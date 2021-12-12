@@ -1,5 +1,6 @@
 import { formatMoney, formatNumberShort, formatDuration, getNsDataThroughFile, runCommand } from './helpers.js'
 
+let disableShorts = false;
 let commission = 100000; // Buy/sell commission. Expected profit must exceed this to buy anything.
 let totalProfit = 0.0; // We can keep track of how much we've earned since start.
 let lastLog = ""; // We update faster than the stock-market ticks, but we don't log anything unless there's been a change
@@ -68,7 +69,7 @@ export async function main(ns) {
     const fracB = options.fracB;
     const fracH = options.fracH;
     const diversification = options.diversification;
-    const disableShorts = options['disable-shorts'];
+    disableShorts = options['disable-shorts'];
     const pre4sBuyThresholdProbability = options['pre-4s-buy-threshold-probability'];
     const pre4sMinBlackoutWindow = options['pre-4s-min-blackout-window'] || 1;
     const pre4sMinHoldTime = options['pre-4s-minimum-hold-time'] || 0;
@@ -391,7 +392,16 @@ async function doBuy(ns, stk, sharesBought) {
         totalProfit -= commission;
     let long = stk.bullish();
     let expectedPrice = long ? stk.ask_price : stk.bid_price; // Depends on whether we will be buying a long or short position
-    let price = mock ? expectedPrice : await transactStock(ns, stk.sym, sharesBought, long ? 'buy' : 'short');
+    let price;
+    try {
+        price = mock ? expectedPrice : Number(await transactStock(ns, stk.sym, sharesBought, long ? 'buy' : 'short'));
+    } catch (err) {
+        if (long) throw err;
+        disableShorts = true;
+        log(ns, `WARN: Failed to short ${stk.sym} (Shorts not available?). Disabling shorts...`, true, 'warning');
+        return 0;
+    }
+
     log(ns, `INFO: ${long ? 'Bought ' : 'Shorted'} ${formatNumberShort(sharesBought, 3, 3).padStart(5)}${stk.maxShares == sharesBought + stk.ownedShares() ? ' (max shares)' : ''} ` +
         `${stk.sym.padEnd(5)} @ ${formatMoney(price).padStart(9)} for ${formatMoney(sharesBought * price).padStart(9)} (Spread:${(stk.spread_pct * 100).toFixed(2)}% ` +
         `ER:${formatBP(stk.expectedReturn()).padStart(8)}) Ticks to Profit: ${stk.timeToCoverTheSpread().toFixed(2)}`, noisy, 'info');

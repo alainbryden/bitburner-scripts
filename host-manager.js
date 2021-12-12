@@ -41,7 +41,11 @@ export function autocomplete(data, _) {
 export async function main(ns) {
     _ns = ns;
     ns.disableLog('ALL')
-    bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
+    try {
+        bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
+    } catch {
+        bitnodeMults = { PurchasedServerMaxRam: 1, PurchasedServerLimit: 1 }
+    }
     maxPurchasableServerRamExponent = Math.round(20 + Math.log2(bitnodeMults.PurchasedServerMaxRam));
     maxPurchasedServers = Math.round(25 * bitnodeMults.PurchasedServerLimit);
 
@@ -210,7 +214,8 @@ function tryToBuyBestServerPossible(ns) {
 
     let purchasedServer = ns.purchaseServer(purchasedServerName, maxRamPossibleToBuy);
     if (!purchasedServer)
-        setStatus(prefix + 'Could not purchase a server. This is either a bug, or we in a SF.9');
+        setStatus(prefix + `Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
+            `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
     else
         announce('Purchased a new server ' + purchasedServer + ' with ' + formatRam(maxRamPossibleToBuy) + ' RAM for ' + formatMoney(cost), 'success');
 }

@@ -77,6 +77,7 @@ let serverListByTargetOrder = [];
 let _ns = null; // Globally available ns reference, for convenience
 let daemonHost = null; // the name of the host of this daemon, so we don't have to call the function more than once.
 let playerStats = null; // stores ultipliers for player abilities and other player info
+let hasFormulas = true;
 
 // bitnode multipliers that can be automatically set by SF-5
 let bitnodeMults = null;
@@ -577,7 +578,9 @@ async function refreshDynamicServerData(ns, serverNames) {
     // Get the information about the relative profitability of each server
     const pid = ns.exec('analyze-hack.js', 'home', 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
-    dictServerProfitInfo = Object.fromEntries(JSON.parse(ns.read('/Temp/analyze-hack.txt')).map(s => [s.hostname, s]));
+    dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
+    if (!dictServerProfitInfo) return log(ns, "WARN: analyze-hack info unavailable.");
+    dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
     //ns.print(dictServerProfitInfo);
 }
 
@@ -590,8 +593,8 @@ function buildServerObject(ns, node) {
         portsRequired: dictServerNumPortsRequired[node],
         getMinSecurity: () => dictServerMinSecurityLevels[node] ?? 0, // Servers not in our dictionary were purchased, and so undefined is okay
         getMaxMoney: () => dictServerMaxMoney[node] ?? 0,
-        getMoneyPerRamSecond: () => dictServerProfitInfo[node]?.gainRate ?? 0,
-        getExpPerSecond: () => dictServerProfitInfo[node]?.expRate ?? 0,
+        getMoneyPerRamSecond: () => dictServerProfitInfo ? dictServerProfitInfo[node]?.gainRate ?? 0 : (dictServerMaxMoney[node] ?? 0),
+        getExpPerSecond: () => dictServerProfitInfo ? dictServerProfitInfo[node]?.expRate ?? 0 : (1 / dictServerMinSecurityLevels[node] ?? 0),
         percentageToSteal: 1.0 / 16.0, // This will get tweaked automatically based on RAM available and the relative value of this server
         getMoney: function () { return this.ns.getServerMoneyAvailable(this.name); },
         getSecurity: function () { return this.ns.getServerSecurityLevel(this.name); },
@@ -656,11 +659,19 @@ function buildServerObject(ns, node) {
             return Math.log(this.targetGrowthCoefficientAfterTheft()) / Math.log(this.adjustedGrowthRate());
         },
         percentageStolenPerHackThread: function () {
-            let server = {
-                hackDifficulty: this.getMinSecurity(),
-                requiredHackingSkill: this.requiredHackLevel
+            if (hasFormulas) {
+                try {
+                    let server = {
+                        hackDifficulty: this.getMinSecurity(),
+                        requiredHackingSkill: this.requiredHackLevel
+                    }
+                    return ns.formulas.hacking.hackPercent(server, playerStats); // hackAnalyzePercent(this.name) / 100;
+                } catch {
+                    hasFormulas = false;
+                }
             }
-            return ns.formulas.hacking.hackPercent(server, playerStats); // hackAnalyzePercent(this.name) / 100;
+            return Math.min(1, Math.max(0, (((100 - Math.min(100, this.getMinSecurity())) / 100) *
+                ((playerHackSkill() - (this.requiredHackLevel - 1)) / playerHackSkill()) / 240)));
         },
         actualPercentageToSteal: function () {
             return this.getHackThreadsNeeded() * this.percentageStolenPerHackThread();
@@ -1301,7 +1312,11 @@ let shouldManipulateHack = []; // Dict of server names, with a value of "true" i
 /** @param {NS} ns **/
 async function updateStockPositions(ns) {
     let updatedPositions = ns.read(`/Temp/stock-probabilities.txt`); // Should be a dict of stock symbol -> prob left by the stockmaster.js script.
-    if (!updatedPositions) return log('The file "/Temp/stock-probabilities.txt" is missing or empty. (Is stockmaster.js running?)', false, 'warning');
+    if (!updatedPositions) {
+        stockMode = false;
+        stockFocus = false;
+        return log('The file "/Temp/stock-probabilities.txt" is missing or empty. (Is stockmaster.js running?)', false, 'warning');
+    }
     updatedPositions = JSON.parse(updatedPositions); // Should be a dict of stock symbol -> prob left by the stockmaster.js script.
     // Strengthen whatever trend a stock currently has, whether we own it or not
     const newShouldManipulateGrow = {}, newShouldManipulateHack = {}, newServersWithOwnedStock = [];
@@ -1422,10 +1437,19 @@ async function getNsDataThroughFile(ns, ...args) {
 async function establishMultipliers(ns) {
     log("establishMultipliers");
     // uncomment this at SF-5 to handle your bitnode multipliers for you
-    bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
+    try {
+        bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
+    } catch {
+        bitnodeMults = {
+            ServerGrowthRate: 1,
+            ServerWeakenRate: 1,
+            FourSigmaMarketDataApiCost: 1,
+            ScriptHackMoneyGain: 1
+        }
+    }
     // prior to SF-5, bitnodeMults stays null and these mults are set to 1.
-    bitnodeGrowMult = bitnodeMults?.ServerGrowthRate ?? 1;
-    bitnodeWeakenMult = bitnodeMults?.ServerWeakenRate ?? 1;
+    bitnodeGrowMult = bitnodeMults.ServerGrowthRate;
+    bitnodeWeakenMult = bitnodeMults.ServerWeakenRate;
     if (verbose)
         log(`Bitnode mults:\n  ${Object.keys(bitnodeMults).filter(k => bitnodeMults[k] != 1.0).map(k => `${k}: ${bitnodeMults[k]}`).join('\n  ')}`);
 }
