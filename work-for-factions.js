@@ -350,7 +350,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(${JSON.stringify(bestCrimesByDifficulty)}.map(c => [c, ns.getCrimeChance(c)]))`, '/Temp/crime-chances.txt');
         let needStats = player.strength < reqStats || player.defense < reqStats || player.dexterity < reqStats || player.agility < reqStats;
         let karma = -ns.heart.break();
-        crime = karma < 1 && crimeCount < 10 ? "mug" : karma < 5 && crimeCount < 20 && crimeChances[2] > 0.5 ? "homicide" : // Start with a few fast crimes to boost stats / crime chances if we haven't done much crime before
+        crime = (karma < 1 || player.strength < 10) && crimeCount < 10 ? "mug" : karma < 5 && player.strength > 20 && crimeCount < 20 && crimeChances[2] > 0.5 ? "homicide" : // Start with a few fast crimes to boost stats / crime chances if we haven't done much crime before
             (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly ? index > 1 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
