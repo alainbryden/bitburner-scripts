@@ -28,8 +28,6 @@ const weakenThreadPadding = 0; //0.01;
 // The name given to purchased servers (should match what's in host-manager.js)
 const purchasedServersName = "daemon";
 
-// Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper 
-const homeReservedRam = 32;
 // The maximum current total RAM utilization before we stop attempting to schedule work for the next less profitable server. Can be used to reserve capacity.
 const maxUtilization = 0.95;
 const lowUtilizationThreshold = 0.80; // The counterpart - low utilization, which leads us to ramp up targets
@@ -45,6 +43,8 @@ let queueDelay = 100; // the delay that it can take for a script to start, used 
 let maxBatches = 40; // the max number of batches this daemon will spool up to avoid running out of IRL ram (TODO: Stop wasting RAM by scheduling batches so far in advance. e.g. Grind XP while waiting for cycle start!)
 let maxTargets = 0; // Initial value, will grow if there is an abundance of RAM
 let maxPreppingAtMaxTargets = 3; // The max servers we can prep when we're at our current max targets and have spare RAM
+// Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper 
+let homeReservedRam = 16;
 
 // --- VARS ---
 // some ancillary scripts that run asynchronously, we utilize the startup/execute capabilities of this daemon to run when able
@@ -143,7 +143,8 @@ const argsSchema = [
     ['cycle-timing-delay', 16000],
     ['queue-delay', 1000],
     ['max-batches', 40],
-    ['i', false], // Farm intelligence with manual hack
+    ['i', false], // Farm intelligence with manual hack.
+    ['reserved-ram', 32]
 ];
 
 export function autocomplete(data, args) {
@@ -194,6 +195,7 @@ export async function main(ns) {
     cycleTimingDelay = options['cycle-timing-delay'];
     queueDelay = options['queue-delay'];
     maxBatches = options['max-batches'];
+    homeReservedRam = options['reserved-ram']
 
     // These scripts are started once and expected to run forever (or terminate themselves when no longer needed)
     asynchronousHelpers = [
@@ -1241,7 +1243,7 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
         let threads = Math.floor(((allocatedServer == null ? expTool.getMaxThreads() : allocatedServer.ramAvailable() / expTool.cost) * percentOfFreeRamToConsume).toPrecision(14));
         if (threads == 0)
             return log(`WARNING: Cannot farm XP from ${server.name}, threads == 0 for allocated server ` + (allocatedServer == null ? '(any server)' :
-                `${allocatedServer.name} with ${formatRam(allocatedServer.ramAvailable())} free RAM`, false, 'warning'));
+                `${allocatedServer.name}`) + ` with ${formatRam(allocatedServer.ramAvailable())} free RAM`, false, 'warning');
 
         if (advancedMode) { // Need to keep server money above zero, and security at minimum to farm xp from hack(); 
             const effectiveHackThreads = Math.ceil(1 / server.percentageStolenPerHackThread()); // Only this many hack threads "count" for stealing/hardening. The rest get a 'free ride'
