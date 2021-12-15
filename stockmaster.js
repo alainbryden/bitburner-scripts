@@ -1,5 +1,6 @@
 import { formatMoney, formatNumberShort, formatDuration, getNsDataThroughFile, runCommand } from './helpers.js'
 
+let disableShorts;
 let commission = 100000; // Buy/sell commission. Expected profit must exceed this to buy anything.
 let totalProfit = 0.0; // We can keep track of how much we've earned since start.
 let lastLog = ""; // We update faster than the stock-market ticks, but we don't log anything unless there's been a change
