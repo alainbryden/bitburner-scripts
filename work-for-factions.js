@@ -334,9 +334,10 @@ async function goToCity(ns, cityName) {
 
 /** @param {NS} ns 
  *  @param {function} crimeCommand if you want to commit the RAM footprint, you can pass in ns.commitCrime, otherise it will run via ram-dodging getNsDataThroughFile */
-export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, crimeCommand = null) {
+export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, crimeCommand = null, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
-    const chanceThresholds = [0.2, 0.75, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
+    const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
+    doFastCrimesOnly = doFastCrimesOnly || fastCrimesOnly;
     if (!crimeCommand) crimeCommand = async crime => await getNsDataThroughFile(ns, `ns.commitCrime('${crime}')`, '/Temp/crime-time.txt');
     let player = ns.getPlayer();
     let strRequirements = [];
@@ -351,7 +352,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let karma = -ns.heart.break();
         crime = karma < 1 && crimeCount < 10 ? "mug" : karma < 5 && crimeCount < 20 && crimeChances[2] > 0.5 ? "homicide" : // Start with a few fast crimes to boost stats / crime chances if we haven't done much crime before
             (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that
-                bestCrimesByDifficulty.find((c, index) => fastCrimesOnly ? index > 1 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
+                bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly ? index > 1 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` + (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
             lastCrime = crime;

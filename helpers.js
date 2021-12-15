@@ -180,7 +180,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = 
     fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
     // To improve performance and save on garbage collection, we can skip writing this exact same script was previously written (common for repeatedly-queried data)
     if (ns.read(fileName) != script) await ns.write(fileName, script, "w");
-    return await autoRetry(ns, async () => await fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
+    return await autoRetry(ns, () => fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
         () => `Run command returned no pid. (Insufficient RAM, or bad command?) Destination: ${fileName} Command: ${command}`, maxRetries, retryDelayMs);
 }
 
@@ -227,7 +227,8 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
     while (maxRetries-- > 0) {
         try {
             const result = await fnFunctionThatMayFail()
-            if (!fnSuccessCondition(result)) throw typeof errorContext === 'string' ? errorContext : errorContext();
+            if (!fnSuccessCondition(result))
+                throw typeof errorContext === 'string' ? errorContext : errorContext();
             return result;
         }
         catch (error) {

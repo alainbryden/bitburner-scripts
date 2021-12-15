@@ -1,6 +1,5 @@
 import { formatMoney, formatNumberShort, formatDuration, getNsDataThroughFile, runCommand } from './helpers.js'
 
-let disableShorts = false;
 let commission = 100000; // Buy/sell commission. Expected profit must exceed this to buy anything.
 let totalProfit = 0.0; // We can keep track of how much we've earned since start.
 let lastLog = ""; // We update faster than the stock-market ticks, but we don't log anything unless there's been a change
@@ -144,7 +143,7 @@ export async function main(ns) {
         }
         if (sales > 0) continue; // If we sold anything, loop immediately (no need to sleep) and refresh stats immediately before making purchasing decisions.
 
-        let cash = playerStats.money - options['reserve'];
+        let cash = playerStats.money - options['reserve'] - Number(ns.read("reserve.txt") || 0);
         let liquidity = cash / corpus;
         // If we haven't gone above a certain liquidity threshold, don't attempt to buy more stock
         // Avoids death-by-a-thousand-commissions before we get super-rich, stocks are capped, and this is no longer an issue

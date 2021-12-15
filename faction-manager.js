@@ -386,7 +386,6 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, purchase
     // Maybe add a bunch of NeuroFlux levels to our purchase?
     if (!options['neuroflux-disabled']) {
         const augNf = augmentationData[strNF];
-        let nfPurchased = purchaseableAugs.filter(a => a === augNf).length;
         // Arrange to purchase NF from the faction with the most reputation, to reduce the chance of having insufficient rep for higher levels TODO: Compute rep / faction donation requirements for these NF levels
         augNf.getFromJoined = function () { return this.joinedFactionsWithAug().sort((a, b) => b.reputation - a.reputation)[0]?.name };
         if (!augNf.canAfford() && !augNf.canAffordWithDonation()) {
@@ -410,17 +409,18 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, purchase
             if (!(joinedFactions.includes(factionWithMostFavor.name) && factionWithMostFavor.donationsUnlocked))
                 return subsetSorted;
         }
+        let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
         const augNfFaction = factionData[augNf.getFromJoined()];
         while (nfPurchased < 200) {
             const nextNfCost = augNf.price * (augCountMult ** purchaseableAugs.length) * (nfCountMult ** nfPurchased);
-            const nextNfRep = augNf.reputation * (nfCountMult ** nfPurchased)
+            const nextNfRep = augNf.reputation * (nfCountMult ** nfPurchased);
             let nfMsg = `Cost of NF ${nfPurchased + 1} is ${formatMoney(nextNfCost)} and will require ${formatNumberShort(nextNfRep)} reputation`
             if (totalAugCost + totalRepCost + nextNfCost > playerData.money) break;
             purchaseableAugs.push(augNf);
             totalAugCost += nextNfCost;
             if (nextNfRep > augNfFaction.reputation) {
                 if (augNfFaction.donationsUnlocked) {
-                    purchaseFactionDonations[augNfFaction.name] = getReqDonationForRep(nextNfRep, augNfFaction);
+                    purchaseFactionDonations[augNfFaction.name] = Math.max(purchaseFactionDonations[augNfFaction.name], getReqDonationForRep(nextNfRep, augNfFaction));
                     totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
                     nfMsg += `, which will require a donation of ${formatMoney(purchaseFactionDonations[augNfFaction.name])} to faction ${augNfFaction.name}`
                 } else {

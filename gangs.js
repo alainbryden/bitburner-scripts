@@ -7,7 +7,7 @@ const maxSpendPerTickPermanentEquipment = 0.5; // Spend up to this percent of no
 const wantedPenaltyThreshold = 0.0001; // Don't let the wanted penalty get worse than this
 
 // Territory-related variables
-const gangsByPower = ["Speakers for the Dead", "The Black Hand", "The Dark Army", "The Syndicate", "NiteSec", "Slum Snakes"]
+const gangsByPower = ["Speakers for the Dead", "The Black Hand", "The Dark Army", "The Syndicate", "Slum Snakes", /* "NiteSec" Been there, not fun. */]
 const territoryEngageThreshold = 0.70; // Minimum average win chance (of gangs with territory) before we engage other clans
 let territoryTickDetected = false;
 let territoryTickTime = 20000; // Est. milliseconds until territory *ticks*. Can vary if processing offline time
@@ -17,9 +17,9 @@ let warfareFinished = false;
 let lastTerritoryPower = 0;
 let lastOtherGangInfo = null;
 
-// Crime activity-related variables
+// Crime activity-related variables TODO all tasks list to evaluate
 const crimes = ["Mug People", "Deal Drugs", "Strongarm Civilians", "Run a Con", "Armed Robbery", "Traffick Illegal Arms", "Threaten & Blackmail", "Human Trafficking", "Terrorism",
-    "Ransomware", "Phishing", "Identity Theft", "DDoS Attacks", "Plant Virus", "Fraud & Counterfeiting", "Money Laundering", "Cyberterrorism", "Ethical Hacking", "Vigilante Justice"];
+    "Ransomware", "Phishing", "Identity Theft", "DDoS Attacks", "Plant Virus", "Fraud & Counterfeiting", "Money Laundering", "Cyberterrorism"];
 let pctTraining = 0.20;
 let multGangSoftcap;
 let allTaskNames;
@@ -108,10 +108,10 @@ async function initialize(ns) {
     allTaskStats = await getGangInfoDict(ns, allTaskNames, 'getTaskStats');
     multGangSoftcap = (await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()')).GangSoftcap;
     myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()', '/Temp/gang-member-names.txt');
-    while (myGangMembers.length < 3) await doRecruitMember(ns); // We should be able to recruit our first three members immediately (for free)
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
     for (const member of Object.values(dictMembers)) // Initialize the current activity of each member
-        assignedTasks[member.name] = member.task || "Train Combat";
+        assignedTasks[member.name] = (member.task && member.task !== "Unassigned") ? member.task : ("Train " + (isHackGang ? "Hacking" : "Combat"));
+    while (myGangMembers.length < 3) await doRecruitMember(ns); // We should be able to recruit our first three members immediately (for free)
     await optimizeGangCrime(ns, myGangInfo);
 }
 
@@ -188,10 +188,13 @@ async function optimizeGangCrime(ns, myGangInfo) {
     const factionRep = await getNsDataThroughFile(ns, `ns.getFactionRep('${myGangFaction}')`, `/Temp/gang-faction-rep.txt`);
     // Tolerate our wanted level increasing, as long as reputation increases several orders of magnitude faster and we do not currently have a penalty more than -0.01%
     let currentWantedPenalty = getWantedPenalty(myGangInfo) - 1;
-    let wantedGainTolerance = currentWantedPenalty < -1.1 * wantedPenaltyThreshold && myGangInfo.wantedLevel > 1 && myGangInfo.respect > 100 ? -0.1 /* Recover from wanted penalty */ :
-        currentWantedPenalty < -0.9 * wantedPenaltyThreshold ? 0 /* Sustain */ : myGangInfo.respectGainRate / 10000 /* Allow wanted to increase */;
+    // Note, until we have ~200 respect, the best way to recover from wanted penalty is to focus on gaining respect, rather than doing vigilante work.
+    let wantedGainTolerance = currentWantedPenalty < -1.1 * wantedPenaltyThreshold && myGangInfo.wantedLevel >= 1 + myGangInfo.respect / 1000 &&
+        myGangInfo.respect > 200 ? -0.01 * myGangInfo.wantedLevel /* Recover from wanted penalty */ :
+        currentWantedPenalty < -0.9 * wantedPenaltyThreshold && myGangInfo.wantedLevel >= 1 + myGangInfo.respect / 10000 ? 0 /* Sustain */ :
+            Math.max(myGangInfo.respectGainRate / 10000, myGangInfo.wantedLevel / 1000) /* Allow wanted to increase at a manageable rate */;
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
-    const optStat = factionRep > requiredRep ? "money" : playerData.money > 1E11 ? "respect" : "both money and respect"; // Change priority based on achieved rep/money
+    const optStat = factionRep > requiredRep ? "money" : (playerData.money > 1E11 || myGangInfo.respect) < 9000 ? "respect" : "both money and respect"; // Change priority based on achieved rep/money
     // Pre-compute how every gang member will perform at every task
     const memberTaskRates = Object.fromEntries(Object.values(dictMembers).map(m => [m.name, allTaskNames.map(taskName => ({
         name: taskName,
@@ -255,7 +258,7 @@ async function optimizeGangCrime(ns, myGangInfo) {
 async function fixWantedGainRate(ns, myGangInfo, wantedGainTolerance = 0) {
     // TODO: steal actual wanted level calcs and strategically pick the member(s) who can bridge the gap while losing the least rep/sec
     let lastWantedLevelGainRate = myGangInfo.wantedLevelGainRate;
-    log(ns, `WARNING: Generating wanted levels (${lastWantedLevelGainRate.toPrecision(3)}/sec), temporarily assigning random members to Vigilante Justice...`, 'warning');
+    log(ns, `WARNING: Generating wanted levels (${lastWantedLevelGainRate.toPrecision(3)}/sec > ${wantedGainTolerance.toPrecision(3)}/sec), temporarily assigning random members to Vigilante Justice...`, 'warning');
     for (const member of shuffleArray(myGangMembers.slice())) {
         if (!crimes.includes(assignedTasks[member])) continue; // This member isn't doing crime, so they aren't contributing to wanted
         assignedTasks[member] = "Vigilante Justice";
@@ -276,7 +279,7 @@ async function doRecruitMember(ns) {
     if (i < myGangMembers.length) newMemberName += " Understudy"; // Pay our respects to the deceased
     if (await getNsDataThroughFile(ns, `ns.gang.canRecruitMember() && ns.gang.recruitMember('${newMemberName}')`, '/Temp/gang-recruit-member.txt')) {
         myGangMembers.push(newMemberName);
-        assignedTasks[newMemberName] = crimes[0];
+        assignedTasks[newMemberName] = "Train " + (isHackGang ? "Hacking" : "Combat");
         lastMemberReset[newMemberName] = Date.now();
         log(ns, `SUCCESS: Recruited a new gang member "${newMemberName}"!`, 'success');
     } else {
@@ -349,7 +352,9 @@ async function doUpgradePurchases(ns, purchaseOrder) {
 /** @param {NS} ns 
  * Helper to wait for the game to update stats (typically 2 seconds per cycle) **/
 async function waitForGameUpdate(ns, oldGangInfo) {
-    const maxWaitTime = 5000;
+    if (!myGangMembers.some(member => !assignedTasks[member].includes("Train")))
+        return oldGangInfo; // Ganginfo will never change if all members are training, so don't wait for an update
+    const maxWaitTime = 2500;
     const waitInterval = 100;
     const start = Date.now()
     while (Date.now() < start + maxWaitTime) {
