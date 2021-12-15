@@ -4,7 +4,7 @@ const max_spend_ratio = 0.1; // Don't spend more than this proportion of money
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const reserve = Number.parseFloat(ns.read('reserve.txt'));
+    const reserve = Number.parseFloat(ns.read('reserve.txt') || 0);
     const money = ns.getServerMoneyAvailable("home");
     const spendable = Math.min(money - reserve, money * max_spend_ratio);
     const cost = ns.getUpgradeHomeRamCost();

@@ -1,4 +1,7 @@
-import { getNsDataThroughFile, runCommand, formatDuration, formatMoney, formatNumberShort, disableLogs } from './helpers.js'
+import {
+    getNsDataThroughFile, runCommand, tryGetBitNodeMultipliers,
+    formatDuration, formatMoney, formatNumberShort, disableLogs
+} from './helpers.js'
 
 const companySpecificConfigs = [
     { name: "NWO", statModifier: 25 },
@@ -107,8 +110,8 @@ export async function main(ns) {
     if (skipFactionsConfig.length > 0) ns.print(`--skip factions: ${skipFactionsConfig.join(", ")}`);
     if (desiredAugStats.length > 0) ns.print(`--desired-stats matching: ${desiredAugStats.join(", ")}`);
     if (fastCrimesOnly) ns.print(`--fast-crimes-only`);
-    const bitnodeMults = await getNsDataThroughFile(ns, `ns.getBitNodeMultipliers()`);
-    repToDonate = 150 * bitnodeMults.RepToDonateToFaction;
+    let bitnodeMults = await tryGetBitNodeMultipliers(ns);
+    repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
     // Get some factions augmentations to decide what remains to be purchased
     const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
     const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];

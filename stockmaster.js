@@ -1,6 +1,9 @@
-import { formatMoney, formatNumberShort, formatDuration, getNsDataThroughFile, runCommand } from './helpers.js'
+import {
+    formatMoney, formatNumberShort, formatDuration,
+    getNsDataThroughFile, runCommand, tryGetBitNodeMultipliers
+} from './helpers.js'
 
-let disableShorts;
+let disableShorts = false;
 let commission = 100000; // Buy/sell commission. Expected profit must exceed this to buy anything.
 let totalProfit = 0.0; // We can keep track of how much we've earned since start.
 let lastLog = ""; // We update faster than the stock-market ticks, but we don't log anything unless there's been a change
@@ -79,7 +82,7 @@ export async function main(ns) {
     showMarketSummary = options['show-pre-4s-forecast'] || options['show-market-summary'];
     // Global values must be reset at start lest they be left in memory from a prior run
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
-    let corpus = 0, bitnodeMults = {}, myStocks = [], allStocks = [];
+    let corpus = 0, myStocks = [], allStocks = [];
     if (options.l || options.liquidate)
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
             `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-script.js');
@@ -101,11 +104,10 @@ export async function main(ns) {
         if (otherStockmasters.some(p => !p.args.includes("--mock"))) // Exception, feel free to run multiple stockmasters in mock mode
             return log(ns, `ERROR: Another version of ${ns.getScriptName()} is already running with different args. Running twice is a bad idea!`, true, 'error');
     }
-    try { // Try to get the bitnode multipliers.
-        bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
-    } catch (err) { // Assume bitnode mults are 1 if user doesn't have this API access yet
-        bitnodeMults = { FourSigmaMarketDataCost: 1, FourSigmaMarketDataApiCost: 1 };
-    }
+
+    // Assume bitnode mults are 1 if user doesn't have this API access yet
+    let bitnodeMults = (await tryGetBitNodeMultipliers(ns)) ?? { FourSigmaMarketDataCost: 1, FourSigmaMarketDataApiCost: 1 };
+    
     if (showMarketSummary) await launchSummaryTail(ns); // Opens a separate script / window to continuously display the Pre4S forecast
 
     log(ns, `Welcome! Please note: all stock purchases will initially result in a Net (unrealized) Loss. This is not only due to commission, but because each stock has a 'spread' (difference in buy price and sell price). ` +

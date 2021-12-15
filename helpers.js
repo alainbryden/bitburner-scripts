@@ -227,8 +227,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
     while (maxRetries-- > 0) {
         try {
             const result = await fnFunctionThatMayFail()
-            if (!fnSuccessCondition(result))
-                throw typeof errorContext === 'string' ? errorContext : errorContext();
+            if (!fnSuccessCondition(result)) throw typeof errorContext === 'string' ? errorContext : errorContext();
             return result;
         }
         catch (error) {
@@ -267,6 +266,18 @@ export function scanAllServers(ns) {
         discoveredHosts.push(hostName); // Mark this host as "scanned"
     }
     return discoveredHosts; // The list of scanned hosts should now be the set of all hosts in the game!
+}
+
+/** @param {NS} ns 
+ * Return bitnode multiplers, or null if they cannot be accessed. **/
+export async function tryGetBitNodeMultipliers(ns) {
+    checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
+    const canGetBitNodeMultipliers =
+        (await getNsDataThroughFile(ns, 'ns.getOwnedSourceFiles()')).some(sf => sf.n === 5) ||
+        (await getNsDataThroughFile(ns, 'ns.getPlayer()')).bitNodeN === 5;
+    if (!canGetBitNodeMultipliers) return null;
+    try { return await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()'); } catch { }
+    return null;
 }
 
 /** @param {NS} ns **/

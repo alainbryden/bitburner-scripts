@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, parseShortNumber, getNsDataThroughFile } from './helpers.js'
+import { formatMoney, formatRam, parseShortNumber, getNsDataThroughFile, tryGetBitNodeMultipliers } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -41,11 +41,7 @@ export function autocomplete(data, _) {
 export async function main(ns) {
     _ns = ns;
     ns.disableLog('ALL')
-    try {
-        bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
-    } catch {
-        bitnodeMults = { PurchasedServerMaxRam: 1, PurchasedServerLimit: 1 }
-    }
+    bitnodeMults = (await tryGetBitNodeMultipliers(ns)) ?? { PurchasedServerMaxRam: 1, PurchasedServerLimit: 1 };
     maxPurchasableServerRamExponent = Math.round(20 + Math.log2(bitnodeMults.PurchasedServerMaxRam));
     maxPurchasedServers = Math.round(25 * bitnodeMults.PurchasedServerLimit);
 
