@@ -7,7 +7,7 @@ const maxSpendPerTickPermanentEquipment = 0.5; // Spend up to this percent of no
 const wantedPenaltyThreshold = 0.0001; // Don't let the wanted penalty get worse than this
 
 // Territory-related variables
-const gangsByPower = ["Speakers for the Dead", "The Black Hand", "The Dark Army", "The Syndicate", "Slum Snakes", /* "NiteSec" Been there, not fun. */]
+const gangsByPower = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Slum Snakes", /* Hack gangs don't scale as far */ "The Black Hand", /* "NiteSec" Been there, not fun. */]
 const territoryEngageThreshold = 0.70; // Minimum average win chance (of gangs with territory) before we engage other clans
 let territoryTickDetected = false;
 let territoryTickTime = 20000; // Est. milliseconds until territory *ticks*. Can vary if processing offline time
