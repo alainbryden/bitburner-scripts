@@ -23,7 +23,7 @@ export async function main(ns) {
     }
     // Flag the server for deletion with a file - daemon should check for this and stop scheduling against it.
     await runCommand(ns, `await ns.scp("/Flags/deleting.txt", "${worstServerName}")`);
-    var success = await getNsDataThroughFile(ns, `ns.deleteServer(${worstServerName})`, '/Temp/try-delete-server-result.txt');
+    var success = await getNsDataThroughFile(ns, `ns.deleteServer("${worstServerName}")`, '/Temp/try-delete-server-result.txt');
     if (success)
         ns.tprint("Deleted " + worstServerName + " which had only " + worstServerRam + " GB of RAM. " + (purchasedServers.length - 1) + " servers remain.");
     else
