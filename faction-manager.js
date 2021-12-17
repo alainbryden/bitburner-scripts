@@ -322,13 +322,20 @@ async function manageUnownedAugmentations(ns, ignoredAugs, alsoPrintToTerminal) 
     if (unownedAugs.length == 0) return log(ns, `All ${Object.keys(augmentationData).length} augmentations are either owned or ignored!`, alsoPrintToTerminal)
     let unavailableAugs = unownedAugs.filter(aug => aug.getFromJoined() == null);
     let firstListPrinted = unavailableAugs.length > 0;
-    if (firstListPrinted) await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, false, true);
-    let availableAugs = unownedAugs.filter(aug => aug.getFromJoined() != null);
-    availableAugs = await manageFilteredSubset(ns, outputRows, 'Available', availableAugs, false, !firstListPrinted); // Use the return value to "lock in" the new sort order
-    if (availableAugs?.length > 0) { // Should only print each filtered list again if the sort order is different
-        await manageFilteredSubset(ns, outputRows, 'Within Rep', availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations'])));
-        let desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', availableAugs.filter(aug => aug.desired));
-        await manageFilteredSubset(ns, outputRows, 'Desired Within Rep', desiredAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations'])), true);
+    if (firstListPrinted) await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, true);
+    // We use the return value to "lock in" the new sort order. Going forward, the routine will only re-print the aug list if the sort order changes (or forcePrint == true)
+    let availableAugs = await manageFilteredSubset(ns, outputRows, 'Available', unownedAugs.filter(aug => aug.getFromJoined() != null), !firstListPrinted);
+    if (availableAugs?.length > 0) {
+        let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
+        let desiredAugs = availableAugs.filter(aug => aug.desired);
+        if (augsWithRep.length > desiredAugs.length) {
+            augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep, false);
+            desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs, false);
+        } else {
+            desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs, false);
+            augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep, false);
+        }
+        await manageFilteredSubset(ns, outputRows, 'Desired Within Rep', augsWithRep.filter(aug => aug.desired), undefined, true);
     }
     // Print all rows of output that were prepped
     log(ns, outputRows.join("\n  "), alsoPrintToTerminal);
@@ -336,7 +343,7 @@ async function manageUnownedAugmentations(ns, ignoredAugs, alsoPrintToTerminal) 
 
 /** @param {NS} ns 
  * Helper to generate outputs for different subsets of the augmentations, each in optimal sort order */
-async function manageFilteredSubset(ns, outputRows, subsetName, subset, purchaseable, forcePrint = false) {
+async function manageFilteredSubset(ns, outputRows, subsetName, subset, printList = undefined /* undefined => automatically print if sort order changed */, purchaseable = false) {
     subset = subset.slice(); // Take a copy so we don't mess up the original array sent in.
     let subsetLength = subset.length;
     if (subsetLength == 0) return subset;
@@ -353,7 +360,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, purchase
     // Compute the total rep cost for augmentations, including the cost of donating for access
     let totalRepCost = Object.values(repCostByFaction).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(subsetSorted);
-    if (forcePrint || !subset.every((v, i) => v == subsetSorted[i])) // If the purchase order is unchanged after filtering out augmentations, don't bother reprinting the full list
+    if (printList === true || printList === undefined && !subset.every((v, i) => v == subsetSorted[i])) // If the purchase order is unchanged after filtering out augmentations, don't bother reprinting the full list
         outputRows.push(`${subset.length} ${subsetName} Augmentations in Optimized Purchase Order (*'s are desired augs and/or stats: ${options['stat-desired'].join(", ")}):\n  ${subsetSorted.join('\n  ')}`);
     outputRows.push(`Total Cost of ${subset.length} ${subsetName}:`.padEnd(37) + ` ${formatMoney(totalRepCost + totalAugCost)}` +
         (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)})  Donate: ${JSON.stringify(repCostByFaction).replaceAll(",", ", ")}`));
@@ -379,7 +386,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, purchase
         log(ns, dropLog);
     }
     // Recursively call this method one time to display the reduced list of affordable purchases as a separate section
-    manageFilteredSubset(ns, outputRows, 'Affordable', purchaseableAugs, false, purchaseableAugs.length < subset.length);
+    manageFilteredSubset(ns, outputRows, 'Affordable', purchaseableAugs, purchaseableAugs.length < subset.length);
     // Let us know how far away we are from being able to get just one more aug:
     if (dropped.length > 0)
         outputRows.push(`Insufficient funds: had to drop ${dropped.length} augs. Next aug \"${dropped[0].aug.name}\" at: ${dropped[0].costBefore}`);
