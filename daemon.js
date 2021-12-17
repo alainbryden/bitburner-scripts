@@ -44,7 +44,7 @@ let maxBatches = 40; // the max number of batches this daemon will spool up to a
 let maxTargets = 0; // Initial value, will grow if there is an abundance of RAM
 let maxPreppingAtMaxTargets = 3; // The max servers we can prep when we're at our current max targets and have spare RAM
 // Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper 
-let homeReservedRam = 16;
+let homeReservedRam = 32;
 
 // --- VARS ---
 // some ancillary scripts that run asynchronously, we utilize the startup/execute capabilities of this daemon to run when able
