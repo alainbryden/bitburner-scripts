@@ -43,6 +43,7 @@ const argsSchema = [
     ['buy-threshold', 0.0001], // Buy only stocks forecasted to earn better than a 0.01% return (1 Basis Point)
     ['sell-threshold', 0], // Sell stocks forecasted to earn less than this return (default 0% - which happens when prob hits 50% or worse)
     ['diversification', 0.34], // Before we have 4S data, we will not hold more than this fraction of our portfolio as a single stock
+    ['disableHud', false], // Disable showing stock value in the HUD panel
     // The following settings are related only to tweaking pre-4s stock-market logic
     ['show-pre-4s-forecast', false], // If set to true, will always generate and display the pre-4s forecast (if false, it's only shown while we hold no stocks)
     ['show-market-summary', false], // Same effect as "show-pre-4s-forecast", this market summary has become so informative, it's valuable even with 4s
@@ -72,6 +73,7 @@ export async function main(ns) {
     const fracB = options.fracB;
     const fracH = options.fracH;
     const diversification = options.diversification;
+    const disableHud = options.disableHud || options.liquidate || options.mock;
     disableShorts = options['disable-shorts'];
     const pre4sBuyThresholdProbability = options['pre-4s-buy-threshold-probability'];
     const pre4sMinBlackoutWindow = options['pre-4s-min-blackout-window'] || 1;
@@ -110,6 +112,12 @@ export async function main(ns) {
     
     if (showMarketSummary) await launchSummaryTail(ns); // Opens a separate script / window to continuously display the Pre4S forecast
 
+    let hudElement = null;
+    if(!disableHud) {
+        hudElement = initializeHud();
+        ns.atExit(() => hudElement.parentElement.parentElement.parentElement.removeChild(hudElement.parentElement.parentElement));
+    }
+
     log(ns, `Welcome! Please note: all stock purchases will initially result in a Net (unrealized) Loss. This is not only due to commission, but because each stock has a 'spread' (difference in buy price and sell price). ` +
         `This script is designed to buy stocks that are most likely to surpass that loss and turn a profit, but it will take a few minutes to see the progress.\n\n` +
         `If you choose to stop the script, make sure you SELL all your stocks (can go 'run ${ns.getScriptName()} --liquidate') to get your money back.\n\nGood luck!\n~ Insight\n\n`)
@@ -129,7 +137,7 @@ export async function main(ns) {
             continue;
         }
         else if (myStocks.length > 0)
-            doStatusUpdate(ns, allStocks, myStocks);
+            doStatusUpdate(ns, allStocks, myStocks, hudElement);
 
         // Sell forecasted-to-underperform shares (worse than some expected return threshold)
         let sales = 0;
@@ -458,7 +466,7 @@ let log = (ns, message, tprint = false, toastStyle = "") => {
     return lastLog = message;
 }
 
-function doStatusUpdate(ns, stocks, myStocks) {
+function doStatusUpdate(ns, stocks, myStocks, hudElement = null) {
     let maxReturnBP = 10000 * Math.max(...myStocks.map(s => s.absReturn())); // The largest return (in basis points) in our portfolio
     let minReturnBP = 10000 * Math.min(...myStocks.map(s => s.absReturn())); // The smallest return (in basis points) in our portfolio
     let est_holdings_cost = myStocks.reduce((sum, stk) => sum + (stk.owned() ? commission : 0) +
@@ -469,6 +477,7 @@ function doStatusUpdate(ns, stocks, myStocks) {
         `Profit: ${formatMoney(totalProfit, 3)} Holdings: ${formatMoney(liquidation_value, 3)} (Cost: ${formatMoney(est_holdings_cost, 3)}) ` +
         `Net: ${formatMoney(totalProfit + liquidation_value - est_holdings_cost, 3)}`
     log(ns, status);
+    if(hudElement) hudElement.innerText = formatMoney(liquidation_value, 6, 3);
 }
 
 /** @param {NS} ns **/
@@ -509,4 +518,24 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, corpus, allStockSymbol
     } else
         log(ns, 'Error attempting to purchase 4SMarketDataTixApi!', true, 'error');
     return false;
+}
+
+function initializeHud() {
+    const d = self["d"+"o"+"c"+"u"+"m"+"e"+"n"+"t"];
+    let htmlDisplay = d.getElementById("#stock-display-1");
+    if(htmlDisplay !== null) return htmlDisplay;
+    // Get the custom display elements in HUD.
+    let customElements = d.getElementById("overview-extra-hook-0").parentElement.parentElement;
+    // Make a clone - in case other scripts are using them
+    let stockValueTracker = customElements.cloneNode(true);
+    // Clear id since duplicate id's are invalid
+    stockValueTracker.querySelectorAll("p").forEach((el, i) => el.id =  "stock-display-" + i);
+    // Get out output element
+    htmlDisplay = stockValueTracker.querySelector("#stock-display-1");
+    // Display label and default value
+    stockValueTracker.querySelectorAll("p")[0].innerText = "Stock";
+    htmlDisplay.innerText ="$0.000"
+    // Insert our element right after Money
+    customElements.parentElement.insertBefore(stockValueTracker, customElements.parentElement.childNodes[2]);
+    return htmlDisplay;
 }
