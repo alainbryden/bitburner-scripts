@@ -253,8 +253,8 @@ async function refresh(ns, playerStats, allStocks, myStocks) {
             if (Date.now() - lastTick < catchUpTickTime - sleepInterval) {
                 let changedPrices = allStocks.filter(stk => stk.ask_price != dictAskPrices[stk.sym]);
                 log(ns, `WARNING: Detected a stock market tick after only ${formatDuration(Date.now() - lastTick)}, but expected ~${formatDuration(expectedTickTime)}. ` +
-                    `The following ${changedPrices.length} stock prices changed: ${changedPrices.map(stk =>
-                        `${stk.sym} ${formatMoney(stk.ask_price)} -> ${formatMoney(dictAskPrices[stk.sym])}`).join(", ")}`, true, 'warning');
+                    (changedPrices.length >= 33 ? '(All stocks updated)' : `The following ${changedPrices.length} stock prices changed: ${changedPrices.map(stk =>
+                        `${stk.sym} ${formatMoney(stk.ask_price)} -> ${formatMoney(dictAskPrices[stk.sym])}`).join(", ")}`), false, 'warning');
             } else
                 log(ns, `INFO: Detected a rapid stock market tick (${formatDuration(Date.now() - lastTick)}), likely to make up for lag / offline time.`)
         }
