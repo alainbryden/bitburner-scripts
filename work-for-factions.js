@@ -59,12 +59,15 @@ let noStudying = false; // Disable studying for Charisma. Useful in longer reset
 let noCrime = false; // Disable doing crimes at all. (Also disabled with --no-focus)
 let crimeFocus = false; // Useful in crime-focused BNs when you want to focus on crime related factions
 let fastCrimesOnly = false; // Can be set via command line argument
+let prioritizeInvites = false;
 let shouldFocusAtWork = false; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 let repToDonate = 150; // Updated after looking at bitnode mults
 let lastActionRestart = 0;
 let ownedAugmentations = [];
 let mostExpensiveAugByFaction = [];
 let mostExpensiveDesiredAugByFaction = [];
+let playerGang;
+let allGangFactions;
 
 let options;
 const argsSchema = [
@@ -74,10 +77,12 @@ const argsSchema = [
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
     ['no-focus', false], // Disable doing work that requires focusing (crime, studying, or focused faction/company work)
     ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements (Also disabled with --no-focus)
+    ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
     ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
     ['fast-crimes-only', false], // Assasination and Heist are so slow, I can see people wanting to disable them just so they can interrupt at will.
     ['invites-only', false], // Just work to get invites, don't work for augmentations / faction rep
+    ['prioritize-invites', false], // Prioritize working for as many invites as is practical before starting to grind for faction reputation
 ];
 
 export function autocomplete(data, args) {
@@ -100,6 +105,7 @@ export async function main(ns) {
     noStudying = options['no-studying'] || noFocus; // Can't study if we aren't allowed to steal focus
     noCrime = options['no-crime'] || noFocus; // Can't crime if we aren't allowed to steal focus
     crimeFocus = options['crime-focus'];
+    prioritizeInvites = options['prioritize-invites'];
     if (crimeFocus && noFocus)
         return ns.tprint("ERROR: Cannot use --no-focus and --crime-focus at the same time. You need to focus to do crime!");
     if (desiredAugStats.length == 0)
@@ -123,6 +129,11 @@ export async function main(ns) {
         let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`);
         shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
     }
+    playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()'))?.faction;
+    let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
+    if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
+        preferredEarlyFactionOrder.splice(configGangIndex, 1);
+    allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())') || [];
     mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
         .filter(aug => !ownedAugmentations.includes(aug))
         .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
@@ -390,8 +401,9 @@ export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000)
     do {
         var invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()');
         var joinedFactions = ns.getPlayer().factions;
-        if (!invitations.includes(factionName) && !joinedFactions.includes(factionName))
-            await ns.sleep(loopSleepInterval);
+        if (invitations.includes(factionName) || joinedFactions.includes(factionName))
+            break;
+        await ns.sleep(loopSleepInterval);
     } while (!invitations.includes(factionName) && !joinedFactions.includes(factionName) && (waitTime -= 1000) > 0);
     if (joinedFactions.includes(factionName)) // Another script may have auto-joined this faction before we could
         ns.print(`An external script has joined faction "${factionName}" for us.`);
@@ -438,8 +450,9 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`We are not yet part of faction "${factionName}". Skipping working for faction...`);
     if (startingFavor >= repToDonate) // If we have already got 150+ favor, we've unlocked donations - no need to grind for rep
         return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
-    // TODO: Cannot work for gang factions. Detect if this is our gang faction!
-    // Don't grind for
+    // Cannot work for gang factions. Detect if this is our gang faction!
+    if (factionName === playerGang || allGangFactions.includes(factionName))
+        return ns.print(`"${factionName}" is an active gang faction. Cannot work for gang factions...`);
     if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) {// Special check to avoid pointless donation unlocking
         ns.print(`The last "${factionName}" aug is only ${mostExpensiveAugByFaction[factionName].toLocaleString()} rep, ` +
             `not worth grinding ${favorRepRequired.toLocaleString()} rep to unlock donations.`);
@@ -463,6 +476,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     ns.print(`Faction "${factionName}" Highest Aug Req: ${highestRepAug.toLocaleString()}, Current Favor (${startingFavor}/${repToDonate}) Req: ${favorRepRequired.toLocaleString()}`);
     if (options['invites-only'])
         return ns.print(`--invites-only Skipping working for faction...`);
+    if (prioritizeInvites && !forceUnlockDonations && !forceBestAug)
+        return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
     let lastStatusUpdateTime;
     while ((currentReputation = ns.getFactionRep(factionName)) < factionRepRequired) {
@@ -472,7 +487,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             lastActionRestart = Date.now();
             ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
         } else {
-            announce(ns, `Something went wrong, failed to start working for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
+            announce(ns, `Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
             break;
         }
         let status = `Doing '${factionWork}' work for "${factionName}" until ${factionRepRequired.toLocaleString()} rep.`;
@@ -501,11 +516,14 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
  * Try all work types and see what gives the best rep gain with this faction! */
 async function detectBestFactionWork(ns, factionName) {
     let bestWork, bestRepRate = 0;
-    for (const work of ["security", "fieldwork", "hacking"]) {
+    for (const work of ["security", "field", "hacking"]) {
         //if (!await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${work}') === true); ns.setFocus(${shouldFocusAtWork}`, '/Temp/work-for-faction.txt'))
-        if (!await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${work}')`, '/Temp/work-for-faction.txt'))
+        if (!await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${work}')`, '/Temp/work-for-faction.txt')) {
+            //ns.print(`"${factionName}" work ${work} not supported.`);
             continue; // This type of faction work must not be supported
+        }
         const currentRepGainRate = ns.getPlayer().workRepGainRate;
+        //ns.print(`"${factionName}" work ${work} provides ${formatNumberShort(currentRepGainRate)} rep rate`);
         if (currentRepGainRate > bestRepRate) {
             bestRepRate = currentRepGainRate;
             bestWork = work;
@@ -541,6 +559,7 @@ export async function workForAllMegacorps(ns, megacorpFactionsInPreferredOrder, 
 /** If we're wealthy, hashes have relatively little monetary value, spend hacknet-node hashes on contracts to gain rep faster
  * @param {NS} ns */
 export async function tryBuyReputation(ns) {
+    if (options['no-coding-contracts']) return;
     if (ns.getPlayer().money > 100E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-node hashes on contracts to gain rep faster
         let spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Generate Coding Contract") - ns.hacknet.numHashes()');
         if (spentHashes > 0) {
