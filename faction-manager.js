@@ -324,16 +324,16 @@ async function manageUnownedAugmentations(ns, ignoredAugs, alsoPrintToTerminal) 
     let firstListPrinted = unavailableAugs.length > 0;
     if (firstListPrinted) await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, true);
     // We use the return value to "lock in" the new sort order. Going forward, the routine will only re-print the aug list if the sort order changes (or forcePrint == true)
-    let availableAugs = await manageFilteredSubset(ns, outputRows, 'Available', unownedAugs.filter(aug => aug.getFromJoined() != null), !firstListPrinted);
+    let availableAugs = await manageFilteredSubset(ns, outputRows, 'Available', unownedAugs.filter(aug => aug.getFromJoined() != null), firstListPrinted ? undefined : true);
     if (availableAugs?.length > 0) {
         let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
         let desiredAugs = availableAugs.filter(aug => aug.desired);
         if (augsWithRep.length > desiredAugs.length) {
-            augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep, false);
-            desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs, false);
+            augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep)
+            desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs);
         } else {
-            desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs, false);
-            augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep, false);
+            desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs);
+            augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep);
         }
         await manageFilteredSubset(ns, outputRows, 'Desired Within Rep', augsWithRep.filter(aug => aug.desired), undefined, true);
     }
