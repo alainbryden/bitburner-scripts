@@ -109,11 +109,11 @@ export async function main(ns) {
 
     // Assume bitnode mults are 1 if user doesn't have this API access yet
     let bitnodeMults = (await tryGetBitNodeMultipliers(ns)) ?? { FourSigmaMarketDataCost: 1, FourSigmaMarketDataApiCost: 1 };
-    
+
     if (showMarketSummary) await launchSummaryTail(ns); // Opens a separate script / window to continuously display the Pre4S forecast
 
     let hudElement = null;
-    if(!disableHud) {
+    if (!disableHud) {
         hudElement = initializeHud();
         ns.atExit(() => hudElement.parentElement.parentElement.parentElement.removeChild(hudElement.parentElement.parentElement));
     }
@@ -221,7 +221,7 @@ async function initAllStocks(ns, allStockSymbols) {
         bearish: function () { return !this.bullish(); },
         ownedShares: function () { return this.sharesLong + this.sharesShort; },
         owned: function () { return this.ownedShares() > 0; },
-        positionValueLong: function () { return this.bid_price * this.sharesLong; },
+        positionValueLong: function () { return this.sharesLong * this.bid_price; },
         positionValueShort: function () { return this.sharesShort * (2 * this.boughtPriceShort - this.ask_price); }, // Shorts work a bit weird
         positionValue: function () { return this.positionValueLong() + this.positionValueShort(); },
         // How many stock market ticks must occur at the current expected return before we regain the value lost by the spread between buy and sell prices.
@@ -477,7 +477,7 @@ function doStatusUpdate(ns, stocks, myStocks, hudElement = null) {
         `Profit: ${formatMoney(totalProfit, 3)} Holdings: ${formatMoney(liquidation_value, 3)} (Cost: ${formatMoney(est_holdings_cost, 3)}) ` +
         `Net: ${formatMoney(totalProfit + liquidation_value - est_holdings_cost, 3)}`
     log(ns, status);
-    if(hudElement) hudElement.innerText = formatMoney(liquidation_value, 6, 3);
+    if (hudElement) hudElement.innerText = formatMoney(liquidation_value, 6, 3);
 }
 
 /** @param {NS} ns **/
@@ -485,11 +485,11 @@ async function liquidate(ns, allStockSymbols) {
     let totalStocks = 0, totalSharesLong = 0, totalSharesShort = 0, totalRevenue = 0;
     const dictPositions = mock ? null : await getStockInfoDict(ns, 'getPosition');
     for (const sym of allStockSymbols) {
-        var [sharesLong, , sharesShort] = dictPositions[sym];
+        var [sharesLong, , sharesShort, avgShortCost] = dictPositions[sym];
         if (sharesLong + sharesShort == 0) continue;
         totalStocks++, totalSharesLong += sharesLong, totalSharesShort += sharesShort;
         if (sharesLong > 0) totalRevenue += (await sellStockWrapper(ns, sym, sharesLong)) * sharesLong - commission;
-        if (sharesShort > 0) totalRevenue += (await sellShortWrapper(ns, sym, sharesShort)) * sharesShort - commission;
+        if (sharesShort > 0) totalRevenue += (2 * avgShortCost - (await sellShortWrapper(ns, sym, sharesShort))) * sharesShort - commission;
     }
     log(ns, `Sold ${totalSharesLong.toLocaleString()} long shares and ${totalSharesShort.toLocaleString()} short shares ` +
         `in ${totalStocks} stocks for ${formatMoney(totalRevenue, 3)}`, true, 'success');
@@ -521,20 +521,20 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, corpus, allStockSymbol
 }
 
 function initializeHud() {
-    const d = self["d"+"o"+"c"+"u"+"m"+"e"+"n"+"t"];
-    let htmlDisplay = d.getElementById("#stock-display-1");
-    if(htmlDisplay !== null) return htmlDisplay;
+    const d = eval("document");
+    let htmlDisplay = d.getElementById("stock-display-1");
+    if (htmlDisplay !== null) return htmlDisplay;
     // Get the custom display elements in HUD.
     let customElements = d.getElementById("overview-extra-hook-0").parentElement.parentElement;
     // Make a clone - in case other scripts are using them
     let stockValueTracker = customElements.cloneNode(true);
     // Clear id since duplicate id's are invalid
-    stockValueTracker.querySelectorAll("p").forEach((el, i) => el.id =  "stock-display-" + i);
+    stockValueTracker.querySelectorAll("p").forEach((el, i) => el.id = "stock-display-" + i);
     // Get out output element
     htmlDisplay = stockValueTracker.querySelector("#stock-display-1");
     // Display label and default value
     stockValueTracker.querySelectorAll("p")[0].innerText = "Stock";
-    htmlDisplay.innerText ="$0.000"
+    htmlDisplay.innerText = "$0.000"
     // Insert our element right after Money
     customElements.parentElement.insertBefore(stockValueTracker, customElements.parentElement.childNodes[2]);
     return htmlDisplay;
