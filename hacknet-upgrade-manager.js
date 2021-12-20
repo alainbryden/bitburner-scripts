@@ -1,12 +1,14 @@
 import { disableLogs, formatDuration, formatMoney } from './helpers.js'
 
+let options;
 const argsSchema = [
     ['max-payoff-time', '1h'], // Controls how far to upgrade hacknets. Can be a number of seconds, or an expression of minutes/hours (e.g. '123m', '4h')
     ['time', null], // alias for max-payoff-time
     ['c', false], // Set to true to run continuously, otherwise, it runs once
     ['continuous', false],
     ['interval', 1000], // Rate at which the program purchases upgrades when running continuously
-    ['max-spend', Number.MAX_VALUE] // The maximum amount of money to spend on upgrades
+    ['max-spend', Number.MAX_VALUE], // The maximum amount of money to spend on upgrades
+    ['toast', false] // Set to true to toast purchases
 ];
 
 export function autocomplete(data, _) {
@@ -16,7 +18,7 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const options = ns.flags(argsSchema);
+    options = ns.flags(argsSchema);
     const continuous = options.c || options.continuous;
     const interval = options.interval;
     let maxSpend = options["max-spend"];
@@ -65,7 +67,7 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
         addedProduction: nodeStats => nodeStats.production * ((nodeStats.cores + 5) / (nodeStats.cores + 4) - 1)
     }, {
         name: "cache", upgrade: ns.hacknet.upgradeCache, cost: i => ns.hacknet.getCacheUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.cache + 1,
-        addedProduction: nodeStats => nodeStats.cache > minCacheLevel ? 0 : nodeStats.production * 0.01 // Note: Does not actually give production, but it has "worth" to us so we can buy more things
+        addedProduction: nodeStats => nodeStats.cache > minCacheLevel ? 0 : nodeStats.production * 0.01 / nodeStats.cache // Note: Does not actually give production, but it has "worth" to us so we can buy more things
     }];
     // Find the best upgrade we can make to an existing node
     let nodeToUpgrade = -1;
@@ -124,7 +126,7 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
         return false; // As long as maxPayoffTimeSeconds doesn't change, we will never purchase another upgrade
     }
     let success = shouldBuyNewNode ? ns.hacknet.purchaseNode() !== -1 : bestUpgrade.upgrade(nodeToUpgrade, 1);
-    if (success) ns.toast(`Purchased ${strPurchase}`, 'success');
+    if (success && options.toast) ns.toast(`Purchased ${strPurchase}`, 'success');
     log(ns, success ? `Purchased ${strPurchase} with ${strPayoff}` : `Insufficient funds to purchase the next best upgrade: ${strPurchase}`);
     return success ? cost : 0;
 }
