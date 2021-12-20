@@ -6,11 +6,16 @@ const argsSchema = [
     ['l', false], // Turn all hashes into money
     ['liquidate', false],
     ['interval', 1000], // Rate at which the program runs and spends hashes
-    ['buy', 'Sell for Money'],
+    ['spend-on', 'Sell for Money'],
 ];
 
-export function autocomplete(data, _) {
+const purchaseOptions = ['Sell for Money', 'Sell for Corporation Funds', 'Exchange for Corporation Research', 'Generate Coding Contract', 'Improve Studying', 'Improve Gym Training'];
+
+export function autocomplete(data, args) {
     data.flags(argsSchema);
+    const lastFlag = args.length > 1 ? args[args.length - 2] : null;
+    if (lastFlag == "--spend-on") // Provide a couple auto-complete options to facilitate these arguments with spaces in them
+        return purchaseOptions.map(f => f.replaceAll(" ", "_")).sort().concat(purchaseOptions.map(f => `'${f}'`).sort());
     return [];
 }
 
@@ -20,6 +25,7 @@ export async function main(ns) {
     const verbose = options.v || options.verbose;
     const liquidate = options.l || options.liquidate;
     const interval = options.interval;
+    const toBuy = options['spend-on'].replaceAll("_", " ");
     disableLogs(ns, ['sleep']);
     ns.print(`Starting spend-hacknet-hashes.js to ensure no hashes go unspent. Will check in every ${formatDuration(interval)}`);
     ns.print(liquidate ? `-l --liquidate mode active! Will spend all hashes on money as soon as possible.` :
@@ -35,7 +41,7 @@ export async function main(ns) {
         let reserve = 10 + globalProduction * interval / 1000; // If we are this far from our capacity, start spending
         let success = true;
         while (success && ns.hacknet.numHashes() > (liquidate ? 4 : capacity - reserve))
-            success = ns.hacknet.spendHashes(options.buy);
+            success = ns.hacknet.spendHashes(toBuy);
         if (!success)
             ns.print(`Weird, failed to spend hashes. (Have: ${ns.hacknet.numHashes()} Capacity: ${ns.hacknet.hashCapacity()}`);
         if (verbose && ns.hacknet.numHashes() < startingHashes)
