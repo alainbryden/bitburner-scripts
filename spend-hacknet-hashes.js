@@ -30,6 +30,8 @@ export async function main(ns) {
     ns.print(`Starting spend-hacknet-hashes.js to ensure no hashes go unspent. Will check in every ${formatDuration(interval)}`);
     ns.print(liquidate ? `-l --liquidate mode active! Will spend all hashes on money as soon as possible.` :
         `Only spending hashes every when near capacity to avoid wasting them.`);
+    if(ns.hacknet.hashCapacity() == 0)
+        return ns.print('We have hacknet nodes, not hacknet servers, so spending hashes is not applicable.');
 
     while (true) {
         let capacity = ns.hacknet.hashCapacity() || Number.MAX_VALUE;

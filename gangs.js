@@ -51,6 +51,11 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    const sf2Level = ((await getNsDataThroughFile(ns, 'ns.getOwnedSourceFiles()')).find(sf => sf.n == 2) || { lvl: 0 }).lvl;
+    if (sf2Level == 0 && playerData.bitNodeN !== 2)
+        return log(ns, "ERROR: You have no yet unlocked gangs. Script should not be run...");
+
     await initialize(ns);
     log(ns, "Starting main loop...");
     while (true) {
@@ -65,6 +70,7 @@ async function initialize(ns) {
     ns.disableLog('ALL');
     options = ns.flags(argsSchema);
     pctTraining = options['no-training'] ? 0 : options['training-percentage'];
+
     let loggedWaiting = false;
     while (!(await getNsDataThroughFile(ns, 'ns.gang.inGang()'))) {
         if (!loggedWaiting) {

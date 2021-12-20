@@ -1,5 +1,6 @@
 import { disableLogs, formatDuration, formatMoney } from './helpers.js'
 
+let formulas = true;
 let options;
 const argsSchema = [
     ['max-payoff-time', '1h'], // Controls how far to upgrade hacknets. Can be a number of seconds, or an expression of minutes/hours (e.g. '123m', '4h')
@@ -30,9 +31,11 @@ export async function main(ns) {
         maxPayoffTime = Number.parseFloat(maxPayoffTime.replace("h", "")) * 3600
     else
         maxPayoffTime = Number.parseFloat(maxPayoffTime);
-
+    if (ns.hacknet.hashCapacity() == 0) {
+        log(ns, `WARNING: This utility was only meant to work on upgraded hacknet servers. You are using hacknet nodes.`);
+    }
     disableLogs(ns, ['sleep', 'getServerUsedRam']);
-    ns.print(`Starting hacknet-upgrade-manager with purchase payoff time limit of ${formatDuration(maxPayoffTime * 1000)} and ` +
+    log(ns, `Starting hacknet-upgrade-manager with purchase payoff time limit of ${formatDuration(maxPayoffTime * 1000)} and ` +
         (maxSpend == Number.MAX_VALUE ? 'no spending limit' : `a spend limit of ${formatMoney(maxSpend)}`) +
         `. Current fleet: ${ns.hacknet.numNodes()} nodes...`);
     do {
@@ -78,12 +81,10 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
     let worstNodeProduction = Number.MAX_VALUE; // Used to how productive a newly purchased node might be
     for (var i = 0; i < ns.hacknet.numNodes(); i++) {
         let nodeStats = ns.hacknet.getNodeStats(i);
-        // When a hacknet server runs scripts, nodeStats.production lags behind what it should be for current ram usage. Get the "raw" rate
-        nodeStats.production = ns.formulas.hacknetServers.hashGainRate(nodeStats.level, 0, nodeStats.ram, nodeStats.cores, currentHacknetMult);
-        //if (nodeStats.ramUsed > 0)
-        //    ns.print(`Node ${i} production is ${nodeStats.production.toPrecision(3)}, but ram used is ${nodeStats.ramUsed.toFixed(1)} / ${nodeStats.ram} ` +
-        //        `so dividing production by ${(1 - nodeStats.ramUsed / nodeStats.ram).toPrecision(3)} to get raw production: ${(nodeStats.production / (1 - nodeStats.ramUsed / nodeStats.ram)).toPrecision(3)}`)
-        //nodeStats.production /= 1 - nodeStats.ramUsed / nodeStats.ram; // "correct" to what production would be if we weren't running any scripts on it
+        if (formulas) { // When a hacknet server runs scripts, nodeStats.production lags behind what it should be for current ram usage. Get the "raw" rate
+            try { nodeStats.production = ns.formulas.hacknetServers.hashGainRate(nodeStats.level, 0, nodeStats.ram, nodeStats.cores, currentHacknetMult); }
+            catch { formulas = false; }
+        }
         worstNodeProduction = Math.min(worstNodeProduction, nodeStats.production);
         for (let up = 1; up < upgrades.length; up++) {
             let currentUpgradeCost = upgrades[up].cost(i);
@@ -109,7 +110,7 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
         return false; // As long as maxSpend doesn't change, we will never purchase another upgrade
     }
     // If specified, only buy upgrades that will pay for themselves in {payoffTimeSeconds}.
-    const hashDollarValue = 2.5e5; // Dollar value of one hash-per-second (0.25m dollars per production)
+    const hashDollarValue = ns.hacknet.hashCapacity() > 0 ? 2.5e5 : 1; // Dollar value of one hash-per-second (0.25m dollars per production).
     let payoffTimeSeconds = 1 / (hashDollarValue * (shouldBuyNewNode ? newNodePayoff : bestUpgradePayoff));
     if (shouldBuyNewNode) cost = newNodeCost;
 

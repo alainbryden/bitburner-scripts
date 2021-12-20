@@ -27,9 +27,14 @@ export async function main(ns) {
     let task = [], lastUpdate = [], lastPurchase = [], availableAugs = [], lastReassign = [];
 
     // Collect info that won't change or that we can track ourselves going forward
-    let numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`);
+    let numSleeves;
+    try {
+        numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
+    } catch {
+        return ns.print("User does not appear to have access to sleeves. Exiting...");
+    }
     for (let i = 0; i < numSleeves; i++)
-        availableAugs[i] = (await getNsDataThroughFile(ns, `ns.sleeve.getSleevePurchasableAugs(${i})`, tempFile)).sort((a, b) => a.cost - b.cost); // list of { name, cost }
+        availableAugs[i] = (await getNsDataThroughFile(ns, `ns.sleeve.getSleevePurchasableAugs(${i})`, '/Temp/sleeve-augs.txt')).sort((a, b) => a.cost - b.cost); // list of { name, cost }
 
     while (true) {
         let cash = ns.getServerMoneyAvailable("home") - Number(ns.read("reserve.txt"));
@@ -85,7 +90,8 @@ export async function main(ns) {
                     let strAction = `Purchase ${batchCount} augmentations for sleeve ${i} at total cost of ${batchCost}`;
                     let toPurchase = availableAugs[i].splice(0, batchCount);
                     budget -= batchCost;
-                    if (await getNsDataThroughFile(ns, JSON.stringify(toPurchase.map(a => a.name)) + `.reduce((s, aug) => s && ns.sleeve.purchaseSleeveAug(${i}, aug), true)`, tempFile))
+                    if (await getNsDataThroughFile(ns, JSON.stringify(toPurchase.map(a => a.name)) +
+                        `.reduce((s, aug) => s && ns.sleeve.purchaseSleeveAug(${i}, aug), true)`, '/Temp/sleeve-purchase.txt'))
                         log(ns, `SUCCESS: ${strAction}`, 'success');
                     else log(ns, `ERROR: Failed to ${strAction}`, 'error');
                     lastPurchase[i] = Date.now();

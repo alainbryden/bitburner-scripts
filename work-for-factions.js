@@ -66,8 +66,8 @@ let lastActionRestart = 0;
 let ownedAugmentations = [];
 let mostExpensiveAugByFaction = [];
 let mostExpensiveDesiredAugByFaction = [];
-let playerGang;
-let allGangFactions;
+let playerGang = null;
+let allGangFactions = [];
 
 let options;
 const argsSchema = [
@@ -129,11 +129,13 @@ export async function main(ns) {
         let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`);
         shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
     }
-    playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()'))?.faction;
-    let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
-    if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
-        preferredEarlyFactionOrder.splice(configGangIndex, 1);
-    allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())') || [];
+    try { playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()'))?.faction; } catch { }
+    if (playerGang) {
+        let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
+        if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
+            preferredEarlyFactionOrder.splice(configGangIndex, 1);
+        allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())') || [];
+    }
     mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
         .filter(aug => !ownedAugmentations.includes(aug))
         .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
