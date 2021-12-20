@@ -66,6 +66,8 @@ let xpOnly = false; // "-x" command line arg - focus on a strategy that produces
 let verbose = false; // "-v" command line arg - Detailed logs about batch scheduling / tuning
 let runOnce = false; // "-o" command line arg - Good for debugging, run the main targettomg loop once then stop
 let useHacknetNodes = false; // "-n" command line arg - Can toggle using hacknet nodes for extra hacking ram
+let loopingMode = false;
+let recoveryThreadPadding = 1; // How many multiples to increase the weaken/grow threads to recovery from misfires automatically (useful when RAM is abundant and timings are tight)
 
 // simple name array of servers that have been added
 let addedServerNames = [];
@@ -78,6 +80,7 @@ let _ns = null; // Globally available ns reference, for convenience
 let daemonHost = null; // the name of the host of this daemon, so we don't have to call the function more than once.
 let playerStats = null; // stores ultipliers for player abilities and other player info
 let hasFormulas = true;
+let currentTerminalServer; // Periodically updated when intelligence farming, the current connected terminal server.
 
 // bitnode multipliers that can be automatically set by SF-5
 let bitnodeMults = null;
@@ -144,7 +147,9 @@ const argsSchema = [
     ['queue-delay', 1000],
     ['max-batches', 40],
     ['i', false], // Farm intelligence with manual hack.
-    ['reserved-ram', 32]
+    ['reserved-ram', 32],
+    ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
+    ['recovery-thread-padding', 1],
 ];
 
 export function autocomplete(data, args) {
@@ -178,12 +183,14 @@ export async function main(ns) {
     // Process command line args (if any)
     options = ns.flags(argsSchema);
     hackOnly = options.h || options['hack-only'];
-    xpOnly = options.x || options.i || options['xp-only'];
+    xpOnly = options.x || options['xp-only'];
     stockMode = options.s || options['stock-manipulation'] || options['stock-manipulation-focus'];
     stockFocus = options['stock-manipulation-focus'];
     useHacknetNodes = options.n || options['run-once'];
     verbose = options.v || options.verbose;
     runOnce = options.o || options['run-once'];
+    loopingMode = options['looping-mode'];
+    recoveryThreadPadding = options['recovery-thread-padding'];
     // Log which flaggs are active
     if (hackOnly) log('-h - Hack-Only mode activated!');
     if (xpOnly) log('-x - Hack XP Grinding mode activated!');
@@ -192,6 +199,13 @@ export async function main(ns) {
     if (xpOnly) log('-n - Using hacknet nodes to run scripts!');
     if (verbose) log('-v - Verbose logging activated!');
     if (runOnce) log('-o - Run-once mode activated!');
+    if (loopingMode) {
+        log('--looping-mode - scheduled remote tasks will loop themselves');
+        cycleTimingDelay = 0;
+        queueDelay = 0;
+        if (recoveryThreadPadding == 1) recoveryThreadPadding = 10;
+        if (stockMode) stockFocus = true; // Need to actively kill scripts that go against stock because they will live forever
+    }
     cycleTimingDelay = options['cycle-timing-delay'];
     queueDelay = options['queue-delay'];
     maxBatches = options['max-batches'];
@@ -205,7 +219,7 @@ export async function main(ns) {
         { name: "hacknet-upgrade-manager.js", requiredServer: "home", tail: true, args: ["-c", "--max-payoff-time", "1h"] }, // Kickstart hash income by buying everything with up to 1h payoff time immediately
         { name: "gangs.js", requiredServer: "home", tail: true }, // Script to create manage our gang for us
         { name: "sleeve.js", requiredServer: "home", tail: true }, // Script to create manage our sleeves for us
-        { name: "work-for-factions.js", requiredServer: "home", args: ['--fast-crimes-only'] }, // Script to manage how we use our "focus" work
+        { name: "work-for-factions.js", requiredServer: "home", args: ['--fast-crimes-only', '--no-coding-contracts'] }, // Script to manage how we use our "focus" work
     ];
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
@@ -491,7 +505,7 @@ async function doTargetingLoop(ns) {
                 Math.ceil((targeting.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
             //log(`intervalsPerTargetCycle: ${intervalsPerTargetCycle} lowUtilizationIterations: ${lowUtilizationIterations} loopInterval: ${loopInterval}`);
             if ((lowUtilizationIterations > intervalsPerTargetCycle || utilizationPercent < 0.01) && skipped.length > 0) {
-                maxTargets += 1;
+                maxTargets = Math.min(maxTargets + 1, serverListByTargetOrder.length);
                 log(`Increased max targets to ${maxTargets} since utilization (${formatNumber(utilizationPercent * 100, 3)}%) has been quite low for ${lowUtilizationIterations} iterations.`);
                 lowUtilizationIterations = 0; // Reset the counter of low-utilization iterations
             } else if (highUtilizationIterations > 60) { // Decrease max-targets by 1 ram utilization is too high (prevents scheduling efficient cycles)
@@ -584,6 +598,8 @@ async function refreshDynamicServerData(ns, serverNames) {
     if (!dictServerProfitInfo) return log(ns, "WARN: analyze-hack info unavailable.");
     dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
     //ns.print(dictServerProfitInfo);
+    if (options.i)
+        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.getCurrentServer()'));
 }
 
 /** @param {NS} ns **/
@@ -892,7 +908,13 @@ async function performScheduling(ns, currentTarget, snapshot) {
             const args = [currentTarget.name, schedItem.start.getTime(), schedItem.end.getTime(), schedItem.end - schedItem.start, discriminationArg];
             if (["hack", "grow"].includes(schedItem.toolShortName)) // Push an arg used by remote hack/grow tools to determine whether it should manipulate the stock market
                 args.push(stockMode && (schedItem.toolShortName == "hack" && shouldManipulateHack[currentTarget.name] || schedItem.toolShortName == "grow" && shouldManipulateGrow[currentTarget.name]) ? 1 : 0);
-            if (options['silent-misfires'] || schedItem.toolShortName == "hack" && bitnodeMults.ScriptHackMoneyGain == 0) args.push(1); // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
+            if (["hack", "weak"].includes(schedItem.toolShortName))
+                args.push(options['silent-misfires'] || (schedItem.toolShortName == "hack" && bitnodeMults.ScriptHackMoneyGain == 0) ? 1 : 0); // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
+            args.push(loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
+            if (recoveryThreadPadding > 1 && ["weak", "grow"].includes(schedItem.toolShortName))
+                schedItem.threadsNeeded *= recoveryThreadPadding; // Only need to pad grow/weaken threads
+            if (options.i && currentTerminalServer?.name == currentTarget.name && schedItem.toolShortName == "hack")
+                schedItem.toolShortName = "manualhack";
             const result = await arbitraryExecution(ns, getTool(schedItem.toolShortName), schedItem.threadsNeeded, args)
             if (result == false) { // If execution fails, we have probably run out of ram.
                 log(`WARNING: Scheduling failed for ${getTargetSummary(currentTarget)} ${discriminationArg} of ${cyclesScheduled} Took: ${Date.now() - start}ms`, false, 'warning');
@@ -1168,10 +1190,9 @@ async function kickstartHackXp(ns, percentOfFreeRamToConsume = 1, verbose = fals
     targets = Math.min(maxTargets, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
     let targetsByExp = getXPFarmServer(true);
     if (options.i) { // To farm intelligence, use manual hack on only the current connected server
-        let server = getServerByName(await getNsDataThroughFile(ns, 'ns.getCurrentServer()'));
-        if (server.name != "home") {
+        if (currentTerminalServer.name != "home") {
             targets = 1;
-            targetsByExp = [server];
+            targetsByExp = [currentTerminalServer];
         }
     }
     const etas = [];
@@ -1342,7 +1363,7 @@ async function updateStockPositions(ns) {
 // Kills all scripts running the specified tool and targeting one of the specified servers if stock market manipulation is enabled
 async function terminateScriptsManipulatingStock(ns, servers, toolName) {
     const problematicProcesses = addedServerNames.flatMap(hostname => ps(ns, hostname)
-        .filter(process => toolName == process.filename && servers.includes(process.args[0]) && (process.args.length > 5 && process.args[5]))
+        .filter(process => servers.includes(process.args[0]) && (loopingMode || toolName == process.filename && process.args.length > 5 && process.args[5]))
         .map(process => ({ pid: process.pid, hostname })));
     if (problematicProcesses.length > 0)
         await runCommand(ns, JSON.stringify(problematicProcesses) + '.forEach(p => ns.kill(p.pid, p.hostname))', '/Temp/kill-remote-stock-manipulation.js');
