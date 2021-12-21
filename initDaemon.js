@@ -46,6 +46,7 @@ const filesToDownload = [
   'stats.js',
   'stockmaster.js',
   'work-for-factions.js',
+  'playerservers.js',
 ]
 const valuesToRemove = ['BB_SERVER_MAP']
 
