@@ -220,7 +220,7 @@ export async function main(ns) {
         { name: "gangs.js", requiredServer: "home", tail: true }, // Script to create manage our gang for us
         { name: "sleeve.js", requiredServer: "home", tail: true }, // Script to create manage our sleeves for us
         { name: "work-for-factions.js", requiredServer: "home", args: ['--fast-crimes-only', '--no-coding-contracts'] }, // Script to manage how we use our "focus" work
-        { name; "playerservers.js", requiredServer: "home", // Script to purchase and upgrade player owned servers
+        { name: "playerservers.js", requiredServer: "home", tail: false }, // Script to purchase and upgrade player owned servers
     ];
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
