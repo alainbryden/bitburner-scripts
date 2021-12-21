@@ -1,7 +1,7 @@
 const argsSchema = [
-  ['github', 'raziel420'],
+  ['github', 'alainbryden'],
   ['repository', 'bitburner-scripts'],
-  ['branch', 'installer'],
+  ['branch', 'main'],
   ['download', []], // By default, all files returned by ns.ls() will be downloaded. Override with just a subset of files here
   ['new-file', []], // By default, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
   ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
