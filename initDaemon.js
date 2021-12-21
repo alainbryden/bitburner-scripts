@@ -1,13 +1,16 @@
 const argsSchema = [
-    ['github', 'raziel420'],
-    ['repository', 'bitburner-scripts'],
-    ['branch', 'installer'],
-    ['download', []], // By default, all files returned by ns.ls() will be downloaded. Override with just a subset of files here
-    ['new-file', []], // By default, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
-    ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
-];
+  ['github', 'raziel420'],
+  ['repository', 'bitburner-scripts'],
+  ['branch', 'installer'],
+  ['download', []], // By default, all files returned by ns.ls() will be downloaded. Override with just a subset of files here
+  ['new-file', []], // By default, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
+  ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
+]
+export function autocomplete(data, _) {
+  data.flags(argsSchema);
+  return [];
+}
 
-const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
 const filesToDownload = [
   '/Flags/deleting.txt',
   '/Remote/grow-target.js',
@@ -60,7 +63,8 @@ function localeHHMMSS(ms = 0) {
 
 export async function main(ns) {
   ns.tprint(`[${localeHHMMSS()}] Starting initDaemon.js`)
-
+  const options = ns.flags(argsSchema);
+  const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
   let hostname = ns.getHostname()
 
   if (hostname !== 'home') {
