@@ -9,7 +9,7 @@ export function formatMoney(num, maxSignificantFigures = 6, maxDecimalPlaces = 3
     return num >= 0 ? "$" + numberShort : numberShort.replace("-", "-$");
 }
 
-const symbols = ["", "k", "m", "b", "t", "qa", "qi", "sx", "sp", "oc", "e30", "e33", "e36", "e39"];
+const symbols = ["", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "e33", "e36", "e39"];
 
 /**
  * Return a formatted representation of the monetary amount using scale sympols (e.g. 6.50M) 
