@@ -9,12 +9,12 @@ export async function main(ns) {
     const spendable = Math.min(money - reserve, money * max_spend_ratio);
     const cost = ns.getUpgradeHomeRamCost();
     const currentRam = ns.getServerMaxRam("home");
+    if (currentRam >= 2 ** 20)
+        return ns.print(`We're at max home RAM (2^20 = ${formatNumberShort(currentRam)}GB)`);
     const nextRam = currentRam * 2;
     const upgradeDesc = `home RAM from ${formatNumberShort(currentRam)}GB to ${formatNumberShort(nextRam)}GB`;
-    if (spendable < cost) {
-        ns.print(`Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
-        return;
-    }
+    if (spendable < cost)
+        return ns.print(`Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
     if (ns.upgradeHomeRam()) {
         announce(ns, `SUCCESS: Upgraded ${upgradeDesc}`, 'success');
         if (nextRam != ns.getServerMaxRam("home"))
