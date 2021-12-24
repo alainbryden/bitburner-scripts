@@ -504,8 +504,8 @@ async function doTargetingLoop(ns) {
             let intervalsPerTargetCycle = targeting.length == 0 ? 120 :
                 Math.ceil((targeting.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
             //log(`intervalsPerTargetCycle: ${intervalsPerTargetCycle} lowUtilizationIterations: ${lowUtilizationIterations} loopInterval: ${loopInterval}`);
-            if ((lowUtilizationIterations > intervalsPerTargetCycle || utilizationPercent < 0.01) && skipped.length > 0) {
-                maxTargets = Math.min(maxTargets + 1, serverListByTargetOrder.length);
+            if ((lowUtilizationIterations > intervalsPerTargetCycle || utilizationPercent < 0.01) && skipped.length > 0 && maxTargets < serverListByTargetOrder.length) {
+                maxTargets++;
                 log(`Increased max targets to ${maxTargets} since utilization (${formatNumber(utilizationPercent * 100, 3)}%) has been quite low for ${lowUtilizationIterations} iterations.`);
                 lowUtilizationIterations = 0; // Reset the counter of low-utilization iterations
             } else if (highUtilizationIterations > 60) { // Decrease max-targets by 1 ram utilization is too high (prevents scheduling efficient cycles)
@@ -699,10 +699,12 @@ function buildServerObject(ns, node) {
             return Math.floor((this.percentageToSteal / this.percentageStolenPerHackThread()).toPrecision(14));
         },
         getGrowThreadsNeeded: function () {
-            return Math.ceil((this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14));
+            return Math.min(this.getMaxMoney(), // Worse case (0 money on server) we get 1$ per thread
+                Math.ceil((this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14)));
         },
         getGrowThreadsNeededAfterTheft: function () {
-            return Math.ceil((this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage()).toPrecision(14));
+            return Math.min(this.getMaxMoney(), // Worse case (0 money on server) we get 1$ per thread
+                Math.ceil((this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage()).toPrecision(14)));
         },
         getWeakenThreadsNeededAfterTheft: function () {
             return Math.ceil((this.getHackThreadsNeeded() * hackThreadHardening / actualWeakenPotency()).toPrecision(14));
@@ -807,6 +809,12 @@ function optimizePerformanceMetrics(currentTarget) {
     const percentPerHackThread = currentTarget.percentageStolenPerHackThread();
     const oldHackThreads = currentTarget.getHackThreadsNeeded();
     const oldActualPercentageToSteal = currentTarget.percentageToSteal = currentTarget.actualPercentageToSteal();
+
+    if (percentPerHackThread >= 1) {
+        currentTarget.percentageToSteal = percentPerHackThread;
+        currentTarget.percentageToSteal = 1;
+        return getPerformanceSnapshot(currentTarget, networkStats);
+    }
 
     let lastAdjustmentSign = 1;
     let attempts = 0;
@@ -971,10 +979,35 @@ function getScheduleTiming(fromDate, currentTarget) {
 
 function getScheduleObject(batchTiming, currentTarget, batchNumber) {
     var schedItems = [];
+
     var schedHack = getScheduleItem("hack", "hack", batchTiming.hackStart, batchTiming.hackEnd, currentTarget.getHackThreadsNeeded());
     var schedWeak1 = getScheduleItem("weak1", "weak", batchTiming.firstWeakenStart, batchTiming.firstWeakenEnd, currentTarget.getWeakenThreadsNeededAfterTheft());
-    var schedGrow = getScheduleItem("grow", "grow", batchTiming.growStart, batchTiming.growEnd, currentTarget.getGrowThreadsNeededAfterTheft());
-    var schedWeak2 = getScheduleItem("weak2", "weak", batchTiming.secondWeakenStart, batchTiming.secondWeakenEnd, currentTarget.getWeakenThreadsNeededAfterGrowth());
+    // Special end-game case, if we have no choice but to hack a server to zero money, schedule back-to-back grows to restore money
+    if (currentTarget.percentageStolenPerHackThread() >= 1) {
+        // Use math and science to minimize total threads required to inject 1 dollar per threads, then grow that to max.
+        let calcThreadsForGrow = money => Math.ceil(((Math.log(1 / (money / currentTarget.getMaxMoney())) / Math.log(currentTarget.adjustedGrowthRate()))
+            / currentTarget.serverGrowthPercentage()).toPrecision(14));
+        let stepSize = Math.floor(currentTarget.getMaxMoney() / 4), injectThreads = stepSize, schedGrowThreads = calcThreadsForGrow(injectThreads);
+        for (let i = 0; i < 100 && stepSize > 0; i++) {
+            if (injectThreads + schedGrowThreads > (injectThreads + stepSize) + calcThreadsForGrow(injectThreads + stepSize))
+                injectThreads += stepSize;
+            else if (injectThreads + schedGrowThreads > (injectThreads - stepSize) + calcThreadsForGrow(injectThreads - stepSize))
+                injectThreads -= stepSize;
+            schedGrowThreads = calcThreadsForGrow(injectThreads);
+            stepSize = Math.floor(stepSize / 2);
+        }
+        schedItems.push(getScheduleItem("grow-from-zero", "grow", new Date(batchTiming.growStart.getTime() - (cycleTimingDelay / 8)),
+            new Date(batchTiming.growEnd.getTime() - (cycleTimingDelay / 8)), injectThreads)); // Will put $injectThreads on the server
+        // This will then grow from whatever % $injectThreads is back to 100%
+        var schedGrow = getScheduleItem("grow", "grow", batchTiming.growStart, batchTiming.growEnd, schedGrowThreads);
+        var schedWeak2 = getScheduleItem("weak2", "weak", batchTiming.secondWeakenStart, batchTiming.secondWeakenEnd,
+            Math.ceil(((injectThreads + schedGrowThreads) * growthThreadHardening / actualWeakenPotency()).toPrecision(14)));
+        if (verbose)
+            log(`INFO: Special grow strategy since percentage stolen per hack thread is 100%: G1: ${injectThreads}, G1: ${schedGrowThreads}, W2: ${schedWeak2.threadsNeeded} (${currentTarget.name})`);
+    } else {
+        var schedGrow = getScheduleItem("grow", "grow", batchTiming.growStart, batchTiming.growEnd, currentTarget.getGrowThreadsNeededAfterTheft());
+        var schedWeak2 = getScheduleItem("weak2", "weak", batchTiming.secondWeakenStart, batchTiming.secondWeakenEnd, currentTarget.getWeakenThreadsNeededAfterGrowth());
+    }
 
     if (hackOnly) {
         schedItems.push(schedHack);
