@@ -9,10 +9,10 @@ export async function main(ns) {
     ns.disableLog('sleep');
     let crime = ns.args.length == 0 ? undefined : ns.args.join(" "); // Need to join in case the crime has a space in it - it will be treated as two args
     ns.tail();
-    if (crime) // Simple crime loop for the specified crime
+    if (!crime || ns.args.includes("--fast-crimes-only")) // More sophisticated auto-scaling crime logic
+        await crimeForKillsKarmaStats(ns, 0, 0, Number.MAX_SAFE_INTEGER, ns.commitCrime, ns.args.includes("--fast-crimes-only"));
+    else // Simple crime loop for the specified crime
         await legacyAutoCrime(ns, crime);
-    else // More sophisticated auto-scaling crime logic
-        await crimeForKillsKarmaStats(ns, 0, 0, Number.MAX_SAFE_INTEGER, ns.commitCrime);
 }
 
 /** @param {NS} ns **/
