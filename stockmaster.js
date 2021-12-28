@@ -99,6 +99,9 @@ export async function main(ns) {
         options.disableShorts = true;
     }
 
+    allStockSymbols = await getNsDataThroughFile(ns, 'ns.stock.getSymbols()', '/Temp/stock-symbols.txt');
+    allStocks = await initAllStocks(ns, allStockSymbols);
+
     if (options.l || options.liquidate) {
         await liquidate(ns, allStockSymbols); // Sell all stocks
         return;
