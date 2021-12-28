@@ -282,8 +282,13 @@ export async function getActiveSourceFiles(ns) {
  * getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
 export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
+    let tempFile = '/Temp/owned-source-files.txt';
     // Find out what source files the user has unlocked
-    let dictSourceFiles = await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, '/Temp/owned-source-files.txt');
+    let dictSourceFiles = await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, tempFile);
+    if (!dictSourceFiles) { // Bit of a hack, but if RAM is so low that this fails, we can fallback to using an older version of this file, and even assuming we have no source files.
+        dictSourceFiles = ns.read(tempFile)
+        dictSourceFiles = dictSourceFiles ? JSON.parse(dictSourceFiles) : {};
+    }
     // If the user is currently in a given bitnode, they will have its features unlocked
     dictSourceFiles[(await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN] = 3;
     return dictSourceFiles;
@@ -299,7 +304,8 @@ export async function tryGetBitNodeMultipliers(ns) {
  * tryGetBitNodeMultipliers Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
 export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
-    const canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile));
+    let canGetBitNodeMultipliers = false;
+    try { canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile)); } catch { }
     if (!canGetBitNodeMultipliers) return null;
     try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()'); } catch { }
     return null;
