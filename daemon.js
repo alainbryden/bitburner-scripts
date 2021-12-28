@@ -2,6 +2,7 @@ import {
     formatMoney, formatRam, formatDuration, formatDateTime, formatNumber,
     scanAllServers, hashCode, disableLogs, log as logHelper,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
+    tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
     getFnRunViaNsExec, getFnIsAliveViaNsPs
 } from './helpers.js'
 
@@ -81,11 +82,8 @@ let daemonHost = null; // the name of the host of this daemon, so we don't have 
 let playerStats = null; // stores ultipliers for player abilities and other player info
 let hasFormulas = true;
 let currentTerminalServer; // Periodically updated when intelligence farming, the current connected terminal server.
-
-// bitnode multipliers that can be automatically set by SF-5
-let bitnodeMults = null;
-let bitnodeGrowMult = null;
-let bitnodeWeakenMult = null;
+let dictSourceFiles; // Available source files
+let bitnodeMults = null; // bitnode multipliers that can be automatically determined after SF-5
 
 // Property to avoid log churn if our status hasn't changed since the last loop
 let lastUpdate = "";
@@ -163,6 +161,7 @@ export async function main(ns) {
     _ns = ns;
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
     updatePlayerStats();
+    dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     //ns.disableLog('ALL');
     disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan']);
 
@@ -213,29 +212,30 @@ export async function main(ns) {
 
     // These scripts are started once and expected to run forever (or terminate themselves when no longer needed)
     asynchronousHelpers = [
-        { name: "stats.js", requiredServer: "home" }, // Adds stats not usually in the HUD
-        { name: "stockmaster.js", requiredServer: "home", args: ["--show-market-summary"], tail: true, shouldRun: () => playerStats.hasTixApiAccess }, // Start our stockmaster if we have the required stockmarket access
-        { name: "spend-hacknet-hashes.js", requiredServer: "home", tail: true, args: ["-v"] }, // Always have this running to make sure hashes aren't wasted
-        { name: "hacknet-upgrade-manager.js", requiredServer: "home", tail: true, args: ["-c", "--max-payoff-time", "1h"] }, // Kickstart hash income by buying everything with up to 1h payoff time immediately
-        { name: "gangs.js", requiredServer: "home", tail: true }, // Script to create manage our gang for us
-        { name: "sleeve.js", requiredServer: "home", tail: true }, // Script to create manage our sleeves for us
-        { name: "work-for-factions.js", requiredServer: "home", args: ['--fast-crimes-only', '--no-coding-contracts'] }, // Script to manage how we use our "focus" work
+        { name: "stats.js", shouldRun: () => ns.getServerMaxRam("home") >= 64 /* Don't waste precious RAM */ }, // Adds stats not usually in the HUD
+        { name: "hacknet-upgrade-manager.js", args: ["-c", "--max-payoff-time", "1h"] }, // Kickstart hash income by buying everything with up to 1h payoff time immediately
+        { name: "stockmaster.js", tail: true, shouldRun: () => playerStats.hasTixApiAccess, args: ["--show-market-summary"] }, // Start our stockmaster if we have the required stockmarket access
+        { name: "gangs.js", tail: true, shouldRun: () => 2 in dictSourceFiles }, // Script to create manage our gang for us
+        { name: "work-for-factions.js", shouldRun: () => 4 in dictSourceFiles, args: ['--fast-crimes-only', '--no-coding-contracts'] }, // Script to manage how we use our "focus" work
+        { name: "spend-hacknet-hashes.js", shouldRun: () => 9 in dictSourceFiles, args: ["-v"] }, // Always have this running to make sure hashes aren't wasted
+        { name: "sleeve.js", tail: true, shouldRun: () => 10 in dictSourceFiles }, // Script to create manage our sleeves for us
     ];
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
+    asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
     let shouldUpgradeHacknet = () => !shouldReserveMoney() && (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false) === null);
     periodicScripts = [
         // Buy tor as soon as we can if we haven't already, and all the port crackers
-        { interval: 29000, name: "/Tasks/tor-manager.js", shouldRun: () => !addedServerNames.includes("darkweb") },
-        { interval: 30000, name: "/Tasks/program-manager.js", shouldRun: () => getNumPortCrackers() != 5 },
-        { interval: 31000, name: "/Tasks/ram-manager.js", shouldRun: () => !shouldReserveMoney() && (getTotalNetworkUtilization() > 0.85 || xpOnly) },
+        { interval: 29000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !addedServerNames.includes("darkweb") },
+        { interval: 30000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers() != 5 },
+        { interval: 31000, name: "/Tasks/ram-manager.js", shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && (getTotalNetworkUtilization() > 0.85 || xpOnly) },
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money
         { interval: 32000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
         { interval: 33000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
         // Don't start auto-joining factions until we're holding 1 billion (so coding contracts returning money is probably less critical) or we've joined one already
-        { interval: 34000, name: "faction-manager.js", requiredServer: "home", args: ['--join-only'], shouldRun: () => playerStats.factions.length > 0 || ns.getServerMoneyAvailable("home") > 1e9 },
+        { interval: 34000, name: "faction-manager.js", requiredServer: "home", args: ['--join-only'], shouldRun: () => 4 in dictSourceFiles && (playerStats.factions.length > 0 || ns.getServerMoneyAvailable("home") > 1e9) },
         { interval: 51000, name: "/Tasks/contractor.js", requiredServer: "home" },
-        { interval: 110000, name: "/Tasks/backdoor-all-servers.js", requiredServer: "home" },
+        { interval: 110000, name: "/Tasks/backdoor-all-servers.js", requiredServer: "home", shouldRun: () => 4 in dictSourceFiles },
         { interval: 111000, name: "host-manager.js", requiredServer: "home", shouldRun: () => !shouldReserveMoney() },
     ];
     hackTools = [
@@ -570,7 +570,7 @@ async function doTargetingLoop(ns) {
 }
 
 // How much a weaken thread is expected to reduce security by
-let actualWeakenPotency = () => bitnodeWeakenMult * weakenThreadPotency * (1 - weakenThreadPadding);
+let actualWeakenPotency = () => bitnodeMults.ServerWeakenRate * weakenThreadPotency * (1 - weakenThreadPadding);
 
 // Dictionaries of static server information
 let serversDictCommand = (servers, command) => `Object.fromEntries(${JSON.stringify(servers)}.map(server => [server, ${command}]))`;
@@ -656,7 +656,7 @@ function buildServerObject(ns, node) {
             return this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('FarmXP'), useCache);
         },
         serverGrowthPercentage: function () {
-            return this.ns.getServerGrowth(this.name) * bitnodeGrowMult * getPlayerHackingGrowMulti() / 100;
+            return this.ns.getServerGrowth(this.name) * bitnodeMults.ServerGrowthRate * getPlayerHackingGrowMulti() / 100;
         },
         adjustedGrowthRate: function () { return Math.min(maxGrowthRate, 1 + ((unadjustedGrowthRate - 1) / this.getMinSecurity())); },
         actualServerGrowthRate: function () {
@@ -1492,20 +1492,14 @@ async function getNsDataThroughFile(ns, ...args) {
 
 async function establishMultipliers(ns) {
     log("establishMultipliers");
-    // uncomment this at SF-5 to handle your bitnode multipliers for you
-    try {
-        bitnodeMults = await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-mults.txt');
-    } catch {
-        bitnodeMults = {
-            ServerGrowthRate: 1,
-            ServerWeakenRate: 1,
-            FourSigmaMarketDataApiCost: 1,
-            ScriptHackMoneyGain: 1
-        }
-    }
-    // prior to SF-5, bitnodeMults stays null and these mults are set to 1.
-    bitnodeGrowMult = bitnodeMults.ServerGrowthRate;
-    bitnodeWeakenMult = bitnodeMults.ServerWeakenRate;
+
+    bitnodeMults = (await tryGetBitNodeMultipliers_Custom(ns, getNsDataThroughFile)) || {
+        // prior to SF-5, bitnodeMults stays null and these mults are set to 1.
+        ServerGrowthRate: 1,
+        ServerWeakenRate: 1,
+        FourSigmaMarketDataApiCost: 1,
+        ScriptHackMoneyGain: 1
+    };
     if (verbose)
         log(`Bitnode mults:\n  ${Object.keys(bitnodeMults).filter(k => bitnodeMults[k] != 1.0).map(k => `${k}: ${bitnodeMults[k]}`).join('\n  ')}`);
 }

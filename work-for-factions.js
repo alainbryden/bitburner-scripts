@@ -1,5 +1,5 @@
 import {
-    getNsDataThroughFile, runCommand, tryGetBitNodeMultipliers,
+    getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers,
     formatDuration, formatMoney, formatNumberShort, disableLogs
 } from './helpers.js'
 
@@ -116,42 +116,59 @@ export async function main(ns) {
     if (skipFactionsConfig.length > 0) ns.print(`--skip factions: ${skipFactionsConfig.join(", ")}`);
     if (desiredAugStats.length > 0) ns.print(`--desired-stats matching: ${desiredAugStats.join(", ")}`);
     if (fastCrimesOnly) ns.print(`--fast-crimes-only`);
-    let bitnodeMults = await tryGetBitNodeMultipliers(ns);
+
+
+    let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
+    if (!(4 in dictSourceFiles) || dictSourceFiles[4] < 2)
+        return ns.tprint("ERROR: You cannot automate working for factions until you have unlocked singularity lvl. 2 access (SF4.2).");
+
+    let bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
     repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
-    // Get some factions augmentations to decide what remains to be purchased
-    const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
-    const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
-    const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
-    const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
-    ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`);
-    shouldFocusAtWork = !noFocus; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
-    if (shouldFocusAtWork) { // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
-        let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`);
-        shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
+
+    // Get some information about gangs (if unlocked)
+    if (2 in dictSourceFiles) {
+        try { playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt'))?.faction; } catch { /* No gang joined */ }
+        if (playerGang) {
+            let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
+            if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
+                preferredEarlyFactionOrder.splice(configGangIndex, 1);
+            allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())') || [];
+        }
     }
-    try { playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()'))?.faction; } catch { }
-    if (playerGang) {
-        let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
-        if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
-            preferredEarlyFactionOrder.splice(configGangIndex, 1);
-        allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())') || [];
+
+    // Get some augmentation information (if available) to decide what remains to be purchased
+    if (dictSourceFiles[4] >= 3) {
+        const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
+        const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
+        const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
+        const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
+
+        ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`);
+        shouldFocusAtWork = !noFocus; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
+        if (shouldFocusAtWork) { // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
+            let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`);
+            shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
+        }
+
+        mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
+            .filter(aug => !ownedAugmentations.includes(aug))
+            .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+        //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
+        // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
+        mostExpensiveDesiredAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
+            .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || !desiredAugStats ||
+                Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
+            .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
     }
-    mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
-        .filter(aug => !ownedAugmentations.includes(aug))
-        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-    //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-    // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-    mostExpensiveDesiredAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
-        .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || !desiredAugStats ||
-            Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
-        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
     //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
     let completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1 && !factionSpecificConfigs.find(c => c.name == fac)?.forceUnlock);
     let skipFactions = skipFactionsConfig.concat(completedFactions);
     let softCompletedFactions = Object.keys(mostExpensiveDesiredAugByFaction).filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 &&
         !completedFactions.includes(fac) && !factionSpecificConfigs.find(c => c.name == fac)?.forceUnlock);
-    ns.print(`${completedFactions.length} factions are completed (all augs purchased): ${completedFactions.join(", ")}`);
-    ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
+    if (completedFactions.length > 0)
+        ns.print(`${completedFactions.length} factions are completed (all augs purchased): ${completedFactions.join(", ")}`);
+    if (softCompletedFactions.length > 0)
+        ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
 
     let scope = -1; // Scope increases each time we complete a type of work and haven't progressed enough to unlock more factions
     let numJoinedFactions = ns.getPlayer().factions.length;
@@ -486,7 +503,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         const factionWork = await detectBestFactionWork(ns, factionName); // Before each loop - determine what work gives the most rep/second for our current stats
         if (await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${factionWork}',  ${shouldFocusAtWork})`, '/Temp/work-for-faction.txt')) {
             lastActionRestart = Date.now();
-            ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
+            if (shouldFocusAtWork)
+                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep stealing focus
         } else {
             announce(ns, `Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
             break;

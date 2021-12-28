@@ -136,7 +136,8 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     const commandHash = hashCode(command);
     fName = fName || `/Temp/${commandHash}-data.txt`;
     const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
-    // Prepare a command that will write out a new file containing the results of the command unless it already exists with the same contents (saves time/ram to check first)
+    // Prepare a command that will write out a new file containing the results of the command
+    // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
     const commandToFile = `let result = ""; try { result = JSON.stringify(${command}); } catch { }
         if (ns.read("${fName}") != result) await ns.write("${fName}", result, 'w')`;
@@ -147,7 +148,8 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails
     const fileData = await autoRetry(ns, () => ns.read(fName), f => f !== undefined && f !== "",
-        () => `ns.read('${fName}') somehow returned undefined or an empty string`, maxRetries, retryDelayMs);
+        () => `ns.read('${fName}') somehow returned undefined or an empty string`,
+        maxRetries, retryDelayMs, undefined, verbose);
     if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
     return JSON.parse(fileData); // Deserialize it back into an object/array and return
 }
@@ -181,7 +183,8 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = 
     // To improve performance and save on garbage collection, we can skip writing this exact same script was previously written (common for repeatedly-queried data)
     if (ns.read(fileName) != script) await ns.write(fileName, script, "w");
     return await autoRetry(ns, () => fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
-        () => `Run command returned no pid. (Insufficient RAM, or bad command?) Destination: ${fileName} Command: ${command}`, maxRetries, retryDelayMs);
+        () => `Run command returned no pid. Destination: ${fileName} Command: ${command}\nEnsure you have sufficient free RAM to run this temporary script.`,
+        maxRetries, retryDelayMs, undefined, verbose);
 }
 
 /**
@@ -221,7 +224,8 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
 
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
  * @param {NS} ns - The nestcript instance passed to your script's main entry point */
-export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met", maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 2) {
+export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
+    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 2, verbose = false) {
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs;
     while (maxRetries-- > 0) {
@@ -233,7 +237,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         catch (error) {
             const fatal = maxRetries === 0;
             const errorLog = `${fatal ? 'FAIL' : 'WARN'}: (${maxRetries} retries remaining): ${String(error)}`
-            log(ns, errorLog, fatal, fatal ? 'error' : 'warning')
+            log(ns, errorLog, fatal, !verbose ? undefined : (fatal ? 'error' : 'warning'))
             if (fatal) throw error;
             await ns.sleep(retryDelayMs);
             retryDelayMs *= backoffRate;
@@ -269,16 +273,38 @@ export function scanAllServers(ns) {
 }
 
 /** @param {NS} ns 
+ * Get a dictionary of active source files, taking into account the current active bitnode as well. **/
+export async function getActiveSourceFiles(ns) {
+    return await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
+}
+
+/** @param {NS} ns 
+ * getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
+export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile) {
+    checkNsInstance(ns, '"getActiveSourceFiles"');
+    // Find out what source files the user has unlocked
+    let dictSourceFiles = await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, '/Temp/owned-source-files.txt');
+    // If the user is currently in a given bitnode, they will have its features unlocked
+    dictSourceFiles[(await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN] = 3;
+    return dictSourceFiles;
+}
+
+/** @param {NS} ns 
  * Return bitnode multiplers, or null if they cannot be accessed. **/
 export async function tryGetBitNodeMultipliers(ns) {
+    return await tryGetBitNodeMultipliers_Custom(ns, getNsDataThroughFile);
+}
+
+/** @param {NS} ns
+ * tryGetBitNodeMultipliers Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
+export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
-    const canGetBitNodeMultipliers =
-        (await getNsDataThroughFile(ns, 'ns.getOwnedSourceFiles()')).some(sf => sf.n === 5) ||
-        (await getNsDataThroughFile(ns, 'ns.getPlayer()')).bitNodeN === 5;
+    const canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile));
     if (!canGetBitNodeMultipliers) return null;
-    try { return await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()'); } catch { }
+    try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()'); } catch { }
     return null;
 }
 
-/** @param {NS} ns **/
+/** @param {NS} ns 
+ * Returns a helpful error message if we forgot to pass the ns instance to a function */
 export function checkNsInstance(ns, fnName = "this function") { if (!ns.print) throw `The first argument to ${fnName} should be a 'ns' instance.`; return ns; }

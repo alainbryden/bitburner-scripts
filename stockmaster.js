@@ -1,6 +1,6 @@
 import {
     formatMoney, formatNumberShort, formatDuration,
-    getNsDataThroughFile, runCommand, tryGetBitNodeMultipliers
+    getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers
 } from './helpers.js'
 
 let disableShorts = false;
@@ -82,21 +82,23 @@ export async function main(ns) {
     nearTermForecastWindowLength = options['pre-4s-inversion-detection-window'] || 10;
     longTermForecastWindowLength = options['pre-4s-forecast-window'] || (marketCycleLength + 1);
     showMarketSummary = options['show-pre-4s-forecast'] || options['show-market-summary'];
-    // Global values must be reset at start lest they be left in memory from a prior run
+    // Other global values must be reset at start lest they be left in memory from a prior run
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
     let corpus = 0, myStocks = [], allStocks = [];
-    if (options.l || options.liquidate)
+
+    if (!ns.getPlayer().hasTixApiAccess) // You cannot use the stockmaster until you have API access
+        return log(ns, "ERROR: You have to buy stock market access and API access before you can run this script!", true);
+
+    if (options.l || options.liquidate) // If given the "liquidate" command, try to kill the version of ourself trading in stocks
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
             `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-script.js');
-    try {
-        allStockSymbols = await getNsDataThroughFile(ns, 'ns.stock.getSymbols()', '/Temp/stock-symbols.txt');
-        allStocks = await initAllStocks(ns, allStockSymbols);
-    } catch (err) {
-        if (String(err).includes("WSE Access"))
-            return log(ns, "You have to buy stock market access and API access before you can run this script!", true);
-        throw (err); // Any other errors should be reraised.
+
+    let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
+    if (!disableShorts && (!(8 in dictSourceFiles) || dictSourceFiles[8] < 2)) {
+        log(ns, "INFO: Shorting stocks has been disabled (you have not yet unlocked access to shorting)");
+        options.disableShorts = true;
     }
-    // If given the "liquidate" command, try to kill the version of ourself trading in stocks, and then sell all shares
+
     if (options.l || options.liquidate) {
         await liquidate(ns, allStockSymbols); // Sell all stocks
         return;
