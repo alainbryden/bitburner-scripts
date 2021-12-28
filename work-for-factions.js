@@ -74,7 +74,7 @@ const argsSchema = [
     ['first', []], // Grind rep with these factions first. Also forces a join of this faction if we normally wouldn't (e.g. no desired augs or all augs owned)
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
-    ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
+    ['desired-stats', ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
     ['no-focus', false], // Disable doing work that requires focusing (crime, studying, or focused faction/company work)
     ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements (Also disabled with --no-focus)
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
