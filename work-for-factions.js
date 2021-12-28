@@ -484,8 +484,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     let lastStatusUpdateTime;
     while ((currentReputation = ns.getFactionRep(factionName)) < factionRepRequired) {
         const factionWork = await detectBestFactionWork(ns, factionName); // Before each loop - determine what work gives the most rep/second for our current stats
-        //if (await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${factionWork}') === true); ns.setFocus(${shouldFocusAtWork}`, '/Temp/work-for-faction.txt'))
-        if (await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${factionWork}')`, '/Temp/work-for-faction.txt')) {
+        if (await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${factionWork}',  ${shouldFocusAtWork})`, '/Temp/work-for-faction.txt')) {
             lastActionRestart = Date.now();
             ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
         } else {
@@ -519,8 +518,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
 async function detectBestFactionWork(ns, factionName) {
     let bestWork, bestRepRate = 0;
     for (const work of ["security", "field", "hacking"]) {
-        //if (!await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${work}') === true); ns.setFocus(${shouldFocusAtWork}`, '/Temp/work-for-faction.txt'))
-        if (!await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${work}')`, '/Temp/work-for-faction.txt')) {
+        if (!await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${work}',  ${shouldFocusAtWork})`, '/Temp/work-for-faction.txt')) {
             //ns.print(`"${factionName}" work ${work} not supported.`);
             continue; // This type of faction work must not be supported
         }
@@ -647,8 +645,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // TODO: If we ever get rid of the below periodic restart-work, we will need to monitor for interruptions with player.workType == e.g. "Work for Company"
         if (!studying && (!working || (Date.now() - lastActionRestart >= restartWorkInteval) /* We must periodically restart work to collect Rep Gains */)) {
             // Work for the company (assume daemon is grinding hack XP as fast as it can, so no point in studying for that)
-            //if (await getNsDataThroughFile(ns, `ns.workForCompany('${companyName}')); ns.setFocus(${shouldFocusAtWork}`, '/Temp/work-for-company.txt')) {
-            if (await getNsDataThroughFile(ns, `ns.workForCompany('${companyName}')`, '/Temp/work-for-company.txt')) {
+            if (await getNsDataThroughFile(ns, `ns.workForCompany('${companyName}',  ${shouldFocusAtWork})`, '/Temp/work-for-company.txt')) {
                 lastActionRestart = Date.now();
                 working = true;
             } else {
