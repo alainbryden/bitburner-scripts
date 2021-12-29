@@ -96,7 +96,7 @@ export async function main(ns) {
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!disableShorts && (!(8 in dictSourceFiles) || dictSourceFiles[8] < 2)) {
         log(ns, "INFO: Shorting stocks has been disabled (you have not yet unlocked access to shorting)");
-        options.disableShorts = true;
+        disableShorts = true;
     }
 
     allStockSymbols = await getNsDataThroughFile(ns, 'ns.stock.getSymbols()', '/Temp/stock-symbols.txt');
