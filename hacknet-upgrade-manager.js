@@ -31,9 +31,6 @@ export async function main(ns) {
         maxPayoffTime = Number.parseFloat(maxPayoffTime.replace("h", "")) * 3600
     else
         maxPayoffTime = Number.parseFloat(maxPayoffTime);
-    if (ns.hacknet.hashCapacity() == 0) {
-        log(ns, `WARNING: This utility was only meant to work on upgraded hacknet servers. You are using hacknet nodes.`);
-    }
     disableLogs(ns, ['sleep', 'getServerUsedRam']);
     log(ns, `Starting hacknet-upgrade-manager with purchase payoff time limit of ${formatDuration(maxPayoffTime * 1000)} and ` +
         (maxSpend == Number.MAX_VALUE ? 'no spending limit' : `a spend limit of ${formatMoney(maxSpend)}`) +
