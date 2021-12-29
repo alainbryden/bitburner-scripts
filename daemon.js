@@ -316,7 +316,7 @@ async function runPeriodicScripts(ns) {
     } */
     // Super-early aug, if we are poor, spend hashes as soon as we get them for a quick cash injection:
     if (playerMoney < 10000000) {
-        await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`);
+        await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`, '/Temp/sell-hashes-for-money.js');
     }
 }
 
