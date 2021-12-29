@@ -1422,14 +1422,16 @@ let isFlaggedForDeletion = (hostName) => hostName != "home" && doesFileExist("/F
 
 // Helper to construct our server lists from a list of all host names
 function buildServerList(ns, verbose = false) {
-    // Actively remove previously added servers that are now flagged for deletion.
-    for (const hostName of addedServerNames.filter(hostName => isFlaggedForDeletion(hostName)))
-        removeServerByName(hostName);
-    // Get list of new servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans)
-    let allServers = scanAllServers(ns).filter(hostName => !addedServerNames.includes(hostName) && !isFlaggedForDeletion(hostName))
+    // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans) that are not currently flagged for deletion
+    let allServers = scanAllServers(ns).filter(hostName => !isFlaggedForDeletion(hostName));
+    // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
         allServers = allServers.filter(hostName => !hostName.startsWith('hacknet-node-'))
-    allServers.forEach(hostName => addServer(buildServerObject(ns, hostName, verbose)));
+    // Remove all servers we currently have added that are no longer being returned by the above query
+    for (const hostName of addedServerNames.filter(hostName => !allServers.includes(hostName)))
+        removeServerByName(hostName);
+    // Add any servers that are new
+    allServers.filter(hostName => !addedServerNames.includes(hostName)).forEach(hostName => addServer(buildServerObject(ns, hostName, verbose)));
 }
 
 // Helper to sort various copies of our host list in different ways.
