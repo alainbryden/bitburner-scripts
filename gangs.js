@@ -237,7 +237,7 @@ async function optimizeGangCrime(ns, myGangInfo) {
         // Following the above attempted optimization, if we're above our wanted gain threshold, downgrade the task of the greatest generators of wanted until within our limit
         let infiniteLoop = 9999;
         while (totalWanted > wantedGainTolerance && Object.values(proposedTasks).some(t => t.name !== "Vigilante Justice")) {
-            const mostWanted = Object.keys(proposedTasks).reduce((t, c) => t == null || proposedTasks[t].wanted < proposedTasks[c].wanted ? c : t, null);
+            const mostWanted = Object.keys(proposedTasks).reduce((t, c) => proposedTasks[c].name !== "Vigilante Justice" && (t == null || proposedTasks[t].wanted < proposedTasks[c].wanted) ? c : t, null);
             const nextBestTask = memberTaskRates[mostWanted].filter(c => c.wanted < proposedTasks[mostWanted].wanted)[0] ?? memberTaskRates[mostWanted].find(t => t.name === "Vigilante Justice");
             [proposedTasks[mostWanted], totalWanted, totalGain] = [nextBestTask, totalWanted + nextBestTask.wanted - proposedTasks[mostWanted].wanted, totalGain + nextBestTask[optStat] - proposedTasks[mostWanted][optStat]];
             if (infiniteLoop-- <= 0) throw "Infinite Loop!";
