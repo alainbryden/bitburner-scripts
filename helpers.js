@@ -307,7 +307,7 @@ export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile
     let canGetBitNodeMultipliers = false;
     try { canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile)); } catch { }
     if (!canGetBitNodeMultipliers) return null;
-    try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()'); } catch { }
+    try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-multipliers.txt'); } catch { }
     return null;
 }
 
