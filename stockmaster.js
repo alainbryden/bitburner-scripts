@@ -106,7 +106,7 @@ export async function main(ns) {
         await liquidate(ns, allStockSymbols); // Sell all stocks
         return;
     } else if (!options.mock) { // If we're not liquidating or in mock mode, we MUST not run two stockmasters at once, or chaos will ensue
-        let otherStockmasters = (await getNsDataThroughFile(ns, `ns.ps()`)).filter(p => p.filename == ns.getScriptName()); // TODO: For bonus points, check all servers
+        let otherStockmasters = (await getNsDataThroughFile(ns, `ns.ps()`, '/Temp/process-list.txt')).filter(p => p.filename == ns.getScriptName()); // TODO: For bonus points, check all servers
         otherStockmasters = otherStockmasters.filter(p => JSON.stringify(ns.args) != JSON.stringify(p.args)); // Don't detect ourselves of course.
         if (otherStockmasters.some(p => !p.args.includes("--mock"))) // Exception, feel free to run multiple stockmasters in mock mode
             return log(ns, `ERROR: Another version of ${ns.getScriptName()} is already running with different args. Running twice is a bad idea!`, true, 'error');
@@ -380,7 +380,7 @@ let summaryFile = '/Temp/stockmarket-summary.txt';
 let updateForecastFile = async (ns, summary) => await ns.write(summaryFile, summary, 'w');
 let launchSummaryTail = async ns => {
     let summaryTailScript = summaryFile.replace('.txt', '-tail.js');
-    if (await getNsDataThroughFile(ns, `ns.scriptRunning('${summaryTailScript}', ns.getHostname())`))
+    if (await getNsDataThroughFile(ns, `ns.scriptRunning('${summaryTailScript}', ns.getHostname())`, '/Temp/stockmarket-summary-is-running.txt'))
         return;
     //await getNsDataThroughFile(ns, `ns.scriptKill('${summaryTailScript}', ns.getHostname())`, summaryTailScript.replace('.js', '-kill.js')); // Only needed if we're changing the script below
     await runCommand(ns, `ns.disableLog('sleep'); ns.tail(); let lastRead = '';
@@ -512,12 +512,12 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, corpus, allStockSymbol
     if (playerStats.money < totalCost)
         await liquidate(ns, allStockSymbols);
     if (!playerStats.has4SData) {
-        if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()'))
+        if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt'))
             log(ns, `Purchased 4SMarketData for ${formatMoney(cost4sData)}!`, true, 'success');
         else
             log(ns, 'Error attempting to purchase 4SMarketData!', true, 'error');
     }
-    if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()')) {
+    if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/purchase-4s-api.txt')) {
         log(ns, `Purchased 4SMarketDataTixApi for ${formatMoney(cost4sApi)}!`, true, 'success');
         return true;
     } else
