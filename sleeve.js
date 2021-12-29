@@ -1,7 +1,7 @@
 import { getNsDataThroughFile, formatMoney, formatDuration, disableLogs } from './helpers.js'
 
 const interval = 5000; // Uodate (tick) this often
-const minTaskWorkTime = 60000; // Gang members assigned a new task should stick to it for at least this long
+const minTaskWorkTime = 59000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
 const tempFile = '/Temp/sleeve-set-task.txt';
 const crimes = ['mug', 'homicide']
 
@@ -43,41 +43,6 @@ export async function main(ns) {
             let sleeveStats = ns.sleeve.getSleeveStats(i);
             let shock = sleeveStats.shock;
             let sync = sleeveStats.sync;
-            // Manage Shock
-            if (shock > 0 && options['shock-recovery'] > 0 && Math.random() < options['shock-recovery']) {
-                task[i] = "shock"
-                if (task[i] == "shock") {
-                    if (Date.now() - (lastUpdate[i] ?? 0) > 60000) {
-                        log(ns, `INFO: Sleeve ${i} is recovering from shock... ${shock.toFixed(2)}%`);
-                        lastUpdate[i] = Date.now();
-                    }
-                    continue;
-                }
-                let strAction = `Set sleeve ${i} to recover from shock`;
-                if (await getNsDataThroughFile(ns, `ns.sleeve.setToShockRecovery(${i})`, tempFile)) {
-                    task[i] = "shock"
-                    lastReassign = Date.now();
-                    log(ns, `SUCCESS: ${strAction}`);
-                } else log(ns, `ERROR: Failed to ${strAction}`, 'error');
-                continue;
-            }
-            // Manage Sync
-            if (sync < 100) {
-                if (task[i] == "sync") {
-                    if (Date.now() - (lastUpdate[i] ?? 0) > 60000) {
-                        log(ns, `INFO: Sleeve ${i} is syncing... ${sync.toFixed(2)}%`);
-                        lastUpdate[i] = Date.now();
-                    }
-                    continue;
-                }
-                let strAction = `Set sleeve ${i} to sync`;
-                if (await getNsDataThroughFile(ns, `ns.sleeve.setToSynchronize(${i})`, tempFile)) {
-                    task[i] = "sync"
-                    lastReassign = Date.now();
-                    log(ns, `SUCCESS: ${strAction}`);
-                } else log(ns, `ERROR: Failed to ${strAction}`, 'error');
-                continue;
-            }
             // Manage Augmentations
             if (shock == 0 && availableAugs[i].length > 0) {
                 const cooldownLeft = Math.max(0, options['buy-cooldown'] - (Date.now() - (lastPurchase[i] || 0)));
@@ -97,17 +62,36 @@ export async function main(ns) {
                     lastPurchase[i] = Date.now();
                 }
             }
-            // Manage Task
-            let designatedTask = options.crime || (sleeveStats.strength < 100 ? 'mug' : 'homicide');
-            if (task[i] == designatedTask || Date.now() - lastReassign[i] < minTaskWorkTime) continue;
-            if (crimes.includes(designatedTask)) {
-                let strAction = `Set sleeve ${i} to commit ${designatedTask}`;
-                if (await getNsDataThroughFile(ns, `ns.sleeve.setToCommitCrime(${i}, '${designatedTask}')`, tempFile)) {
-                    task[i] = designatedTask;
-                    lastReassign = Date.now();
-                    log(ns, `SUCCESS: ${strAction}`);
-                } else log(ns, `ERROR: Failed to ${strAction}`, 'error');
-            } else log(ns, `ERROR: Unrecognized task ${designatedTask}. Known crimes are: ${JSON.stringify(crimes)}`, 'error');
+            // Manage what this sleeve should be doing
+            let command, designatedTask;
+            if (sync < 100) { // Synchronize
+                designatedTask = "synchronize";
+                command = `ns.sleeve.setToSynchronize(${i})`;
+                if (task[i] == designatedTask && Date.now() - (lastUpdate[i] ?? 0) > minTaskWorkTime) {
+                    log(ns, `INFO: Sleeve ${i} is syncing... ${sync.toFixed(2)}%`);
+                    lastUpdate[i] = Date.now();
+                }
+            } else if (shock > 0 && options['shock-recovery'] > 0 && Math.random() < options['shock-recovery']) { // Recover from shock
+                designatedTask = "recover from shock";
+                command = `ns.sleeve.setToShockRecovery(${i})`;
+                if (task[i] == designatedTask && Date.now() - (lastUpdate[i] ?? 0) > minTaskWorkTime) {
+                    log(ns, `INFO: Sleeve ${i} is recovering from shock... ${shock.toFixed(2)}%`);
+                    lastUpdate[i] = Date.now();
+                }
+            } else { // Do something productive
+                let crime = options.crime || (sleeveStats.strength < 100 ? 'mug' : 'homicide');
+                designatedTask = `commit ${crime}`;
+                command = `ns.sleeve.setToCommitCrime(${i}, '${crime}')`;
+            }
+            // Don't change tasks if we've changed tasks recently
+            if (Date.now() - (lastReassign[i] || 0) < minTaskWorkTime || task[i] == designatedTask) continue;
+            // Start doing the specified task
+            let strAction = `Set sleeve ${i} to ${designatedTask}`;
+            if (await getNsDataThroughFile(ns, command, tempFile)) {
+                task[i] = designatedTask;
+                lastReassign[i] = Date.now();
+                log(ns, `SUCCESS: ${strAction}`);
+            } else log(ns, `ERROR: Failed to ${strAction}`, 'error');
         }
         await ns.sleep(interval);
     }
