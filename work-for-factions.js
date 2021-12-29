@@ -127,13 +127,12 @@ export async function main(ns) {
 
     // Get some information about gangs (if unlocked)
     if (2 in dictSourceFiles) {
-        const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
-        if (gangInfo && gangInfo.faction) {
-            playerGang = gangInfo.faction;
+        try { playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt'))?.faction; } catch { /* No gang joined */ }
+        if (playerGang) {
             let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
             if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
                 preferredEarlyFactionOrder.splice(configGangIndex, 1);
-            allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())') || [];
+            allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())', '/Temp/gang-names.txt') || [];
         }
     }
 
@@ -144,10 +143,10 @@ export async function main(ns) {
         const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
         const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
 
-        ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`);
+        ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
         shouldFocusAtWork = !noFocus; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
         if (shouldFocusAtWork) { // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
-            let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`);
+            let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
             shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
         }
 
@@ -273,7 +272,7 @@ async function earnFactionInvite(ns, factionName) {
     const player = ns.getPlayer();
     const joinedFactions = player.factions;
     if (joinedFactions.includes(factionName)) return true;
-    var invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()');
+    var invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/player-faction-invites.txt');
     if (invitations.includes(factionName))
         return await tryJoinFaction(ns, factionName);
 
@@ -419,7 +418,7 @@ export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000)
     ns.print(`Waiting for invite from faction "${factionName}"...`);
     let waitTime = maxWaitTime;
     do {
-        var invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()');
+        var invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/player-faction-invites.txt');
         var joinedFactions = ns.getPlayer().factions;
         if (invitations.includes(factionName) || joinedFactions.includes(factionName))
             break;
@@ -580,7 +579,7 @@ export async function workForAllMegacorps(ns, megacorpFactionsInPreferredOrder, 
 export async function tryBuyReputation(ns) {
     if (options['no-coding-contracts']) return;
     if (ns.getPlayer().money > 100E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-node hashes on contracts to gain rep faster
-        let spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Generate Coding Contract") - ns.hacknet.numHashes()');
+        let spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Generate Coding Contract") - ns.hacknet.numHashes()', '/Temp/spend-hacknet-hashes.txt');
         if (spentHashes > 0) {
             announce(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, 'success');
         }
@@ -597,7 +596,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     let player = ns.getPlayer();
     if (player.factions.includes(factionName))
         return false; // Only return true if we did work to earn a new faction invite
-    if ((await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()')).includes(factionName))
+    if ((await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/player-faction-invites.txt')).includes(factionName))
         return waitForInvite ? await waitForFactionInvite(ns, factionName) : false;
     // TODO: In some scenarios, the best career path may require combat stats, this hard-codes the optimal path for hack stats
     const itJob = jobs.find(j => j.name == "it");
@@ -647,7 +646,8 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                     working = !(studying = true);
             }
             if (requiredCha - player.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
-                if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Studying")')) {
+                let spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Improve Studying") - ns.hacknet.numHashes()', '/Temp/spend-hacknet-hashes.txt');
+                if (spentHashes > 0) {
                     announce(ns, 'Bought a "Improve Studying" upgrade.', 'success');
                     await studyForCharisma(ns); // We must restart studying for the upgrade to take effect.
                 }
