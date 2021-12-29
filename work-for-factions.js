@@ -481,7 +481,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     }
 
     if (ns.getPlayer().workRepGained > 0) // If we're currently woing faction work, stop to collect reputation and find out how much is remaining
-        await getNsDataThroughFile(ns, `ns.stopAction()`);
+        await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
     let currentReputation = ns.getFactionRep(factionName);
     // If the best faction aug is within 10% of our current rep, grind all the way to it so we can get it immediately, regardless of our current rep target
     if (forceBestAug || highestRepAug <= 1.1 * Math.max(currentReputation, factionRepRequired)) {
