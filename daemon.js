@@ -256,11 +256,11 @@ export async function main(ns) {
         await runStartupScripts(ns); // Start helper scripts
     if (playerHackSkill() < 3000 && !xpOnly)
         await kickstartHackXp(ns, 0.5, verbose, 1); // Fire a hack XP cycle using a chunk of free RAM
-    if (stockFocus) {
-        await updateStockPositions(ns);
-        const sumOfTrue = (t, s) => t + (s ? 1 : 0);
-        maxTargets = Object.values(shouldManipulateGrow).reduce(sumOfTrue, 0) + Object.values(shouldManipulateHack).reduce(sumOfTrue, 0);
-    }
+    if (stockFocus)
+        maxTargets = serverStockSymbols.length; // Ensure we immediately attempt to target all servers that represent stocks
+    if (stockMode && !playerStats.hasTixApiAccess)
+        log("WARNING: Ran with '--stock-manipulation' flag, but this will have no effect until you buy access to the stock market API then restart or manually run stockmaster.js");
+
     maxTargets = Math.max(maxTargets, options['initial-max-targets'])
 
     // the actual worker processes live here
@@ -297,24 +297,6 @@ async function runPeriodicScripts(ns) {
     }
     // A couple other quick tasks
     let playerMoney = ns.getServerMoneyAvailable("home");
-    /* Probably don't need this anymore, stockmaster.js now can generate profit pre-S4 and calls purchase4SMarketDataTixApi itself!
-    // If we can afford 4SData and don't own it, buy it!
-    // If we can afford the 4SData API and don't own it, buy it, then launch stockmaster.js
-    const api4sCost = bitnodeMults.FourSigmaMarketDataApiCost * 25000000000;
-    if (!playerStats.has4SDataTixApi && (playerMoney >= api4sCost)) {
-        if (!playerStats.hasTixApiAccess)
-            ns.toast('Buy Stock Market Access Already! (must be done manually)', 'warning');
-        else if (!playerStats.has4SData) {// If we can afford the API access, we can afford the data && (playerMoney >= bitnodeMults.FourSigmaMarketDataCost * 5000000000)
-            await runCommand(ns, 'ns.stock.purchase4SMarketData()'); // We've now spent a chunk of money, have to wait for a future loop to afford 4S API access again
-            ns.toast(log('Purchased 4SMarketData!', true), 'success');
-        } else {
-            let pid = await runCommand(ns, 'ns.stock.purchase4SMarketDataTixApi()');
-            await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
-            ns.toast(log(`Purchased 4SMarketDataTixApi for ${formatMoney(api4sCost)}!`, true), 'success');
-            if (!tryRunTool(ns, getTool("stockmaster.js")))
-                ns.toast(log('Error: Purchased 4SDataTixApi, but then failed to launch stockmaster.js.', true), 'error');
-        }
-    } */
     // Super-early aug, if we are poor, spend hashes as soon as we get them for a quick cash injection:
     if (playerMoney < 10000000) {
         await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`, '/Temp/sell-hashes-for-money.js');
@@ -1366,14 +1348,19 @@ const serverStockSymbols = Object.fromEntries([
 let serversWithOwnedStock = []; // Dict of server names, with a value of "true" if we should turn on stock-manipulation when growing this server
 let shouldManipulateGrow = []; // Dict of server names, with a value of "true" if we should turn on stock-manipulation when growing this server
 let shouldManipulateHack = []; // Dict of server names, with a value of "true" if we should turn on stock-manipulation when hacking this server
+let failedStockUpdates = 0;
 /** @param {NS} ns **/
 async function updateStockPositions(ns) {
+    if (!playerStats.hasTixApiAccess) return; // No point in attempting anything here if the user doesn't have stock market access yet.
     let updatedPositions = ns.read(`/Temp/stock-probabilities.txt`); // Should be a dict of stock symbol -> prob left by the stockmaster.js script.
     if (!updatedPositions) {
-        stockMode = false;
-        stockFocus = false;
-        return log('The file "/Temp/stock-probabilities.txt" is missing or empty. (Is stockmaster.js running?)', false, 'warning');
+        failedStockUpdates++;
+        if (failedStockUpdates % 60 == 10) // Periodically warn if stockmaster is not running (or not generating the required file)
+            log(`WARNING: The file "/Temp/stock-probabilities.txt" has been missing or empty the last ${failedStockUpdates} attempts.` +
+                `\nEnsure stockmaster.js is running, or turn off the --stock-manipulation flag when running.`, false, 'warning');
+        return
     }
+    failedStockUpdates = 0;
     updatedPositions = JSON.parse(updatedPositions); // Should be a dict of stock symbol -> prob left by the stockmaster.js script.
     // Strengthen whatever trend a stock currently has, whether we own it or not
     const newShouldManipulateGrow = {}, newShouldManipulateHack = {}, newServersWithOwnedStock = [];
