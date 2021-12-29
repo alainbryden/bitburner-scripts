@@ -162,6 +162,7 @@ export async function main(ns) {
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
     updatePlayerStats();
     dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
+    log("The following source files are active: " + JSON.stringify(dictSourceFiles));
     //ns.disableLog('ALL');
     disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan']);
 
