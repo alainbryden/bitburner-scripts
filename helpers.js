@@ -225,7 +225,7 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
  * @param {NS} ns - The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
-    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 2, verbose = false) {
+    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false) {
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs;
     while (maxRetries-- > 0) {
