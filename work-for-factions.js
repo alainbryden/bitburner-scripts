@@ -127,8 +127,9 @@ export async function main(ns) {
 
     // Get some information about gangs (if unlocked)
     if (2 in dictSourceFiles) {
-        try { playerGang = (await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt'))?.faction; } catch { /* No gang joined */ }
-        if (playerGang) {
+        const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
+        if (gangInfo && gangInfo.faction) {
+            playerGang = gangInfo.faction;
             let configGangIndex = preferredEarlyFactionOrder.findIndex(f => f === "Slum Snakes");
             if (playerGang && configGangIndex != -1) // If we're in a gang, don't need to earn an invite to slum snakes anymore
                 preferredEarlyFactionOrder.splice(configGangIndex, 1);
