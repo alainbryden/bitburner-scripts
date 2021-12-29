@@ -1,4 +1,4 @@
-import { formatMoney, formatNumberShort, getNsDataThroughFile, runCommand } from './helpers.js'
+import { formatMoney, formatNumberShort, getNsDataThroughFile, getActiveSourceFiles, runCommand, tryGetBitNodeMultipliers } from './helpers.js'
 
 // Global constants
 const updateInterval = 200;
@@ -51,9 +51,9 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
-    const sf2Level = ((await getNsDataThroughFile(ns, 'ns.getOwnedSourceFiles()')).find(sf => sf.n == 2) || { lvl: 0 }).lvl;
-    if (sf2Level == 0 && playerData.bitNodeN !== 2)
+    const ownedSourceFiles = await getActiveSourceFiles(ns);
+    const sf2Level = ownedSourceFiles[2] || 0;
+    if (sf2Level == 0)
         return log(ns, "ERROR: You have no yet unlocked gangs. Script should not be run...");
 
     await initialize(ns);
@@ -92,7 +92,7 @@ async function initialize(ns) {
     lastOtherGangInfo = null;
     // Determine how much rep we would need to get the most expensive unowned augmentation
     const augmentationNames = await getNsDataThroughFile(ns, `ns.getAugmentationsFromFaction('${myGangFaction}')`, '/Temp/gang-augs.txt');
-    const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`);
+    const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
     const dictAugRepReqs = await getDict(ns, augmentationNames, 'getAugmentationRepReq', '/Temp/aug-repreqs.txt');
     // Due to a bug, gangs appear to provide "The Red Pill" even when it's unavailable (outside of BN2), so ignore this one.
     requiredRep = augmentationNames.filter(aug => !ownedAugmentations.includes(aug) && aug != "The Red Pill").reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1);
@@ -110,9 +110,9 @@ async function initialize(ns) {
     })).sort((a, b) => a.cost - b.cost);
     //log(ns, JSON.stringify(equipments));
     // Initialize information about gang members and crimes
-    allTaskNames = await getNsDataThroughFile(ns, 'ns.gang.getTaskNames()')
+    allTaskNames = await getNsDataThroughFile(ns, 'ns.gang.getTaskNames()', '/Temp/gang-task-names.txt')
     allTaskStats = await getGangInfoDict(ns, allTaskNames, 'getTaskStats');
-    multGangSoftcap = (await getNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()')).GangSoftcap;
+    multGangSoftcap = (await tryGetBitNodeMultipliers(ns))?.GangSoftcap || 1;
     myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()', '/Temp/gang-member-names.txt');
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
     for (const member of Object.values(dictMembers)) // Initialize the current activity of each member
@@ -199,7 +199,7 @@ async function optimizeGangCrime(ns, myGangInfo) {
         myGangInfo.respect > 200 ? -0.01 * myGangInfo.wantedLevel /* Recover from wanted penalty */ :
         currentWantedPenalty < -0.9 * wantedPenaltyThreshold && myGangInfo.wantedLevel >= (1.1 + myGangInfo.respect / 10000) ? 0 /* Sustain */ :
             Math.max(myGangInfo.respectGainRate / 1000, myGangInfo.wantedLevel / 10) /* Allow wanted to increase at a manageable rate */;
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     const optStat = factionRep > requiredRep ? "money" : (playerData.money > 1E11 || myGangInfo.respect) < 9000 ? "respect" : "both money and respect"; // Change priority based on achieved rep/money
     // Pre-compute how every gang member will perform at every task
     const memberTaskRates = Object.fromEntries(Object.values(dictMembers).map(m => [m.name, allTaskNames.map(taskName => ({
@@ -330,7 +330,7 @@ async function tryUpgradeMembers(ns, dictMembers) {
     equipments.forEach(e => e.cost = dictEquipmentCosts[e.name])
     // Upgrade members, spending no more than x% of our money per tick (and respecting the global reseve)
     const purchaseOrder = [];
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     const homeMoney = playerData.money - (Number.parseFloat(ns.read("reserve.txt")) || 0);
     let budget = maxSpendPerTickTransientEquipment * homeMoney;
     let augBudget = maxSpendPerTickPermanentEquipment * homeMoney;
