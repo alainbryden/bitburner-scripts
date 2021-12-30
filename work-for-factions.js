@@ -525,7 +525,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         }
         // If we explicitly stop working, we immediately get our updated faction rep, otherwise it lags by 1 loop (until after next time we call workForFaction)
         if (currentReputation + ns.getPlayer().workRepGained >= factionRepRequired) // Note: Actual work rep gained will be subject to early cancellation policy
-            await getNsDataThroughFile(ns, `ns.stopAction()`); // We're close - stop working so our current rep is accurate when we check the while loop condition
+            await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt'); // We're close - stop working so our current rep is accurate when we check the while loop condition
     }
     if (currentReputation >= factionRepRequired)
         ns.print(`Attained ${Math.round(currentReputation).toLocaleString()} rep with "${factionName}" (needed ${factionRepRequired.toLocaleString()}).`);
