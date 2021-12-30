@@ -59,7 +59,8 @@ export async function main(ns) {
     await initialize(ns);
     log(ns, "Starting main loop...");
     while (true) {
-        await mainLoop(ns);
+        try { await mainLoop(ns); }
+        catch (err) { log(ns, `ERROR: Caught an unhandled error in the main loop: ${String(err)}`, error, true); }
         await ns.sleep(updateInterval);
     }
 }
@@ -379,7 +380,7 @@ async function waitForGameUpdate(ns, oldGangInfo) {
             return latestGangInfo;
         await ns.sleep(Math.min(waitInterval, start + maxWaitTime - Date.now()));
     }
-    log(ns, `ERROR: Max wait time ${maxWaitTime} exceeded while waiting for old gang info to update.\n${JSON.stringify(oldGangInfo)}\n===\n${JSON.stringify(latestGangInfo)}`, 'error');
+    log(ns, `WARNING: Max wait time ${maxWaitTime} exceeded while waiting for old gang info to update.\n${JSON.stringify(oldGangInfo)}\n===\n${JSON.stringify(latestGangInfo)}`, 'warning');
     territoryTickDetected = false;
     return latestGangInfo;
 }
