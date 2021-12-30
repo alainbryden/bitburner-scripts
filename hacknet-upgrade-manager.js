@@ -79,7 +79,7 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
     for (var i = 0; i < ns.hacknet.numNodes(); i++) {
         let nodeStats = ns.hacknet.getNodeStats(i);
         if (formulas) { // When a hacknet server runs scripts, nodeStats.production lags behind what it should be for current ram usage. Get the "raw" rate
-            try { nodeStats.production = ns.formulas.hacknetServers.hashGainRate(nodeStats.level, 0, nodeStats.ram, nodeStats.cores, currentHacknetMult); }
+            try { ns.hacknet.hashCapacity() == 0 ? nodeStats.production = ns.formulas.hacknetNodes.moneyGainRate(nodeStats.level, nodeStats.ram, nodeStats.cores, currentHacknetMult) : nodeStats.production = ns.formulas.hacknetServers.hashGainRate(nodeStats.level, 0, nodeStats.ram, nodeStats.cores, currentHacknetMult); }
             catch { formulas = false; }
         }
         worstNodeProduction = Math.min(worstNodeProduction, nodeStats.production);
