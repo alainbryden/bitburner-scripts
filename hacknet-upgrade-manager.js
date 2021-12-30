@@ -33,7 +33,8 @@ export async function main(ns) {
     else
         maxPayoffTime = Number.parseFloat(maxPayoffTime);
     disableLogs(ns, ['sleep', 'getServerUsedRam']);
-    haveHacknetServers = ns.hacknet.hashCapacity > 0;
+    let formulas = true;
+    haveHacknetServers = ns.hacknet.hashCapacity() > 0;
     log(ns, `Starting hacknet-upgrade-manager with purchase payoff time limit of ${formatDuration(maxPayoffTime * 1000)} and ` +
         (maxSpend == Number.MAX_VALUE ? 'no spending limit' : `a spend limit of ${formatMoney(maxSpend)}`) +
         `. Current fleet: ${ns.hacknet.numNodes()} nodes...`);
