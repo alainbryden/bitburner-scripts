@@ -64,7 +64,7 @@ export async function main(ns) {
             }
 
             const karma = ns.heart.break();
-            if (karma < -100) {
+            if (karma <= -9) {
                 headers.push("Karma");
                 values.push(formatNumberShort(karma, 3, 2));
             }
