@@ -136,13 +136,13 @@ export async function main(ns) {
         // Be more conservative with our decisions if we don't have 4S data
         const thresholdToBuy = pre4s ? options['pre-4s-buy-threshold-return'] : options['buy-threshold'];
         const thresholdToSell = pre4s ? options['pre-4s-sell-threshold-return'] : options['sell-threshold'];
+        if (myStocks.length > 0)
+            doStatusUpdate(ns, allStocks, myStocks, hudElement);
         if (pre4s && allStocks[0].priceHistory.length < minTickHistory) {
             log(ns, `Building a history of stock prices (${allStocks[0].priceHistory.length}/${minTickHistory})...`);
             await ns.sleep(sleepInterval);
             continue;
         }
-        else if (myStocks.length > 0)
-            doStatusUpdate(ns, allStocks, myStocks, hudElement);
 
         // Sell forecasted-to-underperform shares (worse than some expected return threshold)
         let sales = 0;
