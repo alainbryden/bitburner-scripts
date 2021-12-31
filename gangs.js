@@ -60,7 +60,7 @@ export async function main(ns) {
     log(ns, "Starting main loop...");
     while (true) {
         try { await mainLoop(ns); }
-        catch (err) { log(ns, `ERROR: Caught an unhandled error in the main loop: ${String(err)}`, error, true); }
+        catch (err) { log(ns, `ERROR: Caught an unhandled error in the main loop: ${String(err)}`, 'error', true); }
         await ns.sleep(updateInterval);
     }
 }
