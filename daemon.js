@@ -257,7 +257,7 @@ export async function main(ns) {
     if (playerHackSkill() < 3000 && !xpOnly)
         await kickstartHackXp(ns, 0.5, verbose, 1); // Fire a hack XP cycle using a chunk of free RAM
     if (stockFocus)
-        maxTargets = serverStockSymbols.length; // Ensure we immediately attempt to target all servers that represent stocks
+        maxTargets = Object.keys(serverStockSymbols).length; // Ensure we immediately attempt to target all servers that represent stocks
     if (stockMode && !playerStats.hasTixApiAccess)
         log("WARNING: Ran with '--stock-manipulation' flag, but this will have no effect until you buy access to the stock market API then restart or manually run stockmaster.js");
 
