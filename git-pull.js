@@ -26,9 +26,9 @@ export async function main(ns) {
     const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
-        const remoteFilePath = baseUrl + localFilePath.substr(options.subfolder.length);
+        const remoteFilePath = baseUrl + localFilePath;
         ns.print(`Trying to update "${localFilePath}" from ${remoteFilePath} ...`);
-        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, localFilePath))
+        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, options.subfolder + '/' + localFilePath))
             ns.tprint(`SUCCESS: Updated "${localFilePath}" to the latest from ${remoteFilePath}`);
         else
             ns.tprint(`WARNING: "${localFilePath}" was not updated. (Currently running or not located at ${remoteFilePath} )`)
