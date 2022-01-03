@@ -284,7 +284,8 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
     let tempFile = '/Temp/owned-source-files.txt';
     // Find out what source files the user has unlocked
-    let dictSourceFiles = await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, tempFile);
+    let dictSourceFiles;
+    try { await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, tempFile); } catch { }
     if (!dictSourceFiles) { // Bit of a hack, but if RAM is so low that this fails, we can fallback to using an older version of this file, and even assuming we have no source files.
         dictSourceFiles = ns.read(tempFile)
         dictSourceFiles = dictSourceFiles ? JSON.parse(dictSourceFiles) : {};
