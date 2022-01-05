@@ -186,8 +186,8 @@ export async function main(ns) {
     xpOnly = options.x || options['xp-only'];
     stockMode = options.s || options['stock-manipulation'] || options['stock-manipulation-focus'];
     stockFocus = options['stock-manipulation-focus'];
-    useHacknetNodes = options.n || options['run-once'];
-    verbose = options.v || options.verbose;
+    useHacknetNodes = options.n || options['use-hacknet-nodes'];
+    verbose = options.v || options['verbose'];
     runOnce = options.o || options['run-once'];
     loopingMode = options['looping-mode'];
     recoveryThreadPadding = options['recovery-thread-padding'];
@@ -196,7 +196,7 @@ export async function main(ns) {
     if (xpOnly) log('-x - Hack XP Grinding mode activated!');
     if (stockMode) log('-s - Stock market manipulation mode activated!');
     if (stockFocus) log('--stock-manipulation-focus - Stock market manipulation is the main priority');
-    if (xpOnly) log('-n - Using hacknet nodes to run scripts!');
+    if (useHacknetNodes) log('-n - Using hacknet nodes to run scripts!');
     if (verbose) log('-v - Verbose logging activated!');
     if (runOnce) log('-o - Run-once mode activated!');
     if (loopingMode) {
