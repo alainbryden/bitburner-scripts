@@ -480,7 +480,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         factionRepRequired = highestRepAug = mostExpensiveAugByFaction[factionName];
     }
 
-    if (ns.getPlayer().workRepGained > 0) // If we're currently woing faction work, stop to collect reputation and find out how much is remaining
+    if (ns.getPlayer().workRepGained > 0) // If we're currently doing faction work, stop to collect reputation and find out how much is remaining
         await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
     let currentReputation = ns.getFactionRep(factionName);
     // If the best faction aug is within 10% of our current rep, grind all the way to it so we can get it immediately, regardless of our current rep target
@@ -500,6 +500,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
     let lastStatusUpdateTime;
+	let duration;
+	let eta;
     while ((currentReputation = ns.getFactionRep(factionName)) < factionRepRequired) {
         const factionWork = await detectBestFactionWork(ns, factionName); // Before each loop - determine what work gives the most rep/second for our current stats
         if (await getNsDataThroughFile(ns, `ns.workForFaction('${factionName}', '${factionWork}',  ${shouldFocusAtWork})`, '/Temp/work-for-faction.txt')) {
@@ -512,7 +514,9 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         }
         let status = `Doing '${factionWork}' work for "${factionName}" until ${factionRepRequired.toLocaleString()} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-            ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString()}, earning ${(ns.getPlayer().workRepGainRate * 5).toFixed(2)} rep/sec.`);
+			duration = Math.floor((factionRepRequired - currentReputation) / (ns.getPlayer().workRepGainRate * 5) * 1000);
+			eta = formatDuration(duration);
+            ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString()}, earning ${(ns.getPlayer().workRepGainRate * 5).toFixed(2)} rep/sec. ETA: ` + eta);
             lastStatusUpdateTime = Date.now();
         }
         await tryBuyReputation(ns);
@@ -607,6 +611,8 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatusUpdateTime, lastStatus = "";
+	let duration;
+	let eta;
     let studying = false, working = false;
     while (((currentReputation = ns.getCompanyRep(companyName)) < repRequiredForFaction) && !player.factions.includes(factionName)) {
         player = ns.getPlayer();
@@ -675,10 +681,12 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         }
         if (lastStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             player = ns.getPlayer();
+			duration = Math.floor((((requiredRep || repRequiredForFaction) - currentReputation) / player.workRepGainRate * 5) * 1000);
+			eta = formatDuration(duration);
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${(player.workRepGainRate * 5).toFixed(2)} rep/sec.\n` +
                 `${status}\nCurrent player stats are Hack:${player.hacking} ${player.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.charisma} ${player.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
-                `Rep:${Math.round(currentReputation).toLocaleString()} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : '✗'}`);
+                `Rep:${Math.round(currentReputation).toLocaleString()} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : '✗ ETA: ' + eta}`);
             lastStatus = status;
             lastStatusUpdateTime = Date.now();
         }
