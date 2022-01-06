@@ -499,7 +499,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     if (prioritizeInvites && !forceUnlockDonations && !forceBestAug)
         return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
-    let lastStatusUpdateTime;
+    let lastStatusUpdateTime = 0;
     let duration;
     let eta;
     while ((currentReputation = ns.getFactionRep(factionName)) < factionRepRequired) {
@@ -514,8 +514,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         }
         let status = `Doing '${factionWork}' work for "${factionName}" until ${factionRepRequired.toLocaleString()} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-        duration = Math.floor((factionRepRequired - currentReputation) / (ns.getPlayer().workRepGainRate * 5) * 1000);
-        eta = formatDuration(duration);
+            duration = Math.floor((factionRepRequired - currentReputation) / (ns.getPlayer().workRepGainRate * 5) * 1000);
+            eta = formatDuration(duration);
             ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString()}, earning ${(ns.getPlayer().workRepGainRate * 5).toFixed(2)} rep/sec. ETA: ` + eta);
             lastStatusUpdateTime = Date.now();
         }
@@ -614,7 +614,8 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         return ns.print(`Cannot yet work for "${companyName}": Need Hack ${itJob.reqHack[0] + statModifier} to get hired (current Hack: ${player.hacking});`);
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
-    let lastStatusUpdateTime, lastStatus = "";
+    let lastStatusUpdateTime = 0;
+	let lastStatus = "";
     let duration;
     let eta;
     let backdooredServers;
