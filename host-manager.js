@@ -14,7 +14,9 @@ let reservedMoneyAmount = 0; //250000000; // Enable if needed (Can also use rese
 let reservedMoneyPercent = 0.99; // Don't spend more than 1% of our money on temporary RAM
 let minRamExponent = 10;
 // The name to give all purchased servers. Also used to determine which servers were purchased
-const purchasedServerName = "daemon";
+// const purchasedServerName = "daemon";
+const purchasedServerNames = ['Alpha (α)', 'Beta (β)', 'Gamma (γ)', 'Delta (Δ)', 'Epsilon (ε)', 'Zeta (ζ)', 'Eta (η)', 'Theta (θ)', 'Iota (ι)', 'Kappa (κ)', 'Lambda (λ)', 'Mu (μ)', 'Nu (ν)', 'Xi (ξ)', 'Omicron (ο)', 'Pi (π)', 'Rho (ρ)', 'Sigma (σ)', 'Tau (τ)', 'Upsilon (υ)', 'Phi (φ)', 'Chi (χ)', 'Psi (Ψ)', 'Omega (Ω)'];
+
 // Frequency of update
 const interval = 10000;
 
@@ -106,10 +108,10 @@ function tryToBuyBestServerPossible(ns) {
 
     // Gether up the list of servers that were previously purchased.
     // Note: You can request the official list of purchased servers (cost 2.25 GB RAM), but we have that commented out here.
-    //let purchasedServers = ns.getPurchasedServers();
     // If you're willing to remember to always name manually purchased severs "daemon", then this should work
     //let purchasedServers = ns.getPurchasedServers();
-    let purchasedServers = rootedServers.filter(hostName => hostName.startsWith(purchasedServerName)).sort();
+    
+    let purchasedServers = rootedServers.filter(hostName => hostName.split('-')[0] in purchasedServerNames).sort();
 
     // analyze the utilization rates
     let utilizationRate = utilizationTotal / totalMaxRam;
@@ -207,8 +209,8 @@ function tryToBuyBestServerPossible(ns) {
                 `of the server it must delete to make room: ${worstServerName} (${formatRam(worstServerRam)} RAM)`);
         }
     }
-
-    let purchasedServer = ns.purchaseServer(purchasedServerName, maxRamPossibleToBuy);
+    let servername = purchasedServerNames[purchasedServers.length % purchasedServerNames.length];
+    let purchasedServer = ns.purchaseServer(servername, maxRamPossibleToBuy);
     if (!purchasedServer)
         setStatus(prefix + `Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);

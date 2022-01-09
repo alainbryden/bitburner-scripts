@@ -8,7 +8,7 @@ const argsSchema = [
     ['time', null], // alias for max-payoff-time
     ['c', false], // Set to true to run continuously, otherwise, it runs once
     ['continuous', false],
-    ['interval', 1000], // Rate at which the program purchases upgrades when running continuously
+    ['interval', 500], // Rate at which the program purchases upgrades when running continuously
     ['max-spend', Number.MAX_VALUE], // The maximum amount of money to spend on upgrades
     ['toast', false] // Set to true to toast purchases
 ];
