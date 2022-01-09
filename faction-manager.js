@@ -426,7 +426,8 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
         }
         let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
         const augNfFaction = factionData[augNf.getFromJoined()];
-        while (nfPurchased < 200) {
+        log(ns, `nfPurchased: ${nfPurchased}, augNfFaction: ${augNfFaction.name} (rep: ${augNfFaction.reputation}), augNf.price: ${augNf.price}, augNf.reputation: ${augNf.reputation}`);
+        while (nfPurchased < 50) {
             const nextNfCost = augNf.price * (augCountMult ** purchaseableAugs.length) * (nfCountMult ** nfPurchased);
             const nextNfRep = augNf.reputation * (nfCountMult ** nfPurchased);
             let nfMsg = `Cost of NF ${nfPurchased + 1} is ${formatMoney(nextNfCost)} and will require ${formatNumberShort(nextNfRep)} reputation`
@@ -435,7 +436,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
             totalAugCost += nextNfCost;
             if (nextNfRep > augNfFaction.reputation) {
                 if (augNfFaction.donationsUnlocked) {
-                    purchaseFactionDonations[augNfFaction.name] = Math.max(purchaseFactionDonations[augNfFaction.name], getReqDonationForRep(nextNfRep, augNfFaction));
+                    purchaseFactionDonations[augNfFaction.name] = Math.max(purchaseFactionDonations[augNfFaction.name] || 0, getReqDonationForRep(nextNfRep, augNfFaction));
                     totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
                     nfMsg += `, which will require a donation of ${formatMoney(purchaseFactionDonations[augNfFaction.name])} to faction ${augNfFaction.name}`
                 } else {
