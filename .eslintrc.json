@@ -1,0 +1,18 @@
+{
+    "env": {
+        "browser": false,
+        "es2021": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 13,
+        "sourceType": "module"
+    },
+    "rules": {
+        "no-irregular-whitespace": ["error", {"skipTemplates": true}],
+        "no-empty": ["error", {"allowEmptyCatch": true}],
+        "no-unused-vars": ["error", {"args": "none", "varsIgnorePattern": "^_"}],
+        "no-constant-condition": ["error", {"checkLoops": false}]
+
+    }
+}
