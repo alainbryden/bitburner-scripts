@@ -28,6 +28,7 @@ let assignedTasks = {}; // Each member will independently attempt to scale up th
 let lastMemberReset = {}; // Tracks when each member last ascended
 
 // Global state
+let ownedSourceFiles;
 let myGangFaction = "";
 let isHackGang = false;
 let requiredRep = 0;
@@ -51,7 +52,7 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const ownedSourceFiles = await getActiveSourceFiles(ns);
+    ownedSourceFiles = await getActiveSourceFiles(ns);
     const sf2Level = ownedSourceFiles[2] || 0;
     if (sf2Level == 0)
         return log(ns, "ERROR: You have no yet unlocked gangs. Script should not be run...");
@@ -91,13 +92,31 @@ async function initialize(ns) {
     territoryNextTick = Date.now() + territoryTickTime; // Expect to miss be "caught unaware" by the first territory tick
     territoryTickDetected = isReadyForNextTerritoryTick = warfareFinished = false;
     lastOtherGangInfo = null;
-    // Determine how much rep we would need to get the most expensive unowned augmentation
-    const augmentationNames = await getNsDataThroughFile(ns, `ns.getAugmentationsFromFaction('${myGangFaction}')`, '/Temp/gang-augs.txt');
-    const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
-    const dictAugRepReqs = await getDict(ns, augmentationNames, 'getAugmentationRepReq', '/Temp/aug-repreqs.txt');
-    // Due to a bug, gangs appear to provide "The Red Pill" even when it's unavailable (outside of BN2), so ignore this one.
-    requiredRep = augmentationNames.filter(aug => !ownedAugmentations.includes(aug) && aug != "The Red Pill").reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1);
-    log(ns, `Highest augmentation reputation cost is ${formatNumberShort(requiredRep)}`);
+
+    // If possible, determine how much rep we would need to get the most expensive unowned augmentation
+    const sf4Level = ownedSourceFiles[4] || 0;
+    requiredRep = -1;
+    if (sf4Level == 0)
+        log(ns, `INFO: SF4 required to get gang augmentation info. Defaulting to assuming ~2.5 million rep is desired.`);
+    else {
+        try {
+            if (sf4Level < 3)
+                log(ns, `WARNING: This script makes heavy use of singularity functions, which are quite expensive before you have SF4.3. ` +
+                    `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
+            const augmentationNames = await getNsDataThroughFile(ns, `ns.getAugmentationsFromFaction('${myGangFaction}')`, '/Temp/gang-augs.txt');
+            const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
+            const dictAugRepReqs = await getDict(ns, augmentationNames, 'getAugmentationRepReq', '/Temp/aug-repreqs.txt');
+            // Due to a bug, gangs appear to provide "The Red Pill" even when it's unavailable (outside of BN2), so ignore this one.
+            requiredRep = augmentationNames.filter(aug => !ownedAugmentations.includes(aug) && aug != "The Red Pill").reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1);
+            log(ns, `Highest augmentation reputation cost is ${formatNumberShort(requiredRep)}`);
+        } catch {
+            log(ns, `WARNING: Failed to get augmentation info despite having SF4.${sf4Level}. This may be due to you having insufficient RAM to launch the temporary scripts. ` +
+                `Proceeding with the default assumption that ~2.5 million rep is desired.`);
+        }
+    }
+    if (requiredRep == -1)
+        requiredRep = 2.5e6
+
     // Initialize equipment information
     const equipmentNames = await getNsDataThroughFile(ns, 'ns.gang.getEquipmentNames()', '/Temp/gang-equipment-names.txt');
     const dictEquipmentTypes = await getGangInfoDict(ns, equipmentNames, 'getEquipmentType');
@@ -390,7 +409,6 @@ async function waitForGameUpdate(ns, oldGangInfo) {
 async function enableOrDisableWarfare(ns, myGangInfo) {
     warfareFinished = Math.round(myGangInfo.territory * 2 ** 20) / 2 ** 20 /* Handle API imprecision */ >= 1;
     if (warfareFinished && !myGangInfo.territoryWarfareEngaged) return; // No need to engage once we hit 100%
-    // Turn on territory warfare only if we have a > 95% chance of beating all opponents
     const otherGangs = await getNsDataThroughFile(ns, 'ns.gang.getOtherGangInformation()', '/Temp/gang-other-gang-info.txt'); // Returns dict of { [gangName]: { "power": Number, "territory": Number } }
     let lowestWinChance = 1, totalWinChance = 0, totalActiveGangs = 0;
     let lowestWinChanceGang = "";
@@ -400,6 +418,7 @@ async function enableOrDisableWarfare(ns, myGangInfo) {
         if (winChance <= lowestWinChance) lowestWinChanceGang = otherGang;
         totalActiveGangs++, totalWinChance += winChance, lowestWinChance = Math.min(lowestWinChance, winChance);
     }
+    // Turn on territory warfare only if we have a better than <territoryEngageThreshold>% chance of beating our random opponent
     const averageWinChance = totalWinChance / totalActiveGangs;
     const shouldEngage = !warfareFinished && territoryEngageThreshold <= averageWinChance;
     if (shouldEngage != myGangInfo.territoryWarfareEngaged) {
