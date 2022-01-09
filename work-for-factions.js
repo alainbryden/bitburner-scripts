@@ -342,7 +342,8 @@ async function earnFactionInvite(ns, factionName) {
         // Change the company to work for into whichever company we can get to CEO fastest with. Minimize needed_rep/rep_gain_rate. CEO job is at 3.2e6 rep, so (3.2e6-current_rep)/(100+favor).
         factionConfig.companyName = companyNames.sort((a, b) => (3.2e6 - ns.getCompanyRep(a)) / (100 + favorByCompany[a]) - (3.2e6 - ns.getCompanyRep(b)) / (100 + favorByCompany[b]))[0];
         // Super-hack. Kick off an external script that just loops until it joins the faction, since we can't have concurrent ns calls in here.
-        await runCommand(ns, `while(true) { if(ns.joinFaction('${factionName}')) return; else await ns.sleep(1000); }`, '/Temp/join-faction-loop.js');
+        try { await runCommand(ns, `while(true) { if(ns.joinFaction('${factionName}')) return; else await ns.sleep(1000); }`, '/Temp/join-faction-loop.js'); }
+        catch { ns.print(`WARN: Could not start a temporary script to join ${factionName} when avaialble. (Still running from a previous run?) Proceeding under the assumption something will join for us...`); }
         workedForInvite = await workForMegacorpFactionInvite(ns, factionName, false); // Work until CTO and the external script joins this faction, triggering an exit condition.
     }
 
