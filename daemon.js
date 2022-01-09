@@ -1116,7 +1116,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
             // Some tools require helpers.js
             if (!doesFileExist('helpers.js', targetServer.name))
                 await ns.scp('helpers.js', daemonHost, targetServer.name);
-
+            await ns.sleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
         }
         let pid = ns.exec(tool.name, targetServer.name, maxThreadsHere, ...(args || []));
         // A pid of 0 indicates that the run failed
