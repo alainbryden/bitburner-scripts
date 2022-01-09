@@ -119,8 +119,11 @@ export async function main(ns) {
 
 
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
-    if (!(4 in dictSourceFiles) || dictSourceFiles[4] < 2)
-        return ns.tprint("ERROR: You cannot automate working for factions until you have unlocked singularity lvl. 2 access (SF4.2).");
+    if (!(4 in dictSourceFiles))
+        return ns.tprint("ERROR: You cannot automate working for factions until you have unlocked singularity access (SF4).");
+    else if (dictSourceFiles[4] < 3)
+        return ns.tprint(`WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
+            `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`);
 
     let bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
     repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
@@ -137,30 +140,29 @@ export async function main(ns) {
         }
     }
 
-    // Get some augmentation information (if available) to decide what remains to be purchased
-    if (dictSourceFiles[4] >= 3) {
-        const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
-        const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
-        const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
-        const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
+    // Get some augmentation information to decide what remains to be purchased
+    const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
+    const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
+    const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
+    const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
 
-        ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
-        shouldFocusAtWork = !noFocus; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
-        if (shouldFocusAtWork) { // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
-            let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
-            shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
-        }
-
-        mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
-            .filter(aug => !ownedAugmentations.includes(aug))
-            .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-        //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-        // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-        mostExpensiveDesiredAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
-            .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || !desiredAugStats ||
-                Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
-            .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+    ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
+    shouldFocusAtWork = !noFocus; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
+    if (shouldFocusAtWork) { // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
+        let activeAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
+        shouldFocusAtWork = !activeAugmentations.includes("Neuroreceptor Management Implant");
     }
+
+    mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
+        .filter(aug => !ownedAugmentations.includes(aug))
+        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+    //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
+    // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
+    mostExpensiveDesiredAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
+        .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || !desiredAugStats ||
+            Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
+        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+
     //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
     let completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1 && !factionSpecificConfigs.find(c => c.name == fac)?.forceUnlock);
     let skipFactions = skipFactionsConfig.concat(completedFactions);
