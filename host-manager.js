@@ -15,7 +15,7 @@ let reservedMoneyPercent = 0.99; // Don't spend more than 1% of our money on tem
 let minRamExponent = 10;
 // The name to give all purchased servers. Also used to determine which servers were purchased
 // const purchasedServerName = "daemon";
-const purchasedServerNames = ['Alpha (α)', 'Beta (β)', 'Gamma (γ)', 'Delta (Δ)', 'Epsilon (ε)', 'Zeta (ζ)', 'Eta (η)', 'Theta (θ)', 'Iota (ι)', 'Kappa (κ)', 'Lambda (λ)', 'Mu (μ)', 'Nu (ν)', 'Xi (ξ)', 'Omicron (ο)', 'Pi (π)', 'Rho (ρ)', 'Sigma (σ)', 'Tau (τ)', 'Upsilon (υ)', 'Phi (φ)', 'Chi (χ)', 'Psi (Ψ)', 'Omega (Ω)'];
+const purchasedServerNames = ['Alpha(α)', 'Beta(β)', 'Gamma(γ)', 'Delta(Δ)', 'Epsilon(ε)', 'Zeta(ζ)', 'Eta(η)', 'Theta(θ)', 'Iota(ι)', 'Kappa(κ)', 'Lambda(λ)', 'Mu(μ)', 'Nu(ν)', 'Xi(ξ)', 'Omicron(ο)', 'Pi(π)', 'Rho(ρ)', 'Sigma(σ)', 'Tau(τ)', 'Upsilon(υ)', 'Phi(φ)', 'Chi(χ)', 'Psi(Ψ)', 'Omega(Ω)'];
 
 // Frequency of update
 const interval = 10000;
@@ -110,9 +110,8 @@ function tryToBuyBestServerPossible(ns) {
     // Note: You can request the official list of purchased servers (cost 2.25 GB RAM), but we have that commented out here.
     // If you're willing to remember to always name manually purchased severs "daemon", then this should work
     //let purchasedServers = ns.getPurchasedServers();
+    let purchasedServers = rootedServers.filter(hostName => purchasedServerNames.includes(hostName.split('-')[0])).sort();
     
-    let purchasedServers = rootedServers.filter(hostName => hostName.split('-')[0] in purchasedServerNames).sort();
-
     // analyze the utilization rates
     let utilizationRate = utilizationTotal / totalMaxRam;
     setStatus(`Using ${Math.round(utilizationTotal).toLocaleString()}/${formatRam(totalMaxRam)} (` +
