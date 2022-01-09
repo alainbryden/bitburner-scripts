@@ -1,6 +1,4 @@
-import {
-    formatDuration, disableLogs
-} from './helpers.js'
+import { formatMoney, formatDuration, formatNumberShort, disableLogs } from './helpers.js'
 
 const argsSchema = [
     ['trips-per-cycle', 1000],
@@ -12,7 +10,9 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** @param {NS} ns **/
+/** @param {NS} ns 
+ * Script contributed by https://github.com/ShawnPatton
+ * Concept: A small amount of intelligence is granted when you (successfully) travel to a new city. This script converts money into intelligence exp! **/
 export async function main(ns) {
     disableLogs(ns, ["travelToCity", "sleep"]);
     ns.tail();
@@ -20,7 +20,7 @@ export async function main(ns) {
     let tripsPerCycle = options['trips-per-cycle'];
     let moneyThreshold = options['money-threshold'];
     ns.print(`trips-per-cycle: ` + tripsPerCycle);
-    ns.print(`money-threshold: ` + moneyThreshold);
+    ns.print(`money-threshold: ` + formatMoney(moneyThreshold));
     let justStarted = true;
     let previousInt = ns.getPlayer().intelligence;
     let currentInt = previousInt;
@@ -31,22 +31,22 @@ export async function main(ns) {
     let tripsPerLevel = 0;
     let tripsPerMs = 0;
     ns.print(`Starting Script at Int ` + currentInt);
-    while(true) {
-        while(ns.getPlayer().money > moneyThreshold) {
-            for(let i = 0; i < tripsPerCycle; i++) {
+    while (true) {
+        while (ns.getPlayer().money > moneyThreshold) {
+            for (let i = 0; i < tripsPerCycle; i++) {
                 ns.travelToCity("Aevum");
                 ns.travelToCity("Sector-12");
             }
             await ns.sleep(1);
             cycles++;
-            if(previousInt != ns.getPlayer().intelligence) {
+            if (previousInt != ns.getPlayer().intelligence) {
                 currentInt = ns.getPlayer().intelligence;
                 levelupTime = Date.now();
                 duration = levelupTime - previousLevelTime;
                 tripsPerLevel = cycles * tripsPerCycle * 2;
                 tripsPerMs = Math.floor(tripsPerLevel / duration);
                 ns.print(`Level Up: Int ` + currentInt + (justStarted ? ` Partial` : ` Full`) + ` Level in `
-                  + formatDuration(duration) + ` & ` + (tripsPerLevel) + ` Travels`);
+                    + formatDuration(duration) + ` & ` + formatNumberShort(tripsPerLevel) + ` Travels`);
                 ns.print(`Approximately ` + tripsPerMs + ` Trips/Millisecond`);
                 previousLevelTime = levelupTime;
                 previousInt = currentInt;

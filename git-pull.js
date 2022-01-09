@@ -10,8 +10,11 @@ const argsSchema = [
     ['omit-folder', ['/Temp/']], // Folders to omit
 ];
 
-export function autocomplete(data, _) {
+export function autocomplete(data, args) {
     data.flags(argsSchema);
+    const lastFlag = args.length > 1 ? args[args.length - 2] : null;
+    if (["--download", "--subfolder", "--omit-folder"].includes(lastFlag))
+        return data.scripts;
     return [];
 }
 
