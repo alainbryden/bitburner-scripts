@@ -24,11 +24,11 @@ export let main = async ns => {
         ns.print(`${hackableServers.filter(s => myHackingLevel > ns.getServerRequiredHackingLevel(s)).length} servers are within our hack level (${myHackingLevel}).`);
         ns.print(`${hackableServers.filter(s => myHackingLevel > ns.getServerRequiredHackingLevel(s) && ns.hasRootAccess(s)).length} rooted servers are within our hack level (${myHackingLevel})`);
 
-        let toBackdoor = await getNsDataThroughFile(ns, `${JSON.stringify(hackableServers)}.filter(s => !ns.getServer(s).backdoorInstalled)`, '/Temp/backdoored-servers.txt');
+        let toBackdoor = await getNsDataThroughFile(ns, `${JSON.stringify(hackableServers)}.filter(s => !ns.getServer(s).backdoorInstalled)`, '/Temp/servers-to-backdoor.txt');
         let count = toBackdoor.length;
         ns.print(`${count} servers have yet to be backdoored.`);
-        if(count == 0) return;
-        
+        if (count == 0) return;
+
         ns.print(`${toBackdoor.filter(s => ns.hasRootAccess(s)).length} of ${count} servers to backdoor are currently rooted.`);
         toBackdoor = toBackdoor.filter(s => myHackingLevel > ns.getServerRequiredHackingLevel(s));
         ns.print(`${toBackdoor.length} of ${count} servers to backdoor are within our hack level (${myHackingLevel}).`);
