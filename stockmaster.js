@@ -10,6 +10,7 @@ let lastLog = ""; // We update faster than the stock-market ticks, but we don't 
 let allStockSymbols = []; // Stores the set of all symbols collected at start
 let mock = false; // If set to true, will "mock" buy/sell but not actually buy/sell anythingorecast
 let noisy = false; // If set to true, tprints and announces each time stocks are bought/sold
+let dictSourceFiles; // Populated at init, a dictionary of source-files the user has access to, and their level
 // Pre-4S configuration (influences how we play the stock market before we have 4S data, after which everything's fool-proof)
 let showMarketSummary = false;  // If set to true, will always generate and display the pre-4s forecast table in a separate tail window
 let minTickHistory; // This much history must be gathered before we will offer a stock forecast.
@@ -93,7 +94,7 @@ export async function main(ns) {
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
             `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-script.js');
 
-    let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
+    dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!disableShorts && (!(8 in dictSourceFiles) || dictSourceFiles[8] < 2)) {
         log(ns, "INFO: Shorting stocks has been disabled (you have not yet unlocked access to shorting)");
         disableShorts = true;
@@ -112,8 +113,10 @@ export async function main(ns) {
             return log(ns, `ERROR: Another version of ${ns.getScriptName()} is already running with different args. Running twice is a bad idea!`, true, 'error');
     }
 
+    let bitnodeMults;
+    if (5 in dictSourceFiles) bitnodeMults = await tryGetBitNodeMultipliers(ns);
     // Assume bitnode mults are 1 if user doesn't have this API access yet
-    let bitnodeMults = (await tryGetBitNodeMultipliers(ns)) ?? { FourSigmaMarketDataCost: 1, FourSigmaMarketDataApiCost: 1 };
+    if (!bitnodeMults) bitnodeMults = { FourSigmaMarketDataCost: 1, FourSigmaMarketDataApiCost: 1 };
 
     if (showMarketSummary) await launchSummaryTail(ns); // Opens a separate script / window to continuously display the Pre4S forecast
 
@@ -515,13 +518,19 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, corpus, allStockSymbol
         if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt'))
             log(ns, `Purchased 4SMarketData for ${formatMoney(cost4sData)}!`, true, 'success');
         else
-            log(ns, 'Error attempting to purchase 4SMarketData!', true, 'error');
+            log(ns, 'ERROR attempting to purchase 4SMarketData!', false, 'error');
     }
     if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/purchase-4s-api.txt')) {
         log(ns, `Purchased 4SMarketDataTixApi for ${formatMoney(cost4sApi)}!`, true, 'success');
         return true;
-    } else
-        log(ns, 'Error attempting to purchase 4SMarketDataTixApi!', true, 'error');
+    } else {
+        log(ns, 'ERROR attempting to purchase 4SMarketDataTixApi!', false, 'error');
+        if (!(5 in dictSourceFiles)) { // If we do not have access to bitnode multipliers, assume the cost is double and try again later
+            log(ns, 'INFO: Bitnode mults are not available (SF5) - assuming everything is twice as expensive in the current bitnode.');
+            bitnodeMults.FourSigmaMarketDataCost *= 2;
+            bitnodeMults.FourSigmaMarketDataApiCost *= 2;
+        }
+    }
     return false;
 }
 
