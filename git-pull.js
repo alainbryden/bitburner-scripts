@@ -1,11 +1,11 @@
 let options;
 const argsSchema = [
-    ['github', 'alainbryden'],
+    ['github', 'mpcomplete'],
     ['repository', 'bitburner-scripts'],
     ['branch', 'main'],
     ['download', []], // By default, all supported files in the repository will be downloaded. Override with just a subset of files here
     ['new-file', []], // If a repository listing fails, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
-    ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
+    ['subfolder', '/alain'], // Can be set to download to a sub-folder that is not part of the remote repository structure
     ['extension', ['.js', '.ns', '.txt', '.script']], // Files to download by extension
     ['omit-folder', ['/Temp/']], // Folders to omit
 ];
@@ -29,13 +29,32 @@ export async function main(ns) {
     const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
+        let fullLocalFilePath = pathJoin(options.subfolder, localFilePath);
         const remoteFilePath = baseUrl + localFilePath;
-        ns.print(`Trying to update "${localFilePath}" from ${remoteFilePath} ...`);
-        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, (options.subfolder ? (options.subfolder + '/') : '') + localFilePath))
+        ns.print(`Trying to update "${fullLocalFilePath}" from ${remoteFilePath} ...`);
+        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, fullLocalFilePath) && await rewriteFileForSubfolder(ns, fullLocalFilePath))
             ns.tprint(`SUCCESS: Updated "${localFilePath}" to the latest from ${remoteFilePath}`);
         else
             ns.tprint(`WARNING: "${localFilePath}" was not updated. (Currently running or not located at ${remoteFilePath} )`)
     }
+}
+
+/** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/
+function pathJoin(...args) {
+    return args.join('/').replace(/\/\/+/g, '/');
+}
+
+/** @param {NS} ns
+ * Rewrites a file with path substitions to handle downloading to a subfolder. **/
+export async function rewriteFileForSubfolder(ns, path) {
+    if (!options.subfolder || path.contains('git-pull.js'))
+        return true;
+    let contents = ns.read(path);
+    contents = contents.replace(`const subfolder = ''`, `const subfolder = '${options.subfolder}/'`);
+    // Note this will catch imports as well as text references (e.g. in daemon.js arbitraryExecution)
+    contents = contents.replace(/'(\.\/)?helpers.js'/g, `'${pathJoin(options.subfolder, 'helpers.js')}'`);
+    await ns.write(path, contents, 'w');
+    return true;
 }
 
 /** @param {NS} ns 

@@ -1,10 +1,12 @@
 import {
     formatMoney, formatRam, formatDuration, formatDateTime, formatNumber,
-    scanAllServers, hashCode, disableLogs, log as logHelper,
+    scanAllServers, hashCode, disableLogs, log as logHelper, pathJoin,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
     getFnRunViaNsExec, getFnIsAliveViaNsPs
 } from './helpers.js'
+
+const subfolder = '';
 
 // the purpose of the daemon is: it's our global starting point.
 // it handles several aspects of the game, primarily hacking for money.
@@ -225,6 +227,7 @@ export async function main(ns) {
             shouldRun: () => 4 in dictSourceFiles && (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Higher SF4 levels result in lower RAM requirements
         },
     ];
+    asynchronousHelpers.forEach(helper => helper.name = pathJoin(subfolder, helper.name));
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
     asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
@@ -247,12 +250,14 @@ export async function main(ns) {
         { interval: 110000, name: "/Tasks/backdoor-all-servers.js", requiredServer: "home", shouldRun: () => 4 in dictSourceFiles },
         { interval: 111000, name: "host-manager.js", requiredServer: "home", shouldRun: () => !shouldReserveMoney() },
     ];
+    periodicScripts.forEach(tool => tool.name = pathJoin(subfolder, tool.name));
     hackTools = [
         { name: "/Remote/weak-target.js", shortName: "weak" },
         { name: "/Remote/grow-target.js", shortName: "grow" },
         { name: "/Remote/hack-target.js", shortName: "hack" },
         { name: "/Remote/manualhack-target.js", shortName: "manualhack" }
     ];
+    hackTools.forEach(tool => tool.name = pathJoin(subfolder, tool.name));
     // TODO: Revive these tools when needed.
     buildToolkit(ns); // build toolkit
     await getStaticServerData(ns, scanAllServers(ns)); // Gather information about servers that will never change
