@@ -1,11 +1,11 @@
 let options;
 const argsSchema = [
-    ['github', 'mpcomplete'],
+    ['github', 'alainbryden'],
     ['repository', 'bitburner-scripts'],
     ['branch', 'main'],
     ['download', []], // By default, all supported files in the repository will be downloaded. Override with just a subset of files here
     ['new-file', []], // If a repository listing fails, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
-    ['subfolder', '/alain'], // Can be set to download to a sub-folder that is not part of the remote repository structure
+    ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
     ['extension', ['.js', '.ns', '.txt', '.script']], // Files to download by extension
     ['omit-folder', ['/Temp/']], // Folders to omit
 ];
@@ -41,7 +41,7 @@ export async function main(ns) {
 
 /** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/
 function pathJoin(...args) {
-    return args.join('/').replace(/\/\/+/g, '/');
+    return args.filter(s => !!s).join('/').replace(/\/\/+/g, '/');
 }
 
 /** @param {NS} ns

@@ -82,8 +82,8 @@ export function hashCode(s) { return s.split("").reduce(function (a, b) { a = ((
 export function disableLogs(ns, listOfLogs) { ['disableLog'].concat(...listOfLogs).forEach(log => checkNsInstance(ns, '"disableLogs"').disableLog(log)); }
 
 /** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/
-export function pathJoin(...args) {
-    return args.join('/').replace(/\/\/+/g, '/');
+function pathJoin(...args) {
+    return args.filter(s => !!s).join('/').replace(/\/\/+/g, '/');
 }
 
 // FUNCTIONS THAT PROVIDE ALTERNATIVE IMPLEMENTATIONS TO EXPENSIVE NS FUNCTIONS
