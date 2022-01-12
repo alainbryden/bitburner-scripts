@@ -586,7 +586,7 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt');
     dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt');
     // Get the information about the relative profitability of each server
-    const pid = ns.exec('analyze-hack.js', 'home', 1, '--all', '--silent');
+    const pid = ns.exec(getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
     dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
     if (!dictServerProfitInfo) return log(ns, "WARN: analyze-hack info unavailable.");
