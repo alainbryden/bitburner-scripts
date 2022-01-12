@@ -1,5 +1,5 @@
-import { getNsDataThroughFile, disableLogs, scanAllServers } from './helpers.js'
-const scriptSolver = "/Tasks/contractor.js.solver.js";
+import { getFilePath, getNsDataThroughFile, disableLogs, scanAllServers } from './helpers.js'
+const scriptSolver = getFilePath("/Tasks/contractor.js.solver.js");
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -23,5 +23,5 @@ export async function main(ns) {
     contractsDb.forEach(c => c.data = dictContractData[c.contract]);
 
     // Let this script die to free up ram, and start up a new script (after a delay) that will solve all these contracts using the minimum ram footprint of 11.6 GB
-    ns.run('/Tasks/run-with-delay.js', 1, scriptSolver, 1, JSON.stringify(contractsDb));
+    ns.run(getFilePath('/Tasks/run-with-delay.js'), 1, scriptSolver, 1, JSON.stringify(contractsDb));
 }

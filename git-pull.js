@@ -50,9 +50,10 @@ export async function rewriteFileForSubfolder(ns, path) {
     if (!options.subfolder || path.includes('git-pull.js'))
         return true;
     let contents = ns.read(path);
+    // Replace subfolder reference in helpers.js getFilePath:
     contents = contents.replace(`const subfolder = ''`, `const subfolder = '${options.subfolder}/'`);
-    // Note this will catch imports as well as text references (e.g. in daemon.js arbitraryExecution)
-    contents = contents.replace(/'(\.\/)?helpers.js'/g, `'${pathJoin(options.subfolder, 'helpers.js')}'`);
+    // Replace any imports, which can't use getFilePath:
+    contents = contents.replace(/from '(\.\/)?(.*)'/, `'${pathJoin(options.subfolder, '$2')}'`);
     await ns.write(path, contents, 'w');
     return true;
 }
