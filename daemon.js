@@ -494,6 +494,11 @@ async function doTargetingLoop(ns) {
             // If we've been at low utilization for longer than the cycle of all our targets, we can add a target
             let intervalsPerTargetCycle = targeting.length == 0 ? 120 :
                 Math.ceil((targeting.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
+            let intervalsPerPrepCycle = prepping.length == 0 ? 120 :
+                Math.ceil((prepping.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
+            // Take the prep cycle into account too.
+            intervalsPerTargetCycle = Math.max(intervalsPerPrepCycle, intervalsPerTargetCycle);
+
             //log(`intervalsPerTargetCycle: ${intervalsPerTargetCycle} lowUtilizationIterations: ${lowUtilizationIterations} loopInterval: ${loopInterval}`);
             if ((lowUtilizationIterations > intervalsPerTargetCycle || utilizationPercent < 0.01) && skipped.length > 0 && maxTargets < serverListByTargetOrder.length) {
                 maxTargets++;
