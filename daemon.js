@@ -496,7 +496,7 @@ async function doTargetingLoop(ns) {
                 Math.ceil((targeting.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
             let intervalsPerPrepCycle = prepping.length == 0 ? 120 :
                 Math.ceil((prepping.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
-            // Take the prep cycle into account too.
+            // Take the prep time into account too. This will slow target growth pretty dramatically.
             intervalsPerTargetCycle = Math.max(intervalsPerPrepCycle, intervalsPerTargetCycle);
 
             //log(`intervalsPerTargetCycle: ${intervalsPerTargetCycle} lowUtilizationIterations: ${lowUtilizationIterations} loopInterval: ${loopInterval}`);
