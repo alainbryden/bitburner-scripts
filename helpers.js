@@ -186,7 +186,7 @@ export async function runCommand(ns, command, fileName, verbose = false, maxRetr
  **/
 export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
     checkNsInstance(ns, '"runCommand_Custom"');
-    let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}''\n` +
+    let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
         `export async function main(ns) { try { ` +
         (verbose ? `let output = ${command}; ns.tprint(output)` : command) +
         `; } catch(err) { ns.tprint(String(err)); throw(err); } }`;

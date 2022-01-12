@@ -53,7 +53,7 @@ export async function rewriteFileForSubfolder(ns, path) {
     // Replace subfolder reference in helpers.js getFilePath:
     contents = contents.replace(`const subfolder = ''`, `const subfolder = '${options.subfolder}/'`);
     // Replace any imports, which can't use getFilePath:
-    contents = contents.replace(/from '(\.\/)?(.*)'/, `'${pathJoin(options.subfolder, '$2')}'`);
+    contents = contents.replace(/from '(\.\/)?(.*)'/, `from '${pathJoin(options.subfolder, '$2')}'`);
     await ns.write(path, contents, 'w');
     return true;
 }
