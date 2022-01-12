@@ -82,7 +82,7 @@ export function hashCode(s) { return s.split("").reduce(function (a, b) { a = ((
 export function disableLogs(ns, listOfLogs) { ['disableLog'].concat(...listOfLogs).forEach(log => checkNsInstance(ns, '"disableLogs"').disableLog(log)); }
 
 /** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/
-function pathJoin(...args) {
+export function pathJoin(...args) {
     return args.filter(s => !!s).join('/').replace(/\/\/+/g, '/');
 }
 
