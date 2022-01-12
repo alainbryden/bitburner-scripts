@@ -15,7 +15,7 @@ let reservedMoneyPercent = 0.99; // Don't spend more than 1% of our money on tem
 let minRamExponent = 10;
 // The name to give all purchased servers. Also used to determine which servers were purchased
 // const purchasedServerName = "daemon";
-const purchasedServerNames = ['Alpha(α)', 'Beta(β)', 'Gamma(γ)', 'Delta(Δ)', 'Epsilon(ε)', 'Zeta(ζ)', 'Eta(η)', 'Theta(θ)', 'Iota(ι)', 'Kappa(κ)', 'Lambda(λ)', 'Mu(μ)', 'Nu(ν)', 'Xi(ξ)', 'Omicron(ο)', 'Pi(π)', 'Rho(ρ)', 'Sigma(σ)', 'Tau(τ)', 'Upsilon(υ)', 'Phi(φ)', 'Chi(χ)', 'Psi(Ψ)', 'Omega(Ω)', 'Infinity(∞)'];
+const purchasedServerNames = ['Alpha(α)', 'Beta(β)', 'Gamma(γ)', 'Delta(Δ)', 'Epsilon(ε)', 'Zeta(ζ)', 'Eta(η)', 'Theta(θ)', 'Iota(ι)', 'Kappa(κ)', 'Lambda(λ)', 'Mu(μ)', 'Nu(ν)', 'Xi(ξ)', 'Omicron(ο)', 'Pi(π)', 'Rho(ρ)', 'Sigma(σ)', 'Tau(τ)', 'Upsilon(υ)', 'Phi(φ)', 'Chi(χ)', 'Psi(Ψ)', 'Omega(Ω)', 'Infinity(∞)', 'Infinity(∞)'];
 
 // Frequency of update
 const interval = 10000;
@@ -208,7 +208,7 @@ function tryToBuyBestServerPossible(ns) {
                 `of the server it must delete to make room: ${worstServerName} (${formatRam(worstServerRam)} RAM)`);
         }
     }
-    let servername = purchasedServerNames[purchasedServers.length % purchasedServerNames.length];
+    let servername = purchasedServerNames[purchasedServers.length];
     let purchasedServer = ns.purchaseServer(servername, maxRamPossibleToBuy);
     if (!purchasedServer)
         setStatus(prefix + `Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
