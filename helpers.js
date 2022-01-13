@@ -81,6 +81,17 @@ export function hashCode(s) { return s.split("").reduce(function (a, b) { a = ((
 /** @param {NS} ns **/
 export function disableLogs(ns, listOfLogs) { ['disableLog'].concat(...listOfLogs).forEach(log => checkNsInstance(ns, '"disableLogs"').disableLog(log)); }
 
+/** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/
+export function pathJoin(...args) {
+    return args.filter(s => !!s).join('/').replace(/\/\/+/g, '/');
+}
+
+/** Gets the path for the given local file, taking into account optional subfolder relocation via git-pull.js **/
+export function getFilePath(file) {
+    const subfolder = '';  // git-pull.js optionally modifies this when downloading
+    return pathJoin(subfolder, file);
+}
+
 // FUNCTIONS THAT PROVIDE ALTERNATIVE IMPLEMENTATIONS TO EXPENSIVE NS FUNCTIONS
 // VARIATIONS ON NS.RUN
 
@@ -175,7 +186,7 @@ export async function runCommand(ns, command, fileName, verbose = false, maxRetr
  **/
 export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
     checkNsInstance(ns, '"runCommand_Custom"');
-    let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om "helpers.js"\n` +
+    let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
         `export async function main(ns) { try { ` +
         (verbose ? `let output = ${command}; ns.tprint(output)` : command) +
         `; } catch(err) { ns.tprint(String(err)); throw(err); } }`;
