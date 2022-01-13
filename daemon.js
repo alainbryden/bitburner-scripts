@@ -1112,6 +1112,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
         }
 
         // if not on the daemon host, do a script copy check before running
+        let just_copied = false;
         if (targetServer.name != daemonHost && !doesFileExist(tool.name, targetServer.name)) {
             if (verbose)
                 log(`Copying ${tool.name} from ${daemonHost} to ${targetServer.name} so that it can be executed remotely.`);
@@ -1120,8 +1121,10 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
             if (!doesFileExist(getFilePath('helpers.js'), targetServer.name))
                 await ns.scp(getFilePath('helpers.js'), daemonHost, targetServer.name);
             await ns.sleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
+            just_copied = true;
         }
         let pid = ns.exec(tool.name, targetServer.name, maxThreadsHere, ...(args || []));
+        if (just_copied) await ns.sleep(5); // I don't know why this would make a difference (based on my understanding of the above issue), but hear reports that putting a sleep after the call to exec works around the problem
         // A pid of 0 indicates that the run failed
         if (pid == 0) {
             log('ERROR: Failed to exec ' + tool.name + ' on server ' + targetServer.name + ' with ' + maxThreadsHere + ' threads', false, 'error');
