@@ -140,6 +140,8 @@ function tryToBuyBestServerPossible(ns) {
     // Vary reservation by time since augment. 
     // Decay factor of 0.2 = Starts willing to spend 95% of our money, backing down to ~75% at 1 hour, ~60% at 2 hours, ~25% at 6 hours, and ~10% at 10 hours.
     // Decay factor of 0.3 = Starts willing to spend 95% of our money, backing down to ~66% at 1 hour, ~45% at 2 hours, ~23% at 4 hours, ~10% at 6 hours
+    // Decay factor of 0.35 = Starts willing to spend 95% of our money, backing down to ~61% at 1 hour, ~40% at 2 hours, ~26% at 3 hours, ~17% at 4 hours, ~11% at 5 hours
+    // Decay factor of 0.5 = Starts willing to spend 95% of our money, then halving every hour (to ~48% at 1 hour, ~24% at 2 hours, ~12% at 3 hours, etc)
     let t = ns.getTimeSinceLastAug() / (60 * 60 * 1000); // Time since last aug, in hours.
     let decayFactor = 0.3
     if (varyReservebyTime) reservedMoneyPercent = 1 - 0.95 * Math.pow(1 - decayFactor, t);
