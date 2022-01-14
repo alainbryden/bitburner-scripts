@@ -1,4 +1,4 @@
-import { getNsDataThroughFile } from './helpers.js'
+import { getNsDataThroughFile, getFilePath } from './helpers.js'
 
 let spawnDelay = 50; // Delay to allow time for `installBackdoor` to start running before a background script connects back to 'home'
 
@@ -46,7 +46,7 @@ export let main = async ns => {
             }
             ns.print(`Installing backdoor on "${server}"...`);
             // Kick off a separate script that will run backdoor before we connect to home.
-            var pid = ns.run('/Tasks/backdoor-all-servers.js.backdoor-one.js', 1, server);
+            var pid = ns.run(getFilePath('/Tasks/backdoor-all-servers.js.backdoor-one.js'), 1, server);
             if (pid === 0)
                 return ns.print(`Couldn't initiate a new backdoor of "${server}"" (insufficient RAM?). Will try again later.`);
             await ns.sleep(spawnDelay); // Wait some time for the external backdoor script to initiate its backdoor of the current connected server

@@ -34,12 +34,14 @@ export async function main(ns) {
         maxPayoffTime = Number.parseFloat(maxPayoffTime);
     disableLogs(ns, ['sleep', 'getServerUsedRam']);
     let formulas = true;
-    haveHacknetServers = ns.hacknet.hashCapacity() > 0;
     log(ns, `Starting hacknet-upgrade-manager with purchase payoff time limit of ${formatDuration(maxPayoffTime * 1000)} and ` +
         (maxSpend == Number.MAX_VALUE ? 'no spending limit' : `a spend limit of ${formatMoney(maxSpend)}`) +
         `. Current fleet: ${ns.hacknet.numNodes()} nodes...`);
     do {
         var spend = upgradeHacknet(ns, maxSpend, maxPayoffTime);
+        // Using this method, we cannot know for sure that we don't have hacknet servers until we have purchased one
+        if (haveHacknetServers && ns.hacknet.numNodes() > 0 && ns.hacknet.hashCapacity() == 0)
+            haveHacknetServers = false;
         if (maxSpend && spend === false) {
             log(ns, `Spending limit reached. Breaking...`);
             break; // Hack, but we return a non-number (false) when we've bought all we can for the current config
