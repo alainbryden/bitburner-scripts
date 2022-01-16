@@ -143,7 +143,7 @@ function tryToBuyBestServerPossible(ns) {
     // Decay factor of 0.35 = Starts willing to spend 95% of our money, backing down to ~61% at 1 hour, ~40% at 2 hours, ~26% at 3 hours, ~17% at 4 hours, ~11% at 5 hours
     // Decay factor of 0.5 = Starts willing to spend 95% of our money, then halving every hour (to ~48% at 1 hour, ~24% at 2 hours, ~12% at 3 hours, etc)
     let t = ns.getTimeSinceLastAug() / (60 * 60 * 1000); // Time since last aug, in hours.
-    let decayFactor = 0.3
+    let decayFactor = 0.5
     if (varyReservebyTime) reservedMoneyPercent = 1 - 0.95 * Math.pow(1 - decayFactor, t);
 
     spendableMoney = Math.max(0, Math.min(spendableMoney * (1 - reservedMoneyPercent), spendableMoney - reservedMoneyAmount));
@@ -221,7 +221,28 @@ function tryToBuyBestServerPossible(ns) {
                 `of the server it must delete to make room: ${worstServerName} (${formatRam(worstServerRam)} RAM)`);
         }
     }
-    let servername = purchasedServerNames[purchasedServers.length];
+    // Find a server name we haven't used yet from the list.
+    // We may have just removed one, so refresh the list of purchased servers first.
+     // Scan the set of all servers on the network that we own (or rooted) to get a sense of RAM utilization
+     hostsToScan = ["home"];
+     infLoopProtection = 1000;
+     while (hostsToScan.length > 0 && infLoopProtection-- > 0) {
+         let hostName = hostsToScan.pop();
+         if (rootedServers.includes(hostName) || ignoredServers.includes(hostName))
+             continue;
+         ns.scan(hostName).forEach(connectedHost => hostsToScan.push(connectedHost));
+         let serverMaxRam = ns.getServerMaxRam(hostName);
+         // Don't count unrooted or useless servers
+         if (ns.getServerMaxRam(hostName) <= 0 || ns.hasRootAccess(hostName) == false) {
+             ignoredServers.push(hostName);
+             continue;
+         }
+         rootedServers.push(hostName);
+     }
+     if (infLoopProtection <= 0)
+         return announce('host-manager.js Infinite Loop Detected!', 'error');
+    purchasedServers = rootedServers.filter(hostName => purchasedServerNames.includes(hostName.split('-')[0])).sort();
+    let servername = purchasedServerNames.find((s)=>!purchasedServers.includes(s.split('-')[0]))
     let purchasedServer = ns.purchaseServer(servername, maxRamPossibleToBuy);
     if (!purchasedServer)
         setStatus(prefix + `Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +

@@ -96,8 +96,13 @@ export async function main(ns) {
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
     log(ns, 'In factions: ' + joinedFactions);
     // Get owned augmentations (whether they've been installed or not). Ignore strNF because you can always buy more.
-    ownedAugmentations = ignorePlayerData ? [] :
-        (await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt')).filter(a => a != strNF);
+    try {
+        ownedAugmentations = ignorePlayerData ? [] :
+            (await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt')).filter(a => a != strNF);
+    } catch {
+        ns.tprint(`WARNING: Failed to get player augmentation data. Not enough RAM?`);
+        return;
+    }
     if (options['neuroflux-disabled']) omitAugs.push(strNF);
     log(ns, 'Getting all faction data...');
     await updateFactionData(ns, allFactions, omitFactions);
@@ -151,7 +156,13 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
     // Add any player joined factions that may not be in the pre-defined list
     factionNames.push(...joinedFactions.filter(f => !factionNames.includes(f) && !factionsToOmit.includes(f)));
     // Add any factions that the player has earned an invite to
-    const invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/player-faction-invites.txt');
+    let invitations = [];
+    try {
+        invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/player-faction-invites.txt');
+    } catch { 
+        ns.tprint(`WARNING: Could not get invitation data. Not enough RAM?`)
+        return;
+    }
     factionNames.push(...invitations.filter(f => !factionNames.includes(f) && !factionsToOmit.includes(f)));
     // If specified, get info about *all* factions in the game, not just the ones hard-coded in the preferred faction order list.
     if (allFactions)
