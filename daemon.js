@@ -45,7 +45,7 @@ let maxBatches = 40; // the max number of batches this daemon will spool up to a
 let maxTargets = 0; // Initial value, will grow if there is an abundance of RAM
 let maxPreppingAtMaxTargets = 3; // The max servers we can prep when we're at our current max targets and have spare RAM
 // Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper 
-let homeReservedRam = 32;
+let homeReservedRam = 128;
 
 // --- VARS ---
 // some ancillary scripts that run asynchronously, we utilize the startup/execute capabilities of this daemon to run when able
@@ -220,10 +220,10 @@ export async function main(ns) {
         { name: "gangs.js", tail: true, shouldRun: () => 2 in dictSourceFiles }, // Script to create manage our gang for us
         { name: "spend-hacknet-hashes.js", args: ["-v"], shouldRun: () => 9 in dictSourceFiles }, // Always have this running to make sure hashes aren't wasted
         { name: "sleeve.js", tail: true, shouldRun: () => 10 in dictSourceFiles }, // Script to create manage our sleeves for us
-        {
-            name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
-            shouldRun: () => 4 in dictSourceFiles && (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Higher SF4 levels result in lower RAM requirements
-        },
+        // {
+        //     name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
+        //     shouldRun: () => 4 in dictSourceFiles && (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Higher SF4 levels result in lower RAM requirements
+        // },
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
@@ -327,7 +327,7 @@ async function tryRunTool(ns, tool) {
     const runResult = await arbitraryExecution(ns, tool, 1, args, tool.requiredServer || "home"); // TODO: Allow actually requiring a server
     if (runResult) {
         runningOnServer = whichServerIsRunning(ns, tool.name, false);
-        if (verbose) log(`Ran tool: ${tool.name} on server ${runningOnServer}` + (args.length > 0 ? ` with args ${JSON.stringify(args)}` : ''));
+        if (verbose) log(`INFO: Ran tool: ${tool.name} on server ${runningOnServer}` + (args.length > 0 ? ` with args ${JSON.stringify(args)}` : ''));
         if (tool.tail === true) {
             log(`Tailing Tool: ${tool.name} on server ${runningOnServer}` + (args.length > 0 ? ` with args ${JSON.stringify(args)}` : ''));
             ns.tail(tool.name, runningOnServer, ...args);
@@ -1044,6 +1044,7 @@ function getScheduleItem(description, toolShortName, start, end, threadsNeeded) 
 // If it can't run all the threads at once, it runs as many as it can across the spectrum of daemons available.
 /** @param {NS} ns **/
 export async function arbitraryExecution(ns, tool, threads, args, preferredServerName = null, useSmallestServerPossible = false) {
+    //ns.print(`running ${tool}, ${threads} threads with args ${JSON.stringify(args)} preferredServer: ${preferredServerName} smallest: ${useSmallestServerPossible}.`)
     // We will be using the list of servers that is sorted by most available ram
     sortServerList("ram");
     var rootedServersByFreeRam = serverListByFreeRam.filter(server => server.hasRoot() && server.totalRam() > 1.6);
@@ -1058,7 +1059,8 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
     //       TODO: This effort is wasted unless we also scale down the number of threads "needed" when running on home. We will overshoot grow/weaken
     //             Disable this for now, and enable it once we have solved for reducing grow/weak threads
     var home = preferredServerOrder.splice(preferredServerOrder.findIndex(i => i.name == "home"), 1)[0];
-    if (tool.shortName == "grow" || tool.shortName == "weak" || preferredServerName == "home")
+    // if (tool.shortName == "grow" || tool.shortName == "weak" || preferredServerName == "home")
+    if (preferredServerName == "home")
         preferredServerOrder.unshift(home); // Send to front
     else
         preferredServerOrder.push(home);
