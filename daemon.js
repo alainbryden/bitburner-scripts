@@ -44,8 +44,8 @@ let queueDelay = 100; // the delay that it can take for a script to start, used 
 let maxBatches = 40; // the max number of batches this daemon will spool up to avoid running out of IRL ram (TODO: Stop wasting RAM by scheduling batches so far in advance. e.g. Grind XP while waiting for cycle start!)
 let maxTargets = 0; // Initial value, will grow if there is an abundance of RAM
 let maxPreppingAtMaxTargets = 3; // The max servers we can prep when we're at our current max targets and have spare RAM
-// Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper 
-let homeReservedRam = 128;
+// Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper. Set the default in the argsSchema, below.
+let homeReservedRam = 32;
 
 // --- VARS ---
 // some ancillary scripts that run asynchronously, we utilize the startup/execute capabilities of this daemon to run when able
@@ -146,7 +146,7 @@ const argsSchema = [
     ['queue-delay', 1000],
     ['max-batches', 40],
     ['i', false], // Farm intelligence with manual hack.
-    ['reserved-ram', 32],
+    ['reserved-ram', 128],
     ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
     ['recovery-thread-padding', 1],
 ];
@@ -237,7 +237,7 @@ export async function main(ns) {
         { interval: 31000, name: "/Tasks/ram-manager.js", shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && (getTotalNetworkUtilization() > 0.85 || xpOnly) },
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money
         { interval: 32000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
-        { interval: 33000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
+        //{ interval: 33000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
         // Don't start auto-joining factions until we're holding 1 billion (so coding contracts returning money is probably less critical) or we've joined one already
         {
             interval: 34000, name: "faction-manager.js", requiredServer: "home", args: ['--join-only'],
@@ -1059,8 +1059,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
     //       TODO: This effort is wasted unless we also scale down the number of threads "needed" when running on home. We will overshoot grow/weaken
     //             Disable this for now, and enable it once we have solved for reducing grow/weak threads
     var home = preferredServerOrder.splice(preferredServerOrder.findIndex(i => i.name == "home"), 1)[0];
-    // if (tool.shortName == "grow" || tool.shortName == "weak" || preferredServerName == "home")
-    if (preferredServerName == "home")
+    if (tool.shortName == "grow" || tool.shortName == "weak" || preferredServerName == "home")
         preferredServerOrder.unshift(home); // Send to front
     else
         preferredServerOrder.push(home);
