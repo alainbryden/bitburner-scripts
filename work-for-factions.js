@@ -243,7 +243,7 @@ export async function main(ns) {
         // Strategy 8: Commit crimes for a while longer, then loop to see if there anything more we can do for the above factions
         if (noCrime) {
             ns.print(`--no-crime (or --no-focus): Crimes are disabled, so sleeping for a while (30s) then checking back on whether there's any work to be done...`);
-            ns.sleep(30000);
+            await ns.sleep(30000);
         } else await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100, 0);
     }
 }
