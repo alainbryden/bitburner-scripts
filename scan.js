@@ -10,6 +10,7 @@ let doc = eval("document"),
         .sc .hack {display:inline-block; font:12px monospace}
         .sc .red {color:red;}
         .sc .green {color:green;}
+        .sc .backdoor {color:#6f3;cursor:pointer;text-decoration:underline}
     </style>`,
     tprint = html => doc.getElementById("terminal").insertAdjacentHTML('beforeend', `<li>${html}</li>`);
 /** @param {NS} ns **/
@@ -25,6 +26,7 @@ export let main = ns => {
             let reqHack = ns.getServerRequiredHackingLevel(x);
             return `<a class="s${f.includes(x) ? " f" : ""}${ns.hasRootAccess(x) ? " r" : ""}">${x}</a>` +
                 ` <span class="hack ${(reqHack <= myHack ? 'green' : 'red')}">(${reqHack})</span>` +
+                ` <a class="backdoor">${(x != 'home' && !x.includes("hacknet-") && !x.includes("daemon") && !ns.getServer(x).backdoorInstalled && reqHack <= myHack ? "[Backdoor]" : "")}</a>` +
                 `${' @'.repeat(ns.ls(x, ".cct").length)}`;
         };
     let tcommand = x => {
@@ -47,5 +49,6 @@ export let main = ns => {
             if (!s.includes(j)) s.push(j), p.push(s[i]), r[j] = r[s[i]] + ";connect " + j;
     tprint(`<div class="sc new">${addSc()}</div>`);
     doc.querySelectorAll(".sc.new .s").forEach(q => q.addEventListener('click', tcommand.bind(null, r[q.childNodes[0].nodeValue])));
+    doc.querySelectorAll(".sc.new .backdoor").forEach(q => q.addEventListener('click', tcommand.bind(null, r[q.previousElementSibling.previousElementSibling.childNodes[0].nodeValue] + ";backdoor")));
     doc.querySelector(".sc.new").classList.remove("new");
 };
