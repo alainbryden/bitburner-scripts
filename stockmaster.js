@@ -482,8 +482,8 @@ function doStatusUpdate(ns, stocks, myStocks, hudElement = null) {
     let liquidation_value = myStocks.reduce((sum, stk) => sum - (stk.owned() ? commission : 0) + stk.positionValue(), 0);
     let status = `Long ${myStocks.filter(s => s.sharesLong > 0).length}, Short ${myStocks.filter(s => s.sharesShort > 0).length} of ${stocks.length} stocks ` +
         (myStocks.length == 0 ? '' : `(ER ${minReturnBP.toFixed(1)}-${maxReturnBP.toFixed(1)} BP) `) +
-        `Profit: ${formatMoney(totalProfit, 3)} Holdings: ${formatMoney(liquidation_value, 3)} (Cost: ${formatMoney(est_holdings_cost, 3)}) ` +
-        `Net: ${formatMoney(totalProfit + liquidation_value - est_holdings_cost, 3)}`
+        `Total Profit: ${formatMoney(totalProfit, 3)} Holdings: ${formatMoney(liquidation_value, 3)} (Cost: ${formatMoney(est_holdings_cost, 3)}) ` +
+        `Net: ${formatMoney(liquidation_value - est_holdings_cost, 3)}`
     log(ns, status);
     if (hudElement) hudElement.innerText = formatMoney(liquidation_value, 6, 3);
 }
