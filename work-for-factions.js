@@ -69,6 +69,7 @@ let mostExpensiveAugByFaction = [];
 let mostExpensiveDesiredAugByFaction = [];
 let playerGang = null;
 let allGangFactions = [];
+let dictFactionFavors;
 
 let options;
 const argsSchema = [
@@ -146,6 +147,7 @@ export async function main(ns) {
     const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
     const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
     const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
+    dictFactionFavors = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getFactionFavor(o)'), '/Temp/faction-favor.txt');
 
     ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
     let installedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
@@ -239,11 +241,13 @@ export async function main(ns) {
             await workForSingleFaction(ns, faction, true, true);
         if (scope < 7) continue;
 
-        // Strategy 8: Commit crimes for a while longer, then loop to see if there anything more we can do for the above factions
-        if (noCrime) {
-            ns.print(`--no-crime (or --no-focus): Crimes are disabled, so sleeping for a while (30s) then checking back on whether there's any work to be done...`);
-            await ns.sleep(30000);
-        } else await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100, 0);
+        // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
+        if (crimeFocus) // IF we're crime-focused, do crimes for a little while
+            await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100 /* Hack: Decrease Karma by 100 */, 0);
+        else { // Otherwise, do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
+            let mostFavorFaction = joinedFactions.sort((a, b) => dictFactionFavors[a] - dictFactionFavors[b])[0]
+            await workForSingleFaction(ns, mostFavorFaction, false, false, ns.getFactionRep(mostFavorFaction) * 1.05 /* Hack: Grow rep by 5% */);
+        }
     }
 }
 
@@ -456,15 +460,15 @@ let lastFactionWorkStatus = "";
 /** @param {NS} ns 
  * Checks how much reputation we need with this faction to either buy all augmentations or get 150 favour, then works to that amount.
  * */
-export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false) {
+export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = undefined) {
     const repToFavour = (rep) => Math.ceil(25500 * 1.02 ** (rep - 1) - 25000);
     const factionConfig = factionSpecificConfigs.find(c => c.name == factionName);
     const forceUnlock = factionConfig?.forceUnlock || options.first.includes(factionName);
     let highestRepAug = forceBestAug ? mostExpensiveAugByFaction[factionName] : mostExpensiveDesiredAugByFaction[factionName];
-    let startingFavor = await getCurrentFactionFavour(ns, factionName);
+    let startingFavor = dictFactionFavors[factionName];
     let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
     // When to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
-    let factionRepRequired = forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
+    let factionRepRequired = forceRep ? forceRep : forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
     if (highestRepAug == -1 && !forceUnlock)
         return ns.print(`All "${factionName}" augmentations are owned. Skipping unlocking faction...`);
     // Ensure we get an invite to location-based factions we might want / need
@@ -475,7 +479,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     // Cannot work for gang factions. Detect if this is our gang faction!
     if (factionName === playerGang || allGangFactions.includes(factionName))
         return ns.print(`"${factionName}" is an active gang faction. Cannot work for gang factions...`);
-    if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) {// Special check to avoid pointless donation unlocking
+    if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
         ns.print(`The last "${factionName}" aug is only ${mostExpensiveAugByFaction[factionName].toLocaleString()} rep, ` +
             `not worth grinding ${favorRepRequired.toLocaleString()} rep to unlock donations.`);
         forceUnlockDonations = false;
