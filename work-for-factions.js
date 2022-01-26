@@ -64,6 +64,7 @@ let hasFocusPenaly = true;
 let shouldFocusAtWork = false; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 let repToDonate = 150; // Updated after looking at bitnode mults
 let lastActionRestart = 0;
+let crimeCount = 0; // A simple count of crime commited since last script restart
 let ownedAugmentations = [];
 let mostExpensiveAugByFaction = [];
 let mostExpensiveDesiredAugByFaction = [];
@@ -129,6 +130,7 @@ export async function main(ns) {
 
     let bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
     repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
+    crimeCount = 0;
 
     // Get some information about gangs (if unlocked)
     if (2 in dictSourceFiles) {
@@ -395,12 +397,12 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${ns.heart.break()})`);
     if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility})`);
-    let crime, lastCrime, lastStatusUpdateTime, crimeCount = 0;
+    let crime, lastCrime, lastStatusUpdateTime;
     while (forever || player.strength < reqStats || player.defense < reqStats || player.dexterity < reqStats || player.agility < reqStats || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(${JSON.stringify(bestCrimesByDifficulty)}.map(c => [c, ns.getCrimeChance(c)]))`, '/Temp/crime-chances.txt');
         let needStats = player.strength < reqStats || player.defense < reqStats || player.dexterity < reqStats || player.agility < reqStats;
         let karma = -ns.heart.break();
-        crime = (karma < 1 || player.strength < 10) && crimeCount < 10 ? "mug" : karma < 5 && player.strength > 20 && crimeCount < 20 && crimeChances[2] > 0.5 ? "homicide" : // Start with a few fast crimes to boost stats / crime chances if we haven't done much crime before
+        crime = crimeCount < 10 ? (crimeChances[2] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
             (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly ? index > 1 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
