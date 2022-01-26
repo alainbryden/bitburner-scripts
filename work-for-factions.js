@@ -242,12 +242,18 @@ export async function main(ns) {
         if (scope <= 7) continue;
 
         // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
-        if (crimeFocus) // IF we're crime-focused, do crimes for a little while
-            await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100 /* Hack: Decrease Karma by 100 */, 0);
-        else { // Otherwise, do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
-            let mostFavorFaction = knownFactions.filter(f => !skipFactionsConfig.includes(f) && !allGangFactions.includes(f)).sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
+        let factionsWeCanWorkFor = knownFactions.filter(f => !skipFactionsConfig.includes(f) && !allGangFactions.includes(f));
+        if (factionsWeCanWorkFor.length > 0 && !crimeFocus) {
+            // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
+            let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
             ns.print(`INFO: All useful work complete. Grinding an additional 5% rep with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
             await workForSingleFaction(ns, mostFavorFaction, false, false, ns.getFactionRep(mostFavorFaction) * 1.05 /* Hack: Grow rep by 5% */);
+        } else if (!noCrime) { // Otherwise, kill some time by doing crimes for a little while
+            ns.print(`INFO: Nothing to do. Doing a little crime...`);
+            await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100 /* Hack: Decrease Karma by 100 */, 0);
+        } else { // If our hands our tied, twiddle our thumbs a bit
+            ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
+            await ns.sleep(30000);
         }
         if (scope <= 8) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
 
@@ -293,17 +299,7 @@ async function earnFactionInvite(ns, factionName) {
         ["Chongqing", "New Tokyo", "Ishima"].includes(factionName) && (precludingFaction = ["Aevum", "Sector-12", "Volhaven"].find(f => joinedFactions.includes(f))) ||
         ["Volhaven"].includes(factionName) && (precludingFaction = ["Aevum", "Sector-12", "Chongqing", "New Tokyo", "Ishima"].find(f => joinedFactions.includes(f))))
         return ns.print(`${reasonPrefix} precluding faction "${precludingFaction}"" has been joined.`);
-    // Skip factions for which money/hack level requirements aren't met. We do not attempt to "train up" for these things (happens automatically outside this script)
     let requirement;
-    if ((requirement = requiredMoneyByFaction[factionName]) && player.money < requirement)
-        return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
-    if ((requirement = requiredHackByFaction[factionName]) && player.hacking < requirement && !reqHackingOrCombat.includes(factionName))
-        return ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
-    // Note: This only complains if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
-    if ((requirement = requiredBackdoorByFaction[factionName]) && player.hacking < ns.getServerRequiredHackingLevel(requirement))
-        return ns.print(`${reasonPrefix} you must fist backdoor ${requirement}, which needs hack: ${ns.getServerRequiredHackingLevel(requirement)}, Have: ${player.hacking}`);
-    //await getNsDataThroughFile(ns, `ns.connect('fulcrumassets'); await ns.installBackdoor(); ns.connect(home)`, '/Temp/backdoor-fulcrum.txt') // TODO: Do backdoor if we can but haven't yet?
-
     // See if we can take action to earn an invite for the next faction under consideration
     let workedForInvite = false;
     // If committing crimes can help us join a faction - we know how to do that
@@ -334,6 +330,16 @@ async function earnFactionInvite(ns, factionName) {
     if (doCrime)
         workedForInvite = await crimeForKillsKarmaStats(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
 
+    // Skip factions for which money/hack level requirements aren't met. We do not attempt to "train up" for these things (happens automatically outside this script)
+    if ((requirement = requiredMoneyByFaction[factionName]) && player.money < requirement)
+        return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
+    if ((requirement = requiredHackByFaction[factionName]) && player.hacking < requirement && !reqHackingOrCombat.includes(factionName))
+        return ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
+    // Note: This only complains if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
+    if ((requirement = requiredBackdoorByFaction[factionName]) && player.hacking < ns.getServerRequiredHackingLevel(requirement))
+        return ns.print(`${reasonPrefix} you must fist backdoor ${requirement}, which needs hack: ${ns.getServerRequiredHackingLevel(requirement)}, Have: ${player.hacking}`);
+    //await getNsDataThroughFile(ns, `ns.connect('fulcrumassets'); await ns.installBackdoor(); ns.connect(home)`, '/Temp/backdoor-fulcrum.txt') // TODO: Do backdoor if we can but haven't yet?
+
     // If travelling can help us join a faction - we can do that too
     if (['Tian Di Hui', 'Tetrads', 'The Dark Army'].includes(factionName))
         workedForInvite = await goToCity(ns, 'Chongqing');
@@ -341,6 +347,7 @@ async function earnFactionInvite(ns, factionName) {
         workedForInvite = await goToCity(ns, 'Sector-12');
     else if (["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"].includes(factionName))
         workedForInvite = await goToCity(ns, factionName);
+    // Special case, earn a CEO position to gain an invite to Silhouette
     if ("Silhouette" == factionName) {
         ns.print(`You must be a CO (e.g. CEO/CTO) of a company to earn an invite to ${factionName}. This may take a while!`);
         let factionConfig = companySpecificConfigs.find(f => f.name == factionName); // We set up Silhouette with a "company-specific-config" so that we can work for an invite like any megacorporation faction.
@@ -357,8 +364,7 @@ async function earnFactionInvite(ns, factionName) {
     if (workedForInvite) // If we took some action to earn the faction invite, wait for it to come in
         return await waitForFactionInvite(ns, factionName);
     else
-        return await tryJoinFaction(ns, factionName);
-
+        return ns.print(`Noting we can do at this time to earn an invitation to faction "${factionName}"...`);
 }
 
 /** @param {NS} ns */
