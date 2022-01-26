@@ -223,8 +223,8 @@ export async function main(ns) {
 
         // Strategies 5+ now work towards getting an invite to *all factions in the game* (sorted by least-expensive final aug (correlated to easiest faction-invite requirement))
         let joinedFactions = player.factions; // In case our hard-coded list of factions is missing anything, merge it with the list of all factions
-        let allIncompleteFactions = factions.concat(joinedFactions.filter(f => !factions.includes(f))).filter(f => !skipFactions.includes(f) && !completedFactions.includes(f))
-            .sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]);
+        let knownFactions = factions.concat(joinedFactions.filter(f => !factions.includes(f)));
+        let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f)).sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]);
         // Strategy 5: For *all factions in the game*, try to earn an invite and work for rep until we can afford the most-expensive *desired* aug (or unlock donations, whichever comes first)
         for (const faction of allIncompleteFactions.filter(f => !softCompletedFactions.includes(f)))
             await workForSingleFaction(ns, faction);
@@ -245,8 +245,8 @@ export async function main(ns) {
         if (crimeFocus) // IF we're crime-focused, do crimes for a little while
             await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100 /* Hack: Decrease Karma by 100 */, 0);
         else { // Otherwise, do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
-            let mostFavorFaction = joinedFactions.filter(f => !allGangFactions.includes(f)).sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0]
-            ns.print(`INFO: All useful work complete. Grinding an addition 5% rep with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction].toFixed(2)} favor)`);
+            let mostFavorFaction = knownFactions.filter(f => !skipFactionsConfig.includes(f) && !allGangFactions.includes(f)).sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
+            ns.print(`INFO: All useful work complete. Grinding an additional 5% rep with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
             await workForSingleFaction(ns, mostFavorFaction, false, false, ns.getFactionRep(mostFavorFaction) * 1.05 /* Hack: Grow rep by 5% */);
         }
         if (scope <= 8) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
@@ -504,7 +504,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             `(Current rep: ${Math.round(currentReputation).toLocaleString()}). Skipping working for faction...`)
 
     ns.print(`Faction "${factionName}" Highest Aug Req: ${highestRepAug.toLocaleString()}, Current Favor (` +
-        `${startingFavor.toFixed(2)}/${repToDonate.toFixed(2)}) Req: ${Math.round(favorRepRequired).toLocaleString()}`);
+        `${startingFavor?.toFixed(2)}/${repToDonate?.toFixed(2)}) Req: ${Math.round(favorRepRequired).toLocaleString()}`);
     if (options['invites-only'])
         return ns.print(`--invites-only Skipping working for faction...`);
     if (prioritizeInvites && !forceUnlockDonations && !forceBestAug && !forceRep)
@@ -535,7 +535,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             lastStatusUpdateTime = Date.now(); lastRepMeasurement = currentReputation;
             const eta_milliseconds = (factionRepRequired - currentReputation) / repGainRatePerMs;
             ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString()}, earning ${formatNumberShort(repGainRatePerMs * 1000)} rep/sec. ` +
-                (hasFocusPenaly && !shouldFocusAtWork ? ' after 20% non-focus Penalty' : '') + ` (ETA: ${formatDuration(eta_milliseconds)})`);
+                (hasFocusPenaly && !shouldFocusAtWork ? 'after 20% non-focus Penalty ' : '') + `(ETA: ${formatDuration(eta_milliseconds)})`);
         }
         await tryBuyReputation(ns);
         await ns.sleep(restartWorkInteval);
@@ -721,7 +721,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             const eta_milliseconds = ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRatePerMs;
             player = ns.getPlayer();
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRatePerMs * 1000)} rep/sec. ` +
-                `(after ${(100 * (1 - cancellationMult)).toFixed(0)}% early-quit penalty` + (hasFocusPenaly && !shouldFocusAtWork ? ' and 20% non-focus Penalty' : '') + `)\n` +
+                `(after ${(100 * (1 - cancellationMult))?.toFixed(0)}% early-quit penalty` + (hasFocusPenaly && !shouldFocusAtWork ? ' and 20% non-focus Penalty' : '') + `)\n` +
                 `${status}\nCurrent player stats are Hack:${player.hacking} ${player.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.charisma} ${player.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
                 `Rep:${Math.round(currentReputation).toLocaleString()} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
