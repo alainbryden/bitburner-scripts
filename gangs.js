@@ -41,7 +41,9 @@ const argsSchema = [
     ['training-percentage', 0.20], // Spend this percent of time training gang members versus doing crime
     ['no-training', false], // Don't train unless all other tasks generate no gains
     ['no-auto-ascending', false], // Don't ascend members
-    ['ascend-multi-threshold', 2.3], // Ascend if any stat multi would increase by more than this amount
+    ['ascend-multi-threshold', 1.05], // Ascend member #12 if a primary stat multi would increase by more than this amount
+    ['ascend-multi-threshold-spacing', 0.05], // Members will space their acention multis by this amount to ensure they are ascending at different rates 
+    // Note: given the above two defaults, members would ascend at multis [1.6, 1.55, 1.50, ..., 1.1, 1.05] once you have 12 members.
     ['min-training-ticks', 20], // Require this many ticks of training after ascending or recruiting
 ];
 
@@ -334,10 +336,11 @@ async function doRecruitMember(ns) {
  * Check if any members are deemed worth ascending to increase a stat multiplier **/
 async function tryAscendMembers(ns) {
     const dictAscensionResults = await getGangInfoDict(ns, myGangMembers, 'getAscensionResult');
-    for (const member of myGangMembers) {
+    for (let i = 0; i < myGangMembers.length; i++) {
+        const member = myGangMembers[i];
+        // First members are given the largest threshold, so that early on when they are our only members, they are more stable
+        const ascMultiThreshold = options['ascend-multi-threshold'] + (11 - i) * options['ascend-multi-threshold-spacing'];
         const ascResult = dictAscensionResults[member];
-        // Hack: Until we know what threshold is best, give each member a different threshold and see how they all do!
-        const ascMultiThreshold = options['ascend-multi-threshold'] /* 2.3 */ - Number(member.split(" ")[1]) * 0.1; /* 1.1 for member 12 */
         if (!ascResult || !importantStats.some(stat => ascResult[stat] >= ascMultiThreshold))
             continue;
         if (undefined !== (await getNsDataThroughFile(ns, `ns.gang.ascendMember('${member}')`, '/Temp/gang-ascend-member.txt'))) {
