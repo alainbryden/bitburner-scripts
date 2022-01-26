@@ -39,12 +39,14 @@ const argsSchema = [
     // Augmentation purchasing-related options. Controls what augmentations are included in cost calculations, and optionally purchased
     ['aug-desired', []], // These augs will be marked as "desired" whether or not they match desired-stats
     ['omit-aug', []], // Augmentations to exclude from the augmentation summary because we do not wish to purchase this round
-    ['stat-desired', ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']], // Augs that give these will be starred
+    ['stat-desired', []], // Augs that give these will be starred (marked as desired and staged for purchase)
     ['disable-faction', []], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
     ['disable-donations', false], // When displaying "obtainable" augs and prices, don't include augs that require a donation to meet their rep requirements
     ['purchase', false], // Set to true to pull the trigger on purchasing all desired augs in the order specified
     ['neuroflux-disabled', false], // Set to true to skip including as many neuroflux upgrades as we can afford
 ];
+
+const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
 
 const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "company_rep", "crime_money", "crime_success", "defense_exp", "defense", "dexterity_exp", "dexterity",
     "faction_rep", "hacking_chance", "hacking_exp", "hacking_grow", "hacking_money", "hacking", "hacking_speed", "strength_exp", "strength", "work_money",
@@ -191,6 +193,8 @@ async function updateAugmentationData(ns, desiredStatsFilters, desiredAugs) {
     const dictAugPrices = await getNsDataThroughFile(ns, augsDictCommand('ns.getAugmentationPrice(aug)'), '/Temp/aug-prices.txt');
     const dictAugStats = await getNsDataThroughFile(ns, augsDictCommand('ns.getAugmentationStats(aug)'), '/Temp/aug-stats.txt');
     const dictAugPrereqs = await getNsDataThroughFile(ns, augsDictCommand('ns.getAugmentationPrereq(aug)'), '/Temp/aug-prereqs.txt');
+    if ((desiredStatsFilters?.length ?? 0) == 0 && (desiredAugs?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
+        desiredStatsFilters = ownedAugmentations.length < 40 ? default_desired_stats : ['_']; // While few augs are installed, use the default priority stats filter, otherwise, treat all augs as desired
     augmentationData = Object.fromEntries(augmentationNames.map(aug => [aug, {
         name: aug,
         owned: ownedAugmentations.includes(aug),
