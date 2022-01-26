@@ -53,8 +53,6 @@ let asynchronousHelpers = [];
 let periodicScripts = [];
 // The primary tools copied around and used for hacking
 let hackTools = [];
-// the port cracking array, we use this to do some things
-let portCrackers = [];
 // toolkit var for remembering the names and costs of the scripts we use the most
 let tools = [];
 let toolsByShortName = []; // Dictionary keyed by tool short name
@@ -96,7 +94,7 @@ let lastShareTime = 0; // Tracks when share was last invoked so we can respect t
 // Replacements / wrappers for various NS calls to let us keep track of them in one place and consolidate where possible
 let log = (...args) => logHelper(_ns, ...args);
 
-function updatePlayerStats() { return playerStats = _ns.getPlayer(); }
+async function updatePlayerStats() { return playerStats = await getNsDataThroughFile(_ns, `ns.getPlayer()`, '/Temp/player-info.txt'); }
 
 function playerHackSkill() { return playerStats.hacking; }
 
@@ -166,7 +164,7 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     _ns = ns;
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
-    updatePlayerStats();
+    await updatePlayerStats();
     dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     log("The following source files are active: " + JSON.stringify(dictSourceFiles));
     //ns.disableLog('ALL');
@@ -182,7 +180,6 @@ export async function main(ns) {
     serverListByTargetOrder = [];
     serverListByMaxRam = [];
     addedServerNames = [];
-    portCrackers = [];
     tools = [];
     toolsByShortName = [];
     psCache = [];
@@ -263,11 +260,10 @@ export async function main(ns) {
         { name: "/Remote/share.js", shortName: "share", threadSpreadingAllowed: true },
     ];
     hackTools.forEach(tool => tool.name = getFilePath(tool.name));
-    // TODO: Revive these tools when needed.
-    buildToolkit(ns); // build toolkit
+
+    await buildToolkit(ns); // build toolkit
     await getStaticServerData(ns, scanAllServers(ns)); // Gather information about servers that will never change
-    buildServerList(ns); // create the exhaustive server list    
-    buildPortCrackingArray(ns); // build port cracking array  
+    buildServerList(ns); // create the exhaustive server list   
     await establishMultipliers(ns); // figure out the various bitnode and player multipliers
 
     allHelpersRunning = hackOnly ? true : await runStartupScripts(ns); // Start helper scripts
@@ -346,6 +342,13 @@ async function tryRunTool(ns, tool) {
     return false;
 }
 
+/** @param {NS} ns 
+ * Execute an external script that roots a server, and wait for it to complete. **/
+async function doRoot(ns, server) {
+    const pid = ns.exec(getFilePath('/Tasks/crack-host.js'), 'home', 1, server.name);
+    await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
+}
+
 // Main targeting loop
 /** @param {NS} ns **/
 async function doTargetingLoop(ns) {
@@ -359,7 +362,7 @@ async function doTargetingLoop(ns) {
             var start = Date.now();
             psCache = []; // Clear the cache of the process list we update once per loop           
             buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process           
-            updatePlayerStats(); // Update player info
+            await updatePlayerStats(); // Update player info
             // Run some auxilliary processes that ease the ram burden of this daemon and add additional functionality (like managing hacknet or buying servers)
             await runPeriodicScripts(ns);
 
@@ -419,7 +422,7 @@ async function doTargetingLoop(ns) {
                 const server = serverListByTargetOrder[i];
                 // Attempt to root any servers that are not yet rooted
                 if (!server.hasRoot() && server.canCrack())
-                    doRoot(server);
+                    await doRoot(ns, server);
 
                 // Check whether we can / should attempt any actions on this server
                 if (!server.shouldHack()) { // Ignore servers we own (bought servers / home / no money)
@@ -542,8 +545,8 @@ async function doTargetingLoop(ns) {
                 let shareTool = getTool("share");
                 let shareThreads = Math.floor(shareTool.getMaxThreads() * maxShareUtilization);
                 if (shareThreads > 0) {
-                    if (await arbitraryExecution(ns, getTool('share'), shareThreads, [Date.now()], null, true)) // Note: Need a unique argument to multiple parallel share scripts on the same server
-                        if (verbose) log(`Sharing ${formatRam(shareThreads * 4)} RAM with factions using ${shareThreads.toLocaleString()} share threads.`);
+                    if (verbose) log(`Sharing ${formatRam(shareThreads * 4)} RAM with factions using ${shareThreads.toLocaleString()} share threads.`);
+                    await arbitraryExecution(ns, getTool('share'), shareThreads, [Date.now()], null, true) // Note: Need a unique argument to multiple parallel share scripts on the same server
                     lastShareTime = Date.now();
                 }
             }// else log(`Not Sharing. workCapped: ${isWorkCapped()} utilizationPercent: ${utilizationPercent} maxShareUtilization: ${maxShareUtilization} cooldown: ${formatDuration(Date.now() - lastShareTime)} networkRam: ${network.totalMaxRam}`);
@@ -551,7 +554,7 @@ async function doTargetingLoop(ns) {
             // Log some status updates
             let keyUpdates = `Of ${serverListByFreeRam.length} total servers:\n > ${noMoney.length} were ignored (owned or no money)`;
             if (notRooted.length > 0)
-                keyUpdates += `, ${notRooted.length} are not rooted (missing ${portCrackers.filter(c => !c.exists()).map(c => c.name).join(',')})`;
+                keyUpdates += `, ${notRooted.length} are not rooted (missing ${crackNames.filter(c => !ownedCracks.includes(c)).join(', ')})`;
             if (cantHack.length > 0)
                 keyUpdates += `\n > ${cantHack.length} cannot be hacked (${cantHackButPrepping.length} prepping, ` +
                     `${cantHackButPrepped.length} prepped, next unlock at Hack ${lowestUnhackable})`;
@@ -620,7 +623,7 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
     //ns.print(dictServerProfitInfo);
     if (options.i)
-        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.getCurrentServer()'));
+        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.getCurrentServer()', '/Temp/terminal-server.txt'));
 }
 
 /** @param {NS} ns **/
@@ -1138,23 +1141,22 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
             }
         }
 
-        // if not on the daemon host, do a script copy check before running
+        // If running on a non-daemon host, do a script copy check before running
         let just_copied = false;
         if (targetServer.name != daemonHost && !doesFileExist(tool.name, targetServer.name)) {
+            let missing_scripts = [tool.name];
+            if (!doesFileExist(getFilePath('helpers.js'), targetServer.name))
+                missing_scripts.push(getFilePath('helpers.js')); // Some tools require helpers.js. Best to copy it around.
             if (verbose)
                 log(`Copying ${tool.name} from ${daemonHost} to ${targetServer.name} so that it can be executed remotely.`);
-            await ns.scp(tool.name, daemonHost, targetServer.name);
-            // Some tools require helpers.js
-            if (!doesFileExist(getFilePath('helpers.js'), targetServer.name))
-                await ns.scp(getFilePath('helpers.js'), daemonHost, targetServer.name);
+            await getNsDataThroughFile(ns, `await ns.scp(${JSON.stringify(missing_scripts)}, '${daemonHost}', '${targetServer.name}')`, '/Temp/copy-scripts.txt')
             await ns.sleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
             just_copied = true;
         }
         let pid = ns.exec(tool.name, targetServer.name, maxThreadsHere, ...(args || []));
         if (just_copied) await ns.sleep(5); // I don't know why this would make a difference (based on my understanding of the above issue), but hear reports that putting a sleep after the call to exec works around the problem
-        // A pid of 0 indicates that the run failed
         if (pid == 0) {
-            log('ERROR: Failed to exec ' + tool.name + ' on server ' + targetServer.name + ' with ' + maxThreadsHere + ' threads', false, 'error');
+            log(`ERROR: Failed to exec ${tool.name} on server ${targetServer.name} with ${maxThreadsHere} threads`, false, 'error');
             return false;
         }
         // Decrement the threads that have been successfully scheduled
@@ -1167,7 +1169,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
     }
     // The run failed if there were threads left to schedule after we exhausted our pool of servers
     if (remainingThreads > 0 && threads < Number.MAX_SAFE_INTEGER)
-        log(`ERROR: Ran out of RAM to run ${tool.name} against ${args[0]} - ${threads - remainingThreads} of ${threads} threads were spawned.`, false, 'error');
+        log(`ERROR: Ran out of RAM to run ${tool.name} ${splitThreads ? '' : `on ${targetServer} `}- ${threads - remainingThreads} of ${threads} threads were spawned.`, false, 'error');
     if (splitThreads && !tool.isThreadSpreadingAllowed)
         return false;
     return remainingThreads == 0;
@@ -1291,7 +1293,7 @@ let farmXpReentryLock = []; // A dictionary of server names and whether we're cu
 let nextXpCycleEnd = []; // A dictionary of server names and when their next XP farming cycle is expected to end
 /** @param {NS} ns **/
 async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbose, advancedMode, allocatedServer = null, singleServer = false) {
-    if (!server.hasRoot() && server.canCrack()) doRoot(server); // Get root if we do not already have it.
+    if (!server.hasRoot() && server.canCrack()) await doRoot(ns, server); // Get root if we do not already have it.
     if (!server.hasRoot()) return log(`ERROR: Cannot farm XP from unrooted server ${server.name}`, true, 'error');
     // If we are already farming XP from this server, wait for it to complete (if the last cycle is almost done) or skip scheduling more work
     const eta = nextXpCycleEnd[server.name];
@@ -1536,9 +1538,12 @@ async function establishMultipliers(ns) {
 }
 
 /** @param {NS} ns **/
-function buildToolkit(ns) {
+async function buildToolkit(ns) {
     log("buildToolkit");
-    for (const toolConfig of hackTools.concat(asynchronousHelpers).concat(periodicScripts)) {
+    let allTools = hackTools.concat(asynchronousHelpers).concat(periodicScripts);
+    let toolCosts = await getNsDataThroughFile(ns, `Object.fromEntries(${JSON.stringify(allTools.map(t => t.name))}` +
+        `.map(s => [s, ns.getScriptRam(s, '${daemonHost}')]))`, '/Temp/script-costs.txt');
+    for (const toolConfig of allTools) {
         let tool = {
             instance: ns,
             name: toolConfig.name,
@@ -1548,7 +1553,7 @@ function buildToolkit(ns) {
             shouldRun: toolConfig.shouldRun,
             requiredServer: toolConfig.requiredServer,
             isThreadSpreadingAllowed: toolConfig.threadSpreadingAllowed === true,
-            cost: ns.getScriptRam(toolConfig.name, daemonHost),
+            cost: toolCosts[toolConfig.name],
             canRun: function (server) {
                 return doesFileExist(this.name, server.name) && server.ramAvailable() >= this.cost;
             },
@@ -1557,7 +1562,9 @@ function buildToolkit(ns) {
                 let maxThreads = 0;
                 sortServerList("ram");
                 for (const server of serverListByFreeRam.filter(s => s.hasRoot())) {
-                    var threadsHere = Math.floor((server.ramAvailable() / this.cost).toPrecision(14));
+                    // Note: To be conservative, we allow double imprecision to cause this floor() to return one less than should be possible,
+                    //       because the game likely doesn't account for this imprecision (e.g. let 1.9999999999999998 return 1 rather than 2)
+                    var threadsHere = Math.floor((server.ramAvailable() / this.cost)/*.toPrecision(14)*/);
                     if (!this.isThreadSpreadingAllowed)
                         return threadsHere;
                     maxThreads += threadsHere;
@@ -1574,66 +1581,14 @@ const hashToolDefinition = s => hashCode(s.name + JSON.stringify(s.args || []));
 
 function getTool(s) { return toolsByShortName[s] || toolsByShortName[s.shortName || hashToolDefinition(s)]; }
 
-function getNumPortCrackers() { return portCrackers.filter(c => c.exists()).length; }
+const crackNames = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe"];
+let ownedCracks = [];
 
-// assemble a list of port crackers and abstract their functionality
-function buildPortCrackingArray(ns) {
-    var crackNames = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe"];
-    for (var i = 0; i < crackNames.length; i++) {
-        var cracker = buildPortCrackerObject(ns, crackNames[i]);
-        portCrackers.push(cracker);
-    }
-}
-
-/** @param {NS} ns **/
-function buildPortCrackerObject(ns, crackName) {
-    var crack = {
-        ns: ns,
-        name: crackName,
-        exists: () => doesFileExist(crackName, "home"),
-        runAt: function (target) {
-            switch (this.name) {
-                case "BruteSSH.exe":
-                    this.ns.brutessh(target);
-                    break;
-                case "FTPCrack.exe":
-                    this.ns.ftpcrack(target);
-                    break;
-                case "relaySMTP.exe":
-                    this.ns.relaysmtp(target);
-                    break;
-                case "HTTPWorm.exe":
-                    this.ns.httpworm(target);
-                    break;
-                case "SQLInject.exe":
-                    this.ns.sqlinject(target);
-                    break;
-            }
-        },
-        // I made this a function of the crackers out of laziness.
-        doNuke: target => ns.nuke(target)
-    };
-    return crack;
-}
-
-function doRoot(server) {
-    try {
-        var portsCracked = 0;
-        var portsNeeded = server.portsRequired;
-        for (var i = 0; i < portCrackers.length; i++) {
-            var cracker = portCrackers[i];
-            if (cracker.exists()) {
-                cracker.runAt(server.name);
-                portsCracked++;
-            }
-            if (portsCracked >= portsNeeded) {
-                cracker.doNuke(server.name);
-                break;
-            }
-        }
-    }
-    catch (err) {
-        log(`ERROR while attempting to root ${server.name} with ${server.portsRequired} ports needed.`, true, 'error');
-        throw err;
-    }
+function getNumPortCrackers() {
+    // Once we own a port cracker, assume it won't be deleted.
+    if (ownedCracks.length == 5) return 5;
+    for (const crack of crackNames.filter(c => !ownedCracks.includes(c)))
+        if (doesFileExist(crack, 'home'))
+            ownedCracks.push(crack);
+    return ownedCracks.length;
 }
