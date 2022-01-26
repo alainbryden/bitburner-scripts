@@ -74,6 +74,7 @@ export function autocomplete(data, args) {
 /** @param {NS} ns **/
 export async function main(ns) {
     options = ns.flags(argsSchema);
+    if (options['stat-desired'].length === 1) options['stat-desired'] = options['stat-desired'][0].split(',')
     const verbose = options.v || options.verbose;
     const allFactions = options.a || options.all;
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
