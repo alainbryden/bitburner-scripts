@@ -235,11 +235,14 @@ export async function main(ns) {
     asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
     let shouldUpgradeHacknet = () => !shouldReserveMoney() && (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false) === null);
+    // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
+    let shouldImproveHacking = () => bitnodeMults.ScriptHackMoneyGain != 0 || playerStats.bitNodeN != 8 || ns.getServerMoneyAvailable("home") > 1e10;
+
     periodicScripts = [
         // Buy tor as soon as we can if we haven't already, and all the port crackers
         { interval: 29000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !addedServerNames.includes("darkweb") },
-        { interval: 30000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers() != 5 },
-        { interval: 31000, name: "/Tasks/ram-manager.js", shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && (getTotalNetworkUtilization() > 0.85 || xpOnly) },
+        { interval: 30000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers() != 5 && (getNumPortCrackers() < 3 || shouldImproveHacking()) },
+        { interval: 31000, name: "/Tasks/ram-manager.js", shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && (getTotalNetworkUtilization() > 0.85 || xpOnly) && shouldImproveHacking() },
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money
         { interval: 32000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
         //{ interval: 33000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
@@ -251,7 +254,7 @@ export async function main(ns) {
         },
         { interval: 51000, name: "/Tasks/contractor.js", requiredServer: "home" },
         { interval: 110000, name: "/Tasks/backdoor-all-servers.js", requiredServer: "home", shouldRun: () => 4 in dictSourceFiles },
-        { interval: 111000, name: "host-manager.js", requiredServer: "home", shouldRun: () => !shouldReserveMoney(), args: ['--utilization-trigger', '0.80'] },
+        { interval: 111000, name: "host-manager.js", requiredServer: "home", shouldRun: () => !shouldReserveMoney() && shouldImproveHacking() },
     ];
     periodicScripts.forEach(tool => tool.name = getFilePath(tool.name));
     hackTools = [
@@ -547,7 +550,7 @@ async function doTargetingLoop(ns) {
 
             // Use any unspent RAM on share.
             const maxShareUtilization = options['share-max-utilization']
-            if (!isWorkCapped() && utilizationPercent < maxShareUtilization && (Date.now() - lastShareTime) > options['share-cooldown'] &&
+            if (failed.length <= 0 && utilizationPercent < maxShareUtilization && (Date.now() - lastShareTime) > options['share-cooldown'] &&
                 !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) { // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
                 let shareTool = getTool("share");
                 let shareThreads = Math.floor(shareTool.getMaxThreads() * maxShareUtilization);
@@ -556,7 +559,7 @@ async function doTargetingLoop(ns) {
                     await arbitraryExecution(ns, getTool('share'), shareThreads, [Date.now()], null, true) // Note: Need a unique argument to multiple parallel share scripts on the same server
                     lastShareTime = Date.now();
                 }
-            }// else log(`Not Sharing. workCapped: ${isWorkCapped()} utilizationPercent: ${utilizationPercent} maxShareUtilization: ${maxShareUtilization} cooldown: ${formatDuration(Date.now() - lastShareTime)} networkRam: ${network.totalMaxRam}`);
+            } // else log(`Not Sharing. workCapped: ${isWorkCapped()} utilizationPercent: ${utilizationPercent} maxShareUtilization: ${maxShareUtilization} cooldown: ${formatDuration(Date.now() - lastShareTime)} networkRam: ${network.totalMaxRam}`);
 
             // Log some status updates
             let keyUpdates = `Of ${serverListByFreeRam.length} total servers:\n > ${noMoney.length} were ignored (owned or no money)`;
