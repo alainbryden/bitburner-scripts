@@ -941,7 +941,8 @@ async function performScheduling(ns, currentTarget, snapshot) {
             if (["hack", "grow"].includes(schedItem.toolShortName)) // Push an arg used by remote hack/grow tools to determine whether it should manipulate the stock market
                 args.push(stockMode && (schedItem.toolShortName == "hack" && shouldManipulateHack[currentTarget.name] || schedItem.toolShortName == "grow" && shouldManipulateGrow[currentTarget.name]) ? 1 : 0);
             if (["hack", "weak"].includes(schedItem.toolShortName))
-                args.push(options['silent-misfires'] || (schedItem.toolShortName == "hack" && bitnodeMults.ScriptHackMoneyGain == 0) ? 1 : 0); // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
+                args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
+                    (schedItem.toolShortName == "hack" && (bitnodeMults.ScriptHackMoneyGain == 0 || playerStats.bitNodeN == 8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
             args.push(loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
             if (recoveryThreadPadding > 1 && ["weak", "grow"].includes(schedItem.toolShortName))
                 schedItem.threadsNeeded *= recoveryThreadPadding; // Only need to pad grow/weaken threads
