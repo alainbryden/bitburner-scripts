@@ -248,8 +248,9 @@ export async function main(ns) {
         if (factionsWeCanWorkFor.length > 0 && !crimeFocus) {
             // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
             let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
-            ns.print(`INFO: All useful work complete. Grinding an additional 5% rep with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
-            await workForSingleFaction(ns, mostFavorFaction, false, false, ns.getFactionRep(mostFavorFaction) * 1.05 /* Hack: Grow rep by 5% */);
+            let targetRep = 1000 + ns.getFactionRep(mostFavorFaction) * 1.05; // Hack: Grow rep by ~5%, plus 1000 incase it's currently 0
+            ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
+            await workForSingleFaction(ns, mostFavorFaction, false, false, targetRep);
         } else if (!noCrime) { // Otherwise, kill some time by doing crimes for a little while
             ns.print(`INFO: Nothing to do. Doing a little crime...`);
             await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100 /* Hack: Decrease Karma by 100 */, 0);
