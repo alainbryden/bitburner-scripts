@@ -151,7 +151,7 @@ const argsSchema = [
     ['share', false], // Enable sharing free ram to increase faction rep gain (enabled automatically once RAM is sufficient)
     ['no-share', false], // Disable sharing free ram to increase faction rep gain
     ['share-cooldown', 5000], // Wait before attempting to schedule more share threads (e.g. to free RAM to be freed for hack batch scheduling first)
-    ['share-max-utilization', 0.9], // Set to 1 if you don't care to leave any RAM free after sharing
+    ['share-max-utilization', 0.9], // Set to 1 if you don't care to leave any RAM free after sharing. Will use up to this much of the available RAM
 ];
 
 export function autocomplete(data, args) {
@@ -546,9 +546,13 @@ async function doTargetingLoop(ns) {
             if (failed.length <= 0 && utilizationPercent < maxShareUtilization && (Date.now() - lastShareTime) > options['share-cooldown'] &&
                 !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) { // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
                 let shareTool = getTool("share");
-                let shareThreads = Math.floor(shareTool.getMaxThreads() * maxShareUtilization);
+                let maxThreads = shareTool.getMaxThreads(); // This many threads would use up 100% of the (1-utilizationPercent)% RAM remaining
+                network = getNetworkStats(); // Update network stats since they may have changed after scheduling xp cycles above
+                utilizationPercent = network.totalUsedRam / network.totalMaxRam;
+                let shareThreads = Math.floor(maxThreads * (maxShareUtilization - utilizationPercent) / (1 - utilizationPercent)); // Ensure we don't take utilization above (1-maxShareUtilization)%
                 if (shareThreads > 0) {
-                    if (verbose) log(`Sharing ${formatRam(shareThreads * 4)} RAM with factions using ${shareThreads.toLocaleString()} share threads.`);
+                    if (verbose) log(`Creating ${shareThreads.toLocaleString()} share threads to improve faction rep gain rates. Using ${formatRam(shareThreads * 4)} of ${formatRam(network.totalMaxRam)} ` +
+                        `(${(400 * shareThreads / network.totalMaxRam).toFixed(1)}%) of all RAM). Final utilization will be ${(100 * (4 * shareThreads + network.totalUsedRam) / network.totalMaxRam).toFixed(1)}%`);
                     await arbitraryExecution(ns, getTool('share'), shareThreads, [Date.now()], null, true) // Note: Need a unique argument to multiple parallel share scripts on the same server
                     lastShareTime = Date.now();
                 }
@@ -1112,12 +1116,14 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
     // Helper function to compute the most threads a server can run 
     let computeMaxThreads = function (server) {
         if (tool.cost == 0) return 1;
-        let ramAvailable = server.ramAvailable() - 0.001; // Hack: Due to imprecision errors in game, a RAM "perfect fit" doesn't fit, so simulate less space
+        let ramAvailable = server.ramAvailable();
         // It's a hack, but we know that "home"'s reported ram available is lowered to leave room for "preferred" jobs, 
         // so if this is a preferred job, ignore what the server object says and get it from the source
         if (server.name == "home" && preferredServerName == "home")
             ramAvailable = ns.getServerMaxRam("home") - ns.getServerUsedRam("home");
-        return Math.floor((ramAvailable / tool.cost).toPrecision(14));
+        // Note: To be conservative, we allow double imprecision to cause this floor() to return one less than should be possible,
+        //       because the game likely doesn't account for this imprecision (e.g. let 1.9999999999999998 return 1 rather than 2)
+        return Math.floor((ramAvailable / tool.cost)/*.toPrecision(14)*/);
     };
 
     let remainingThreads = threads;
