@@ -653,7 +653,8 @@ function buildServerObject(ns, node) {
         canHack: function () { return this.requiredHackLevel <= playerHackSkill(); },
         shouldHack: function () {
             return this.getMaxMoney() > 0 && this.name !== "home" && !this.name.startsWith('hacknet-node-') &&
-                !purchasedServerNames.includes( (nm) => this.name.startsWith(nm))
+                !purchasedServerNames.includes( (nm) => this.name.startsWith(nm)) &&
+                !this.name.startsWith(corpServerName)
         },
         previouslyPrepped: false,
         prepRegressions: 0,
