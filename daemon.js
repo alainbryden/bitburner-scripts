@@ -147,7 +147,7 @@ const argsSchema = [
     ['queue-delay', 1000], // Delay before the first script begins, to give time for all scripts to be scheduled
     ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule more
     ['i', false], // Farm intelligence with manual hack.
-    ['reserved-ram', 64],
+    ['reserved-ram', 32],
     ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
     ['recovery-thread-padding', 1],
     ['share', false], // Enable sharing free ram to increase faction rep gain (enabled automatically once RAM is sufficient)
