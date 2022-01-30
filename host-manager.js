@@ -204,10 +204,10 @@ function tryToBuyBestServerPossible(ns) {
     }
     // Find a server name we haven't used yet from the list.
     // We may have just removed one, so refresh the list of purchased servers first.
-     // Scan the set of all servers on the network that we own (or rooted) to get a sense of RAM utilization
     scanHosts(rootedServers, ignoredServers, ns);
     purchasedServers = rootedServers.filter(hostName => purchasedServerNames.includes(hostName.split('-')[0])).sort();
     let servername = purchasedServerNames.find((s)=>!purchasedServers.includes(s.split('-')[0]))
+    if (servername === undefined) servername = purchasedServerNames[0];
     let purchasedServer = ns.purchaseServer(servername, maxRamPossibleToBuy);
     if (!purchasedServer)
         setStatus(prefix + `Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
