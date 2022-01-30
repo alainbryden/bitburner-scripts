@@ -27,7 +27,9 @@ const maxGrowthRate = 1.0035;
 // Pad weaken thread counts to account for undershooting. (Shouldn't happen. And if this is a timing issue, padding won't help)
 const weakenThreadPadding = 0; //0.01;
 // The name given to purchased servers (should match what's in host-manager.js)
-const purchasedServersName = "daemon";
+const purchasedServerNames = ['Alpha(α)', 'Beta(β)', 'Gamma(γ)', 'Delta(Δ)', 'Epsilon(ε)', 'Zeta(ζ)', 'Eta(η)', 'Theta(θ)', 'Iota(ι)', 'Kappa(κ)', 'Lambda(λ)', 'Mu(μ)', 'Nu(ν)', 'Xi(ξ)', 'Omicron(ο)', 'Pi(π)', 'Rho(ρ)', 'Sigma(σ)', 'Tau(τ)', 'Upsilon(υ)', 'Phi(φ)', 'Chi(χ)', 'Psi(Ψ)', 'Omega(Ω)','Infinity(∞)','daemon'];
+// The name given to reserved corporate servers
+const corpServerName = 'Corp';
 
 // The maximum current total RAM utilization before we stop attempting to schedule work for the next less profitable server. Can be used to reserve capacity.
 const maxUtilization = 0.95;
@@ -651,7 +653,7 @@ function buildServerObject(ns, node) {
         canHack: function () { return this.requiredHackLevel <= playerHackSkill(); },
         shouldHack: function () {
             return this.getMaxMoney() > 0 && this.name !== "home" && !this.name.startsWith('hacknet-node-') &&
-                !this.name.startsWith(purchasedServersName); // Hack, but beats wasting 2.25 GB on ns.getPurchasedServers()
+                !purchasedServerNames.includes( (nm) => this.name.startsWith(nm))
         },
         previouslyPrepped: false,
         prepRegressions: 0,
@@ -1480,6 +1482,9 @@ function buildServerList(ns, verbose = false) {
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
         allServers = allServers.filter(hostName => !hostName.startsWith('hacknet-node-'))
+    // If there's a dedicated corporate server, ignore that too.
+    if (corpServerName)
+    allServers = allServers.filter(hostName => !hostName.startsWith(corpServerName));
     // Remove all servers we currently have added that are no longer being returned by the above query
     for (const hostName of addedServerNames.filter(hostName => !allServers.includes(hostName)))
         removeServerByName(hostName);
