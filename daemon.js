@@ -547,6 +547,7 @@ async function doTargetingLoop(ns) {
                 !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) { // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
                 let shareTool = getTool("share");
                 let maxThreads = shareTool.getMaxThreads(); // This many threads would use up 100% of the (1-utilizationPercent)% RAM remaining
+                if (xpOnly) maxThreads -= Math.floor(getServerByName('home').ramAvailable() / shareTool.cost); // Reserve home ram entirely for XP cycles when in xpOnly mode
                 network = getNetworkStats(); // Update network stats since they may have changed after scheduling xp cycles above
                 utilizationPercent = network.totalUsedRam / network.totalMaxRam;
                 let shareThreads = Math.floor(maxThreads * (maxShareUtilization - utilizationPercent) / (1 - utilizationPercent)); // Ensure we don't take utilization above (1-maxShareUtilization)%
