@@ -2,8 +2,8 @@ import { formatMoney, formatNumberShort, getNsDataThroughFile, getActiveSourceFi
 
 // Global constants
 const updateInterval = 200;
-const maxSpendPerTickTransientEquipment = 0.01;
-const maxSpendPerTickPermanentEquipment = 0.5; // Spend up to this percent of non-reserved cash on permanent member upgrades
+const maxSpendPerTickTransientEquipment = 0.002;
+const maxSpendPerTickPermanentEquipment = 0.2; // Spend up to this percent of non-reserved cash on permanent member upgrades
 const wantedPenaltyThreshold = 0.0001; // Don't let the wanted penalty get worse than this
 
 // Territory-related variables
