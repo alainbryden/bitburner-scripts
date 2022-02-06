@@ -11,7 +11,7 @@ let options;
 const argsSchema = [
     ['shock-recovery', 0.25], // Set to a number between 0 and 1 to devote that much time to shock recovery
     ['crime', ''],
-    ['aug-budget', 0.5], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
+    ['aug-budget', 0.1], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
     ['buy-cooldown', 60 * 1000], // Must wait this may milliseconds before buying more augs for a sleeve
     ['min-aug-batch', 20], // Must be able to afford at least this many augs before we pull the trigger (or fewer if buying all remaining augs)
 ];

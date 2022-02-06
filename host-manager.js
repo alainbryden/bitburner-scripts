@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, parseShortNumber, getNsDataThroughFile, tryGetBitNodeMultipliers } from './helpers.js'
+import { formatMoney, formatRam, tryGetBitNodeMultipliers } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -167,7 +167,7 @@ function tryToBuyBestServerPossible(ns) {
             `is less than the minimum ram exponent (2^${minRamExponent} for ${formatMoney(ns.getPurchasedServerCost(Math.pow(2, minRamExponent)))})'`);
 
     // Under some conditions, we consider the new server "not worthwhile". but only if it isn't the biggest possible server we can buy
-    if (exponentLevel < maxPurchasableServerRamExponent) {
+    if (exponentLevel < maxPurchasableServerRamExponent - 1) { // -1 To give a buffer if we don't have SF5, because several bitnodes lower the max exponent by 1
         // Abort if our home server is more than 2x bettter (rough guage of how much we 'need' Daemon RAM at the current stage of the game?)
         // Unless we're looking at buying the maximum purchasable server size - in which case we can do no better
         if (maxRamPossibleToBuy < ns.getServerMaxRam("home") / 4)
