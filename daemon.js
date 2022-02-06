@@ -317,9 +317,6 @@ async function runPeriodicScripts(ns) {
     }
 }
 
-// Helper that gets the either invokes a function that returns a value, or returns the value as-is if it is not a function.
-const funcResultOrValue = fnOrVal => (fnOrVal instanceof Function ? fnOrVal() : fnOrVal);
-
 // Returns true if the tool is running (including if it was already running), false if it could not be run.
 /** @param {NS} ns **/
 async function tryRunTool(ns, tool) {
@@ -332,7 +329,7 @@ async function tryRunTool(ns, tool) {
         if (verbose) log(`INFO: Tool ${tool.name} is already running on server ${runningOnServer}.`);
         return true;
     }
-    const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
+    const args = tool.args ? (tool.args instanceof Function ? tool.args() : tool.args) : []; // Support either a static args array, or a function returning the args.
     const runResult = await arbitraryExecution(ns, tool, 1, args, tool.requiredServer || "home"); // TODO: Allow actually requiring a server
     if (runResult) {
         runningOnServer = whichServerIsRunning(ns, tool.name, false);
@@ -1591,7 +1588,7 @@ async function buildToolkit(ns) {
     }
 }
 
-const hashToolDefinition = s => hashCode(s.name + JSON.stringify(funcResultOrValue(s.args) || []));
+const hashToolDefinition = s => hashCode(s.name + JSON.stringify(s.args || []));
 
 function getTool(s) { return toolsByShortName[s] || toolsByShortName[s.shortName || hashToolDefinition(s)]; }
 
