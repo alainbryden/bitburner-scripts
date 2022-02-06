@@ -1,4 +1,5 @@
 import { disableLogs, formatDuration } from './helpers.js'
+/** @typedef {import('./index.js').NS} NS*/
 
 const argsSchema = [
     ['v', false], // Verbose
