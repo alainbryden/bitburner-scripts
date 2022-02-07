@@ -1598,7 +1598,7 @@ async function buildToolkit(ns) {
     }
 }
 
-const hashToolDefinition = s => hashCode(s.name + JSON.stringify(funcResultOrValue(s.args) || []));
+const hashToolDefinition = s => hashCode(s.name + (s.args?.toString() || ''));
 
 function getTool(s) { return toolsByShortName[s] || toolsByShortName[s.shortName || hashToolDefinition(s)]; }
 
