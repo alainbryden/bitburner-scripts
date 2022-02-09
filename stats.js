@@ -2,6 +2,7 @@ import { formatNumberShort, formatMoney, getNsDataThroughFile, getActiveSourceFi
 
 const argsSchema = [
     ['hide-stocks', false],
+    ['show-peoplekilled', false],
 ];
 
 export function autocomplete(data, args) {
@@ -69,11 +70,13 @@ export async function main(ns) {
                 values.push(formatNumberShort(karma, 3, 2));
             }
 
-            playerInfo = (await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt'));
-            const numPeopleKilled = playerInfo.numPeopleKilled;
-            if (numPeopleKilled > 0) {
-                headers.push("Ppl Killed");
-                values.push(formatNumberShort(numPeopleKilled, 6, 0));
+            if(options['show-peoplekilled']) {
+                playerInfo = (await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt'));
+                const numPeopleKilled = playerInfo.numPeopleKilled;
+                if (numPeopleKilled > 0) {
+                    headers.push("Ppl Killed");
+                    values.push(formatNumberShort(numPeopleKilled, 6, 0));
+                }
             }
 
             const sharePower = ns.getSharePower();
