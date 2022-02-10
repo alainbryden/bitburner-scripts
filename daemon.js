@@ -5,7 +5,7 @@ import {
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
     getFnRunViaNsExec, getFnIsAliveViaNsPs
 } from './helpers.js'
-
+/** @typedef {import('./index.js').NS} NS */
 // the purpose of the daemon is: it's our global starting point.
 // it handles several aspects of the game, primarily hacking for money.
 // since it requires a robust "execute arbitrarily" functionality
@@ -281,6 +281,20 @@ export async function main(ns) {
 
     maxTargets = Math.max(maxTargets, options['initial-max-targets'])
 
+    if (10 in dictSourceFiles) { 
+        // See if our last run was xp-only mode. If so, we have some cleanup to do.
+        let daemonLastRanXpOnly = await getNsDataThroughFile(ns, `ns.fileExists('/Temp/daemon_last_ran_xpOnly.txt')`, '/Temp/script-exists.txt');
+        if (xpOnly) { // If we're in xp-only mode, set our sleeves to work learning hacking too. 
+            let sleeveCost = await getNsDataThroughFile(ns, `ns.getScriptRam('sleeve.js', 'home')`, '/Temp/script-cost.txt');
+            await arbitraryExecution(ns, {name: 'sleeve.js', cost: sleeveCost}, 1, ['--study', 'Hacking'], 'home');
+            await ns.write('/Temp/daemon_last_ran_xpOnly.txt', 'True', 'w');
+        } else if (daemonLastRanXpOnly) { // We're not in xp-only mode now, but the previous time daemon was run, it was.
+            // I wish we could to this in an atExit() callback, but that doesn't work. Instead, we have to rely on the user restarting the daemon after killing it.
+            let sleeveCost = await getNsDataThroughFile(ns, `ns.getScriptRam('sleeve.js', 'home')`, '/Temp/script-cost.txt');
+            await arbitraryExecution(ns, {name: 'sleeve.js', cost: sleeveCost}, 1, ['--study', ''], 'home');
+            await getNsDataThroughFile(ns, `ns.rm('/Temp/daemon_last_ran_xpOnly.txt')`, '/Temp/script-rm.txt');
+        }
+    }
     // the actual worker processes live here
     await doTargetingLoop(ns);
 }

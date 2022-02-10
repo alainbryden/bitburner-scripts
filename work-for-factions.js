@@ -2,6 +2,7 @@ import {
     getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers,
     formatDuration, formatMoney, formatNumberShort, disableLogs
 } from './helpers.js'
+/** @typedef {import('./index.js').NS} NS */
 
 const companySpecificConfigs = [
     { name: "NWO", statModifier: 25 },
@@ -71,6 +72,7 @@ let mostExpensiveDesiredAugByFaction = [];
 let playerGang = null;
 let allGangFactions = [];
 let dictFactionFavors;
+let dictSourceFiles;
 
 let options;
 const argsSchema = [
@@ -121,7 +123,7 @@ export async function main(ns) {
     if (fastCrimesOnly) ns.print(`--fast-crimes-only`);
 
     ns.print('Checking source files.')
-    let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
+    dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return ns.tprint("ERROR: You cannot automate working for factions until you have unlocked singularity access (SF4).");
     else if (dictSourceFiles[4] < 3)
@@ -378,6 +380,9 @@ async function goToCity(ns, cityName) {
         ns.print(`Already in city ${cityName}`);
         return true;
     }
+    // Only try to travel if we have the $200k for the ticket, plus a bit.
+    if (ns.getPlayer().money <= 250000) return false;
+
     if (await getNsDataThroughFile(ns, `ns.travelToCity('${cityName}')`, '/Temp/travel.txt')) {
         lastActionRestart = Date.now();
         announce(ns, `Travelled to ${cityName}`, 'info');
@@ -396,6 +401,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     if (!crimeCommand) crimeCommand = async crime => await getNsDataThroughFile(ns, `ns.commitCrime('${crime}')`, '/Temp/crime-time.txt');
     let player = ns.getPlayer();
     let strRequirements = [];
+    let sleevesInGym = false;
     let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER || reqStats >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${ns.heart.break()})`);
@@ -414,12 +420,23 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
             lastStatusUpdateTime = Date.now();
         }
         ns.tail(); // Force a tail window open when auto-criming, or else it's very difficult to stop if it was accidentally closed.
+        // If we don't need any more kills or karma, have the sleeves go to work in the gym instead
+        if (ns.getPlayer().money > 1e6 && !sleevesInGym && 10 in dictSourceFiles && player.numPeopleKilled >= reqKills && -ns.heart.break() >= reqKarma) {
+            ns.run('sleeve.js', 1, '--study', 'combat');
+            sleevesInGym = true;
+        }
+        // If we run low on money, pull the sleeves back out of the gym.
+        if (ns.getPlayer().money < 1e5 && sleevesInGym) {
+            ns.run('sleeve.js', 1, '--study', '');
+            sleevesInGym = false;
+        }
         await ns.sleep(await crimeCommand(crime));
         while ((player = ns.getPlayer()).crimeType == `commit ${crime}` || player.crimeType == crime) // If we woke up too early, wait a little longer for the crime to finish
             await ns.sleep(10);
         crimeCount++;
     }
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
+    if (sleevesInGym) ns.run('sleeve.js', 1, '--study', '');
     return true;
 }
 
@@ -672,6 +689,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         const requiredHack = nextJob.reqHack[nextJobTier] === 0 ? 0 : nextJob.reqHack[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         const requiredCha = nextJob.reqCha[nextJobTier] === 0 ? 0 : nextJob.reqCha[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         const requiredRep = nextJob.reqRep[nextJobTier]; // No modifier on rep requirements
+        let sleevesInSchool = false;
         let status = `Next promotion ('${nextJobName}' #${nextJobTier}) at Hack:${requiredHack} Cha:${requiredCha} Rep:${requiredRep?.toLocaleString()}` +
             (repRequiredForFaction > nextJob.reqRep[nextJobTier] ? '' : `, but we won't need it, because we'll sooner hit ${repRequiredForFaction.toLocaleString()} reputation to unlock company faction "${factionName}"!`);
         // We should only study at university if every other requirement is met but Charisma
@@ -682,9 +700,20 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 studying = false; // If something external has interrupted our studies, take note
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
             }
-            if (!studying) { // Study at ZB university if CHA is the limiter.
+            if (!studying) { 
+                // Study at ZB university if CHA is the limiter.
                 if (await studyForCharisma(ns))
                     working = !(studying = true);
+            }
+            // Set our sleeves to studying too
+            if (10 in dictSourceFiles && ns.getPlayer().money > 1e6 && !sleevesInSchool) {
+                ns.run('sleeve.js', 1, '--study', 'Charisma');
+                sleevesInSchool = true;
+            } 
+            // Pull them back out if we're low on money.
+            if (ns.getPlayer().money < 1e5 && sleevesInSchool) {
+                ns.run('sleeve.js', 1, '--study', '');
+                sleevesInSchool = false;
             }
             if (requiredCha - player.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Improve Studying") - ns.hacknet.numHashes()', '/Temp/spend-hacknet-hashes.txt');
@@ -695,6 +724,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             }
         } else if (studying) { // If we no longer need to study and we currently are, turn off study mode and get back to work!
             studying = false;
+            if (sleevesInSchool) ns.run('sleeve.js', 1, '--study', '');
             continue; // Restart the loop so we refresh our promotion index and apply for a promotion before working more
         }
         await tryBuyReputation(ns);

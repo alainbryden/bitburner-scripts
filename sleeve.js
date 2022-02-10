@@ -1,4 +1,5 @@
-import { getNsDataThroughFile, formatMoney, formatDuration, disableLogs } from './helpers.js'
+import { getNsDataThroughFile, formatMoney, formatDuration, disableLogs, formatNumberShort, getActiveSourceFiles_Custom } from './helpers.js'
+/** @typedef {import('./index.js').NS} NS*/
 
 const interval = 5000; // Uodate (tick) this often
 const minTaskWorkTime = 59000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
@@ -8,12 +9,15 @@ const works = ['security', 'field', 'hacking']; // When doing faction work, we p
 const workByFaction = {}
 
 let options;
+let running;
+let dictSourceFiles;
 const argsSchema = [
     ['shock-recovery', 0.25], // Set to a number between 0 and 1 to devote that much time to shock recovery
     ['crime', ''],
     ['aug-budget', 0.1], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
     ['buy-cooldown', 60 * 1000], // Must wait this may milliseconds before buying more augs for a sleeve
     ['min-aug-batch', 20], // Must be able to afford at least this many augs before we pull the trigger (or fewer if buying all remaining augs)
+    ['study', ''], // Study 'Hacking' or 'Charisma' at univeristy, or 'Combat', 'Strength', 'Defense', 'Dexterity', or 'Agility' in a gym.
 ];
 
 export function autocomplete(data, _) {
@@ -26,9 +30,17 @@ export async function main(ns) {
     options = ns.flags(argsSchema);
     disableLogs(ns, ['getServerMoneyAvailable']);
     if (!crimes.includes(options.crime)) crimes.push(options.crime);
-    let task = [], lastUpdate = [], lastPurchase = [], availableAugs = [], lastReassign = [];
+    // We've set our global options. If there's already an instance of this script running, we can just quit now, and let it take over.
+    if (running === true) {
+        ns.exit();
+    } else if (running === undefined) {
+        running = true;
+        ns.atExit(() => running = undefined);
+    }
 
+    let task = [], lastUpdate = [], lastPurchase = [], availableAugs = [], lastReassign = [];
     // Collect info that won't change or that we can track ourselves going forward
+    dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     let numSleeves;
     try {
         numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
@@ -92,9 +104,17 @@ export async function main(ns) {
                 designatedTask = `work for company '${playerInfo.companyName}'`;
                 command = `ns.sleeve.setToCompanyWork(${i}, '${playerInfo.companyName}')`;
             } else { // Do something productive
-                let crime = options.crime || (sleeveStats.strength < 100 ? 'mug' : 'homicide');
-                designatedTask = `commit ${crime}`;
-                command = `ns.sleeve.setToCommitCrime(${i}, '${crime}')`;
+                if (options.study) {
+                    if (['charisma', 'hacking'].includes(options.study.toLowerCase()))
+                        ({ designatedTask, command } = await doUniversityCourse(ns, i));
+                    else if (['combat', 'strength', 'defense', 'dexterity', 'agility'].includes(options.study.toLowerCase()))
+                        ({ designatedTask, command } = await doGymWorkout(ns, playerInfo, i));
+                    else options.study = ''; // Unknown study option, so just clear it.
+                } else {
+                    let crime = options.crime || (sleeveStats.strength < 100 ? 'mug' : 'homicide');
+                    designatedTask = `commit ${crime}`;
+                    command = `ns.sleeve.setToCommitCrime(${i}, '${crime}')`;
+                }
             }
             // Don't change tasks if we've changed tasks recently
             if (Date.now() - (lastReassign[i] || 0) < minTaskWorkTime || task[i] == designatedTask) continue;
@@ -115,6 +135,52 @@ export async function main(ns) {
         }
         await ns.sleep(interval);
     }
+}
+
+async function doUniversityCourse(ns, sleeveNum) {
+    let city = 'Volhaven'
+    let university = 'ZB Institute of Technology'; // Gains 80 exp per sec, costs $8k/s
+    let course = 'Algorithms'; 
+    if ('charisma' === options.study.toLowerCase())
+        course = 'Leadership';
+    // If we're studying, and we have spare hashes, spend them to increase our exp gains.
+    if (ns.getPlayer().money > 100E6 && 9 in dictSourceFiles) { // Make sure we have a decent amount of money ($100m) before spending hashes this way.
+        let spentHashes = 0;
+        do {
+            spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Improve Studying") - ns.hacknet.numHashes()', '/Temp/spend-hacknet-hashes.txt');
+            if (spentHashes > 0) log(ns, `Improved studying for ${formatNumberShort(Math.round(spentHashes / 50) * 50)} hashes`, 'success');
+        } while (spentHashes > 0);
+    }
+    const designatedTask = `Study ${course} at ${university} in ${city}`;
+    const command = `ns.sleeve.travel(${sleeveNum}, '${city}') && ns.sleeve.setToUniversityCourse(${sleeveNum}, '${university}', '${course}')`;
+    return { designatedTask, command };
+
+}
+
+async function doGymWorkout(ns, playerInfo, sleeveNum) {
+    let city = 'Sector-12'
+    let gymName = 'Powerhouse Gym'; // Looks like the best Exp rate comes from powerhouse gym (50 exp/sec, costs $12k/sec)
+    let gymStat = options.study;
+    if (gymStat.toLowerCase() === 'combat') {
+        let playerStats = [];
+        playerStats.push(['Agility', playerInfo.agility]);
+        playerStats.push(['Strength', playerInfo.strength]);
+        playerStats.push(['Defense', playerInfo.defense]);
+        playerStats.push(['Dexterity', playerInfo.dexterity]);
+        playerStats.sort((a, b) => a[1] - b[1]); // Sort by stat value.
+        gymStat = playerStats[0][0]; // Work on the stat with the lowest value.
+    }
+    // If we're working out in the gym, and we have spare hashes, spend them to increase our exp gains.
+    if (ns.getPlayer().money > 100E6 && 9 in dictSourceFiles) { // Make sure we have a decent amount of money ($100m) before spending hashes this way.
+        let spentHashes = 0;
+        do {
+            spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Improve Gym Training") - ns.hacknet.numHashes()', '/Temp/spend-hacknet-hashes.txt');
+            if (spentHashes > 0) log(ns, `Improved gym training for ${formatNumberShort(Math.round(spentHashes / 50) * 50)} hashes`, 'success');
+        } while (spentHashes > 0);
+    }
+    const designatedTask = `Working on ${gymStat} at ${gymName} in ${city}`;
+    const command = `ns.sleeve.travel(${sleeveNum}, '${city}') && ns.sleeve.setToGymWorkout(${sleeveNum}, '${gymName}', '${gymStat}')`;
+    return { designatedTask, command };
 }
 
 function log(ns, log, toastStyle, printToTerminal) {
