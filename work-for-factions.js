@@ -512,7 +512,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`Faction "${factionName}" required rep of ${Math.round(factionRepRequired).toLocaleString()} has already been attained ` +
             `(Current rep: ${Math.round(currentReputation).toLocaleString()}). Skipping working for faction...`)
 
-    ns.print(`Faction "${factionName}" Highest Aug Req: ${highestRepAug.toLocaleString()}, Current Favor (` +
+    ns.print(`Faction "${factionName}" Highest Aug Req: ${highestRepAug?.toLocaleString()}, Current Favor (` +
         `${startingFavor?.toFixed(2)}/${repToDonate?.toFixed(2)}) Req: ${Math.round(favorRepRequired).toLocaleString()}`);
     if (options['invites-only'])
         return ns.print(`--invites-only Skipping working for faction...`);
