@@ -178,6 +178,7 @@ async function onTerritoryTick(ns, myGangInfo) {
     else if (!warfareFinished) {
         log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, 'warning');
         territoryTickDetected = false;
+        lastOtherGangInfo = null;
     }
 
     // Update gang members in case someone died in a clash
@@ -254,7 +255,7 @@ async function optimizeGangCrime(ns, myGangInfo) {
     let bestTaskAssignments = null, bestWanted = 0;
     let bestTotalGain = myGangInfo.wantedLevelGainRate > wantedGainTolerance ? 0 : // Forget our past achievements, we're gaining wanted levels too fast right now
         optStat == "respect" ? myGangInfo.respectGainRate : myGangInfo.moneyGainRate; // Must do better than the current gain rate if it's within our wanted threshold
-    for (let shuffle = 0; shuffle < 1000; shuffle++) { // We can discover more optimal results by greedy-optimizing gang members in a different order. Try a few.
+    for (let shuffle = 0; shuffle < 100; shuffle++) { // We can discover more optimal results by greedy-optimizing gang members in a different order. Try a few.
         let proposedTasks = {}, totalWanted = 0, totalGain = 0;
         shuffleArray(myGangMembers.slice()).forEach((member, index) => {
             const taskRates = memberTaskRates[member];
