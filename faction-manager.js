@@ -174,7 +174,8 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
         joined: joinedFactions.includes(faction),
         reputation: dictFactionReps[faction] || 0,
         favor: dictFactionFavors[faction],
-        donationsUnlocked: dictFactionFavors[faction] >= ns.getFavorToDonate() && faction !== gangFaction, // Can't donate to gang factions for rep
+        donationsUnlocked: dictFactionFavors[faction] >= ns.getFavorToDonate() && faction !== gangFaction // Can't donate to gang factions for rep
+            && faction !== "Church of the Machine God", // Can't donate to this faction either
         augmentations: dictFactionAugs[faction],
         unownedAugmentations: function (includeNf = false) { return this.augmentations.filter(aug => !ownedAugmentations.includes(aug) && (aug != strNF || includeNf)) },
         mostExpensiveAugCost: function () { return this.augmentations.map(augName => augmentationData[augName]).reduce((max, aug) => Math.max(max, aug.price), 0) },
