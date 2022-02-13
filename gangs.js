@@ -364,8 +364,9 @@ async function tryUpgradeMembers(ns, dictMembers) {
     const homeMoney = playerData.money - (Number.parseFloat(ns.read("reserve.txt")) || 0);
     let budget = maxSpendPerTickTransientEquipment * homeMoney;
     let augBudget = maxSpendPerTickPermanentEquipment * homeMoney;
-    // Hack: Budget is cut by 1/100 if we don't yet own the Stockmarket 4S API (main source of income early BN)
-    if (!playerData.has4SDataTixApi) budget /= 100, augBudget /= 100;
+    // Hack: Budget is cut by 1/100 in a few situations (TODO: Add more, like when gang income is severely nerfed)
+    if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8)
+        budget /= 100, augBudget /= 100;
     if (budget <= 0) return;
     // Find out what outstanding equipment can be bought within our budget
     for (const equip of equipments) {
