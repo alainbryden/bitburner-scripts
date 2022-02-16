@@ -22,10 +22,14 @@ You may find it useful to set up one or more aliases with the default options yo
 - `alias start="run daemon.js -v --stock-manipulation --tail"`
   - This way I can just enter `start` in the terminal after each reset, and the rest is handled automatically.
 - `alias stop="home; kill daemon.js -v --stock-manipulation; run cascade-kill.js"`
+- `alias sscan="home; run scan.js"`
+  - Makes it a little quicker to run this custom-scan routine, which shows the entire network, stats about servers, and provides handy links for jumping to servers or backdooring them.
 - `alias do="run run-command.js"`
   - This lets you run ns commands from the terminal, such as `do ns.getPlayer()`, `do Object.keys(ns)` or `do ns.getServerMoneyAvailable('n00dles')`
+- `alias reserve="run reserve.js"`
+  - Doesn't save many keystrokes, but worth highlighting this script. You can run e.g. `reserve 100m` to globally reserve this much money. All scripts with an auto-spend component should respect this amount and leave it unspent. This is useful if e.g. you're saving up to buy something (SQLInject.exe, a big server, the next home RAM upgrade), saving money to spend at the casino, etc...
 - `alias liquidate="home; run stockmaster.js --liquidate; run spend-hacknet-hashes.js --liquidate;"`
-  - Quickly sell all your stocks and hacknet hashs for money so that you can spend it (useful before resetting)
+  - Quickly sell all your stocks and hacknet hashes for money so that you can spend it (useful before resetting)
 - `facman="run faction-manager.js"`
   - Quickly see what augmentations you can afford to purchase. Then use `facman --purchase` to pull the trigger.
 - `alias spend-on-ram="run Tasks/ram-manager.js --reserve 0 --budget 1 --tail"`
@@ -39,7 +43,7 @@ You may find it useful to set up one or more aliases with the default options yo
 - `alias work="run work-for-factions.js --fast-crimes-only"`
   - Auto-work for factions. Will also do crime loops as deemed necessary. (Note, daemon will start this automatically as well)
 - `alias start-tight="run daemon.js --looping-mode --recovery-thread-padding 30 --cycle-timing-delay 2000 --queue-delay 10 --stock-manipulation-focus --tail --silent-misfires --initial-max-targets 64"`
-  - Let this be a hint as to how customizable some of these scripts are (without editing the source code). The above alias is powerful when you are end-of-bn and your hacking skill is very high (8000+), so hack/grow/weaken times are very fast (milliseconds). You can greatly increase productivitly and reduce lag by switching to this `--looping-mode` which creates long-lived hack/grow/weaken scripts that run in a loop. This, in addition to the tighter cycle-timing makes them more vulnerable to misfiring (completing out-of-order), but adding recovery thread padding (a multiple on the number of grow/weaken threads to use) can quickly recover from misfires. Note that if you don't yet have enough home-ram to support such a high recovery-thread multiple, you can start lower (5 or 10) then buy more home ram and work your way up.
+  - Let this be a hint as to how customizable some of these scripts are (without editing the source code). The above alias is powerful when you are end-of-bn and your hacking skill is very high (8000+), so hack/grow/weaken times are very fast (milliseconds). You can greatly increase productivity and reduce lag by switching to this `--looping-mode` which creates long-lived hack/grow/weaken scripts that run in a loop. This, in addition to the tighter cycle-timing makes them more vulnerable to misfiring (completing out-of-order), but adding recovery thread padding (a multiple on the number of grow/weaken threads to use) can quickly recover from misfires. Note that if you don't yet have enough home-ram to support such a high recovery-thread multiple, you can start lower (5 or 10) then buy more home ram and work your way up.
 
 ## Customizing Script Code (Advanced)
 
@@ -49,7 +53,7 @@ I encourage you to make a fork and customize scripts to your own needs / liking.
 # Disclaimer
 
 This is my own repository of scripts for playing Bitburner.
-I often go to some lengths to make them generic and customizable, but am by no means providing these scripts as a "service" to the bitburner community.
+I often go to some lengths to make them generic and customizable, but am by no means providing these scripts as a "service" to the Bitburner community.
 It's meant as an easy way for me to share code with friends, and track changes and bugs in my scripts.
 
 - If you wish to use my scripts or copy from them, feel free!
