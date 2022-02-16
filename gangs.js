@@ -1,10 +1,10 @@
 import { formatMoney, formatNumberShort, getNsDataThroughFile, getActiveSourceFiles, runCommand, tryGetBitNodeMultipliers, formatDuration } from './helpers.js'
 
-// Global constants
-const updateInterval = 200;
-const maxSpendPerTickTransientEquipment = 0.002;
-const maxSpendPerTickPermanentEquipment = 0.2; // Spend up to this percent of non-reserved cash on permanent member upgrades
+// Global config
+const updateInterval = 200; // We can improve our timing by updating more often than gang stats do (which is every 2 seconds for stats, every 20 seconds for territory)
 const wantedPenaltyThreshold = 0.0001; // Don't let the wanted penalty get worse than this
+let defaultMaxSpendPerTickTransientEquipment = 0.002; // If the --equipment-budget is not specified, spend up to this percent of non-reserved cash on temporary upgrades (equipment)
+let defaultMaxSpendPerTickPermanentEquipment = 0.2; // If the --augmentation-budget is not specified, spend up to this percent of non-reserved cash on permanent member upgrades
 
 // Territory-related variables
 const gangsByPower = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Slum Snakes", /* Hack gangs don't scale as far */ "The Black Hand", /* "NiteSec" Been there, not fun. */]
@@ -17,7 +17,7 @@ let isReadyForNextTerritoryTick = false;
 let warfareFinished = false;
 let lastTerritoryPower = 0;
 let lastOtherGangInfo = null;
-let lastLoopTime = Date.now();
+let lastLoopTime = null;
 
 // Crime activity-related variables TODO all tasks list to evaluate
 const crimes = ["Mug People", "Deal Drugs", "Strongarm Civilians", "Run a Con", "Armed Robbery", "Traffick Illegal Arms", "Threaten & Blackmail", "Human Trafficking", "Terrorism",
@@ -47,6 +47,9 @@ const argsSchema = [
     ['ascend-multi-threshold-spacing', 0.05], // Members will space their acention multis by this amount to ensure they are ascending at different rates 
     // Note: given the above two defaults, members would ascend at multis [1.6, 1.55, 1.50, ..., 1.1, 1.05] once you have 12 members.
     ['min-training-ticks', 20], // Require this many ticks of training after ascending or recruiting
+    ['reserve', null], // Reserve this much cash before determining spending budgets (defaults to contents of reserve.txt if not specified)
+    ['augmentations-budget', null], // Percentage of non-reserved cash to spend per tick on permanent member upgrades (If not specified, uses defaultMaxSpendPerTickPermanentEquipment)
+    ['equipment-budget', null], // Percentage of non-reserved cash to spend per tick on permanent member upgrades (If not specified, uses defaultMaxSpendPerTickTransientEquipment)
 ];
 
 export function autocomplete(data, _) {
@@ -92,10 +95,8 @@ async function initialize(ns) {
     if (loggedWaiting) log(ns, `SUCCESS: Created gang ${myGangFaction}`, 'success', true);
     isHackGang = myGangInfo.isHacking;
     importantStats = isHackGang ? ["hack"] : ["str", "def", "dex", "agi"];
-    lastTerritoryPower = myGangInfo.power;
-    territoryNextTick = Date.now() + territoryTickTime; // Expect to miss be "caught unaware" by the first territory tick
+    territoryNextTick = lastTerritoryPower = lastOtherGangInfo = null;
     territoryTickDetected = isReadyForNextTerritoryTick = warfareFinished = false;
-    lastOtherGangInfo = null;
 
     // If possible, determine how much rep we would need to get the most expensive unowned augmentation
     const sf4Level = ownedSourceFiles[4] || 0;
@@ -121,6 +122,13 @@ async function initialize(ns) {
     if (requiredRep == -1)
         requiredRep = 2.5e6
 
+    // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when gang income is severely nerfed)
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8) {
+        defaultMaxSpendPerTickPermanentEquipment /= 100;
+        defaultMaxSpendPerTickTransientEquipment /= 100;;
+    }
+
     // Initialize equipment information
     const equipmentNames = await getNsDataThroughFile(ns, 'ns.gang.getEquipmentNames()', '/Temp/gang-equipment-names.txt');
     const dictEquipmentTypes = await getGangInfoDict(ns, equipmentNames, 'getEquipmentType');
@@ -142,7 +150,10 @@ async function initialize(ns) {
     for (const member of Object.values(dictMembers)) // Initialize the current activity of each member
         assignedTasks[member.name] = (member.task && member.task !== "Unassigned") ? member.task : ("Train " + (isHackGang ? "Hacking" : "Combat"));
     while (myGangMembers.length < 3) await doRecruitMember(ns); // We should be able to recruit our first three members immediately (for free)
-    await optimizeGangCrime(ns, myGangInfo);
+    // Peform all updates / actions normally performed on territory tick (every 20 seconds) once before starting the main loop
+    lastLoopTime = Date.now()
+    await onTerritoryTick(ns, myGangInfo);
+    lastTerritoryPower = myGangInfo.power;
 }
 
 /** @param {NS} ns 
@@ -181,7 +192,7 @@ async function mainLoop(ns) {
  * Do some things only once per territory tick **/
 async function onTerritoryTick(ns, myGangInfo) {
     territoryNextTick = lastLoopTime + territoryTickTime; // Reset the time the next tick will occur
-    if (lastTerritoryPower != myGangInfo.power) {
+    if (lastTerritoryPower != myGangInfo.power || lastTerritoryPower == null) {
         log(ns, `Territory power updated from ${formatNumberShort(lastTerritoryPower)} to ${formatNumberShort(myGangInfo.power)}.`)
     } else if (!warfareFinished) {
         log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, 'warning');
@@ -377,12 +388,9 @@ async function tryUpgradeMembers(ns, dictMembers) {
     // Upgrade members, spending no more than x% of our money per tick (and respecting the global reseve)
     const purchaseOrder = [];
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
-    const homeMoney = playerData.money - (Number.parseFloat(ns.read("reserve.txt")) || 0);
-    let budget = maxSpendPerTickTransientEquipment * homeMoney;
-    let augBudget = maxSpendPerTickPermanentEquipment * homeMoney;
-    // Hack: Budget is cut by 1/100 in a few situations (TODO: Add more, like when gang income is severely nerfed)
-    if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8)
-        budget /= 100, augBudget /= 100;
+    const homeMoney = playerData.money - (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
+    let budget = (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment) * homeMoney;
+    let augBudget = (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment) * homeMoney;
     if (budget <= 0) return;
     // Find out what outstanding equipment can be bought within our budget
     for (const equip of equipments) {
