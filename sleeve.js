@@ -39,7 +39,7 @@ export async function main(ns) {
         availableAugs[i] = null;
 
     while (true) {
-        let cash = ns.getServerMoneyAvailable("home") - Number(ns.read("reserve.txt"));
+        let cash = ns.getServerMoneyAvailable("home") - Number(ns.read("reserve.txt") || 0);
         let budget = cash * options['aug-budget'];
         let playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
         for (let i = 0; i < numSleeves; i++) {
