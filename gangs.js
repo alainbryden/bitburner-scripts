@@ -11,7 +11,7 @@ const gangsByPower = ["Speakers for the Dead", "The Dark Army", "The Syndicate",
 const territoryEngageThreshold = 0.60; // Minimum average win chance (of gangs with territory) before we engage other clans
 let territoryTickDetected = false;
 let territoryTickTime = 20000; // Est. milliseconds until territory *ticks*. Can vary if processing offline time
-let territoryTickWaitPadding = 1000; // Start waiting this many milliseconds before we think territory will tick, in case it ticks early
+let territoryTickWaitPadding = 200; // Start waiting this many milliseconds before we think territory will tick, in case it ticks early (increases automatically after misfires)
 let territoryNextTick = null; // The next time territory will tick
 let isReadyForNextTerritoryTick = false;
 let warfareFinished = false;
@@ -196,6 +196,7 @@ async function onTerritoryTick(ns, myGangInfo) {
         log(ns, `Territory power updated from ${formatNumberShort(lastTerritoryPower)} to ${formatNumberShort(myGangInfo.power)}.`)
     } else if (!warfareFinished) {
         log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, 'warning');
+        territoryTickWaitPadding = Math.max(2000, territoryTickWaitPadding + updateInterval); // Start waiting earlier to account for observed lag.
         territoryNextTick -= updateInterval; // Prep for the next tick a little earlier, in case we just lagged behind the tick by a bit.
         territoryTickDetected = false;
         lastOtherGangInfo = null;
@@ -224,14 +225,14 @@ async function updateMemberActivities(ns, dictMemberInfo = null, forceTask = nul
     const maxMemberDefense = Math.max(...Object.values(dictMembers).map(m => m.def));
     for (const member of Object.values(dictMembers)) { // Set the desired activity of each member
         let task = forceTask ? forceTask : assignedTasks[member.name];
-        if (myGangInfo?.territoryClashChance > 0 && task == "Territory Warfare" && member.def < Math.min(10000, maxMemberDefense * 0.1))
+        if (task == "Territory Warfare" && myGangInfo.territoryClashChance > 0 && (member.def < 100 || member.def < Math.min(10000, maxMemberDefense * 0.1)))
             task = assignedTasks[member.name]; // Hack: Spare low-defense members from engaging in in warfare since they have a higher chance of dying
         if (member.task != task) workOrders.push({ name: member.name, task }); // Only bother with the API call if this isn't their current task
     }
     if (workOrders.length == 0) return;
     // Set the activities in bulk using a ram-dodging script
     if (await getNsDataThroughFile(ns, `${JSON.stringify(workOrders)}.reduce((success, m) => success && ns.gang.setMemberTask(m.name, m.task), true)`, '/Temp/gang-set-member-tasks.txt'))
-        log(ns, `INFO: Assigned ${workOrders.length} gang member tasks! (${workOrders.map(o => o.task).filter((v, i, self) => self.indexOf(v) === i).join(", ")})`)
+        log(ns, `INFO: Assigned ${workOrders.length}/${Object.keys(dictMembers).length} gang member tasks (${workOrders.map(o => o.task).filter((v, i, self) => self.indexOf(v) === i).join(", ")})`)
     else
         log(ns, `ERROR: Failed to set member task of one or more members: ` + JSON.stringify(workOrders), 'error');
 }
@@ -320,7 +321,7 @@ async function optimizeGangCrime(ns, myGangInfo) {
             log(ns, `WARNING: Calculated new rates would be Rep:${formatNumberShort(optRespect)} Wanted: ${optWanted.toPrecision(3)} Money: ${formatMoney(optMoney)}` +
                 `but they are Rep:${formatNumberShort(myGangInfo.respectGainRate)} Wanted: ${myGangInfo.wantedLevelGainRate.toPrecision(3)} Money: ${formatMoney(myGangInfo.moneyGainRate)}`, 'warning');
     } else
-        log(ns, `INFO: Determined all gang member assignments are already optimal for ${optStat} with wanted gain tolerance ${wantedGainTolerance.toPrecision(2)} (${elapsed} ms).`);
+        log(ns, `INFO: Determined all ${myGangMembers.length} gang member assignments are already optimal for ${optStat} with wanted gain tolerance ${wantedGainTolerance.toPrecision(2)} (${elapsed} ms).`);
     // Fail-safe: If we somehow over-shot and are generating wanted levels, start randomly assigning members to vigilante to fix it
     if (myGangInfo.wantedLevelGainRate > wantedGainTolerance) await fixWantedGainRate(ns, myGangInfo, wantedGainTolerance);
 }
