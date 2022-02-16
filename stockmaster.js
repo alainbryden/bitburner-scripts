@@ -38,7 +38,7 @@ const argsSchema = [
     ['mock', false], // If set to true, will "mock" buy/sell but not actually buy/sell anything
     ['noisy', false], // If set to true, tprints and announces each time stocks are bought/soldgetHostnames
     ['disable-shorts', false], // If set to true, will "mock" buy/sell but not actually buy/sell anything
-    ['reserve', 0], // A fixed amount of money to not spend
+    ['reserve', null], // A fixed amount of money to not spend
     ['fracB', 0.4], // Fraction of assets to have as liquid before we consider buying more stock
     ['fracH', 0.2], // Fraction of assets to retain as cash in hand when buying
     ['buy-threshold', 0.0001], // Buy only stocks forecasted to earn better than a 0.01% return (1 Basis Point)
@@ -162,7 +162,7 @@ export async function main(ns) {
         }
         if (sales > 0) continue; // If we sold anything, loop immediately (no need to sleep) and refresh stats immediately before making purchasing decisions.
 
-        let cash = playerStats.money - options['reserve'] - Number(ns.read("reserve.txt") || 0);
+        let cash = playerStats.money - (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
         let liquidity = cash / corpus;
         // If we haven't gone above a certain liquidity threshold, don't attempt to buy more stock
         // Avoids death-by-a-thousand-commissions before we get super-rich, stocks are capped, and this is no longer an issue
