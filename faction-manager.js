@@ -25,11 +25,11 @@ const argsSchema = [
     ['a', false], // Display all factions (spoilers), not just unlocked and early-game factions
     ['all', false],
     ['after-faction', []], // Pretend we were to buy all augs offered by these factions. Show us only what remains.
-    ['join-only', false], // Don't generate input, just join factions that can/should be joined
+    ['join-only', false], // Don't generate output, just join factions that can/should be joined
     ['force-join', ['Slum Snakes']], // Always join these factions if we have an invite
     // Display-related options - controls what information is displayed and how
-    ['v', false], // Print the terminal as well as the script logs
-    ['verbose', false],
+    ['v', true], // Print the terminal as well as the script logs
+    ['verbose', true],
     ['i', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
     ['ignore-player-data', false],
     ['u', false], // When displaying total aug stats for a faction, only include augs not given by a faction further up the list
@@ -76,7 +76,7 @@ export function autocomplete(data, args) {
 /** @param {NS} ns **/
 export async function main(ns) {
     options = ns.flags(argsSchema);
-    const verbose = options.v || options.verbose;
+    const verbose = options.v || options.verbose && !options['join-only'];
     const allFactions = options.a || options.all;
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
     const omitFactions = options['disable-faction'].map(f => f.replaceAll("_", " "));
