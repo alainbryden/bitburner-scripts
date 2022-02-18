@@ -751,13 +751,16 @@ function buildServerObject(ns, node) {
         _hasRootCached: false,
         hasRoot: function () { return this._hasRootCached || (this._hasRootCached = this.ns.hasRootAccess(this.name)); },
         isHost: function () { return this.name == daemonHost; },
-        totalRam: function () { return this.ns.getServerMaxRam(this.name); },
-        // Used ram is constantly changing
+        totalRam: function () {
+            var maxRam = this.ns.getServerMaxRam(this.name);
+            if (this.name == "home") maxRam = Math.max(0, maxRam - homeReservedRam); // Complete HACK: but for most planning purposes, we want to pretend home has less ram to leave room for temp scripts to run
+            return maxRam;
+        },
         usedRam: function () {
             var usedRam = this.ns.getServerUsedRam(this.name);
-            // Complete HACK: but for most planning purposes, we want to pretend home has more ram in use than it does to leave room for "preferred" jobs at home
-            if (this.name == "home")
-                usedRam = Math.min(this.totalRam(), usedRam + homeReservedRam);
+            // TODO: Uncertain whether reserved ram is best done by pretending home has less RAM, or pretending it has more ram in use.
+            //if (this.name == "home")
+            //    usedRam = Math.min(this.totalRam(), usedRam + homeReservedRam);
             return usedRam;
         },
         ramAvailable: function () { return this.totalRam() - this.usedRam(); },
@@ -775,7 +778,7 @@ function getNetworkStats() {
     const rootedServers = serverListByMaxRam.filter(server => server.hasRoot());
     const listOfServersFreeRam = rootedServers.map(s => s.ramAvailable()).filter(ram => ram > 1.6); // Servers that can't run a script don't count
     const totalMaxRam = rootedServers.map(s => s.totalRam()).reduce((a, b) => a + b, 0);
-    const totalFreeRam = listOfServersFreeRam.reduce((a, b) => a + b, 0);
+    const totalFreeRam = Math.max(0, listOfServersFreeRam.reduce((a, b) => a + b, 0)); // Hack, free ram can be negative due to "pretending" reserved home ram doesn't exist. Clip to 0
     return {
         listOfServersFreeRam: listOfServersFreeRam,
         totalMaxRam: totalMaxRam,
@@ -1259,7 +1262,7 @@ async function kickstartHackXp(ns, percentOfFreeRamToConsume = 1, verbose = fals
     getTool("grow").isThreadSpreadingAllowed = true; // Only true when in XP mode - where each grow thread is expected to give 1$. "weak" can always spread.   
     var jobHosts = serverListByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 128); // Get the set of servers that can be reasonably expected to host decent-sized jobs
     if (jobHosts.length == 0) jobHosts = serverListByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 16); // Lower our standards if we're early-game and nothing qualifies
-    var homeRam = ns.getServerMaxRam("home"); // If home ram is large enough, the XP contributed by additional targets is insignificant compared to the risk of increased lag/latency.
+    var homeRam = Math.max(0, ns.getServerMaxRam("home") - homeReservedRam); // If home ram is large enough, the XP contributed by additional targets is insignificant compared to the risk of increased lag/latency.
     targets = Math.min(maxTargets, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
     let targetsByExp = getXPFarmServer(true);
     if (options.i) { // To farm intelligence, use manual hack on only the current connected server
