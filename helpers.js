@@ -194,7 +194,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = 
     // To improve performance and save on garbage collection, we can skip writing this exact same script was previously written (common for repeatedly-queried data)
     if (ns.read(fileName) != script) await ns.write(fileName, script, "w");
     return await autoRetry(ns, () => fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
-        () => `Run command returned no pid. Destination: ${fileName} Command: ${command}\nEnsure you have sufficient free RAM to run this temporary script.`,
+        () => `Run command returned no pid.\n  Destination: ${fileName}\n  Command: ${command}\nEnsure you have sufficient free RAM to run this temporary script.`,
         maxRetries, retryDelayMs, undefined, verbose);
 }
 
