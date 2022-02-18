@@ -225,7 +225,7 @@ async function updateMemberActivities(ns, dictMemberInfo = null, forceTask = nul
     const maxMemberDefense = Math.max(...Object.values(dictMembers).map(m => m.def));
     for (const member of Object.values(dictMembers)) { // Set the desired activity of each member
         let task = forceTask ? forceTask : assignedTasks[member.name];
-        if (task == "Territory Warfare" && myGangInfo.territoryClashChance > 0 && (member.def < 100 || member.def < Math.min(10000, maxMemberDefense * 0.1)))
+        if (forceTask == "Territory Warfare" && myGangInfo.territoryClashChance > 0 && (member.def < 100 || member.def < Math.min(10000, maxMemberDefense * 0.1)))
             task = assignedTasks[member.name]; // Hack: Spare low-defense members from engaging in in warfare since they have a higher chance of dying
         if (member.task != task) workOrders.push({ name: member.name, task }); // Only bother with the API call if this isn't their current task
     }
