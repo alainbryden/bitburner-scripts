@@ -184,7 +184,7 @@ export async function main(ns) {
         // Sleep until the next time we go into the 'START' phase
         await sleepWhileNotInStartState(ns, true);
 
-        log(ns, '');
+        if (verbose) log(ns, ``);
     }
 }
 
