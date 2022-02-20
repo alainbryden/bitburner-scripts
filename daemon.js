@@ -1090,7 +1090,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
 
     // Sort servers by total ram, and try to fill these before utilizing another server.
     sortServerList("totalram");
-    var preferredServerOrder = serverListByMaxRam.filter(server => server.hasRoot() && server.totalRam() > 1.6);
+    var preferredServerOrder = serverListByMaxRam.filter(server => server.hasRoot() && server.totalRam() > 1.6 || server.name == "home");
     if (useSmallestServerPossible) // Fill up small servers before utilizing larger ones (can be laggy)
         preferredServerOrder.reverse();
     // IDEA: "home" is more effective at grow() and weaken() than other nodes (has multiple cores) (TODO: By how much?)
@@ -1186,7 +1186,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
     }
     // The run failed if there were threads left to schedule after we exhausted our pool of servers
     if (remainingThreads > 0 && threads < Number.MAX_SAFE_INTEGER)
-        log(`ERROR: Ran out of RAM to run ${tool.name} ${splitThreads ? '' : `on ${targetServer.name} `}- ${threads - remainingThreads} of ${threads} threads were spawned.`, false, 'error');
+        log(`ERROR: Ran out of RAM to run ${tool.name} ${splitThreads ? '' : `on ${targetServer?.name} `}- ${threads - remainingThreads} of ${threads} threads were spawned.`, false, 'error');
     if (splitThreads && !tool.isThreadSpreadingAllowed)
         return false;
     return remainingThreads == 0;
