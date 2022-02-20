@@ -30,6 +30,8 @@ export const argsSchema = [
     ['once', false], // Run once, then quit, instead of going into a loop.
     ['mock', false], // Run the task assignment queue, but don't actually spend any money.
     ['price-discovery-only', false], // Don't do any auto-buying, just try to keep the sale price balanced as high as possible. (Emulating TA2 as best we can)
+    ['first', 'Agriculture'], // What should we use for our first division? Agriculture works well, but others should be fine too.
+    ['second', 'RealEstate'], // What should we prefer for our second division? If we can't afford it, we'll buy what we can afford instead.
 ];
 
 const desiredDivisions = 2; // One Material division to kickstart things, then a product division to really make money.
@@ -276,8 +278,8 @@ async function doManageCorporation(ns) {
         // And only the ones where we'll be able to spend at least half our budget setting up shop.
         possibleIndustries = possibleIndustries.filter((ind) => ind.startupCost < newDivisionBudget * 0.5);
         // TODO: Pick a starting industry using some sort of logic.
-        // For the moment, let's just try to go with Agriculture.
-        let newIndustry = possibleIndustries.find((ind) => ind.name === 'Agriculture');
+        // For the moment, let's just try to go with Agriculture. It's cheap and works well.
+        let newIndustry = possibleIndustries.find((ind) => ind.name === options['first']);
         if (newIndustry) {
             tasks.push(new Task(`Add the first division, '${newIndustry.name}'`, () => doCreateNewDivision(ns, newIndustry, newDivisionBudget), newDivisionBudget, 100));
         } else {
@@ -300,9 +302,13 @@ async function doManageCorporation(ns) {
                 log(ns, `  ${mf(industry.startupCost)} - ${industry.name}`);
             }
         } else if (verbose) log(ns, `INFO: We would like to create a new division but we cannot afford one. Willing to spend ${mf(budget)}.`);
-        // ... and just pick something static for now.
+
+        // Try to use the industry from the command line. If that doesn't work, fall back to picking from our list of possibilities.
         //        let newIndustry = possibleIndustries.find((ind) => ind.name == 'Pharmaceutical');
-        let newIndustry = possibleIndustries.find((ind) => ind.name == 'RealEstate');
+        let newIndustry = possibleIndustries.find((ind) => ind.name === options['second']);
+        if (!newIndustry && possibleIndustries.length > 0) {
+            newIndustry = possibleIndustries[0];
+        }
         if (newIndustry) {
             tasks.push(new Task(`Add a production division, '${newIndustry.name}'`, () => doCreateNewDivision(ns, newIndustry, newDivisionBudget), newDivisionBudget, 100));
         } else {
