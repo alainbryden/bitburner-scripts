@@ -355,7 +355,8 @@ async function doManageCorporation(ns) {
  */
 async function tryRaiseCapital(ns) {
     // First, spend hacknet hashes.
-    if (options['spend-hashes']) await doSpendHashes(ns, 'Sell for Corporation Funds');
+    if (options['can-spend-hashes'] && myCorporation.funds < 10e9) 
+        await doSpendHashes(ns, 'Sell for Corporation Funds');
     // If we're not public, then raise private funding.
     if (!myCorporation.public) {
         let offer = ns.corporation.getInvestmentOffer();
