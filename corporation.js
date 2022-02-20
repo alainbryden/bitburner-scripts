@@ -2,7 +2,6 @@
  * Set up and run a corporation. Note that access to the corporation API costs tons of RAM.
  *
  * TODO: Make daemon.js reserve memory for a corporate script to run someplace if we have enough RAM.
- * TODO: Given the memory used, would it make more sense to run this script occassionally -- like every 10 seconds, instead of with a loop?
  */
 
 import { formatMoney, formatNumberShort, getActiveSourceFiles } from './helpers.js';
@@ -754,9 +753,8 @@ async function doManageDivision(ns, division, budget) {
         // Calculate the required free space for a production cycle's worth of Material and products.
         let warehouseSpaceRequiredForCycle = getReservedWarehouseSpace(ns, industry, division, city);
 
-        // TODO The amounts we buy still needs to be tuned, probably based on corporate income or something?
-        // We don't want to drive the corp too deeply negative with material purchases, or else nothing else
-        // will ever be bought, and employees will never get happy.
+        // We don't want to drive the corp too deeply negative with material purchases too soon, or 
+        // else nothing else will ever be bought, and employees will never get happy.
         let freeSpace = warehouse.size - warehouse.sizeUsed;
         let warehouseSpaceAvailable = freeSpace - warehouseSpaceRequiredForCycle;
         let tolerance = warehouseSpaceRequiredForCycle * 0.01;
