@@ -206,6 +206,8 @@ async function doManageCorporation(ns) {
 
     myCorporation = ns.corporation.getCorporation();
     let budget = myCorporation.funds - options['reserve-amount'] - extraReserve;
+    // If we're making more than $1 sextillion / sec, we need to stop. The game gets slow if we start employing too many people.
+    if (myCorporation.revenue > 1e21) budget = 0;
     budget = Math.max(0, budget);
     if (verbose) log(ns, ``);
     if (verbose) log(ns, `Working with a corporate budget of ${mf(budget)}`);
