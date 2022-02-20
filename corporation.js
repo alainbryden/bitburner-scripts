@@ -316,6 +316,12 @@ async function doManageCorporation(ns) {
         }
     }
 
+    // If we have all of our divisions bought, it's worth spending hashes on research.
+    if (myCorporation.divisions.length >= desiredDivisions) {
+        if (options['can-spend-hashes'])
+            await doSpendHashes(ns, 'Exchange for Corporation Research');
+    }
+
     /**
      * We've looked at the at the corporation, and come up with a list of tasks we'd like to do. Now, figure out
      * which ones we can actually accomplish on our budget.
