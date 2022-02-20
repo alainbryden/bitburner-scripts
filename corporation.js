@@ -1099,11 +1099,12 @@ async function doPriceDiscovery(ns) {
             let newPrice = `MP*${newMultiplier.toFixed(3)}`;
             // if (verbose) log(ns, `${prefix}Votes: ${votes.map((n) => nf(n)).join(', ')}.`);
             let sChange = percentChange(lastPriceMultiplier, newMultiplier);
-            if (verbose) log(ns, `Adjusting '${product.name}' price from ${sPrice} to ${newPrice} (${sChange}).`);
+            if (verbose) log(ns, `    Adjusting '${product.name}' price from ${sPrice} to ${newPrice} (${sChange}).`);
             ns.corporation.sellProduct(division.name, hqCity, product.name, 'MAX', newPrice, true);
             prevProductMultiplier = newMultiplier;
         } // end for-products
     } // end for-divisions
+    if (verbose) log(ns, ``);
 }
 
 /**
