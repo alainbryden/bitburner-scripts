@@ -8,8 +8,8 @@
 import { formatMoney, formatNumberShort, getActiveSourceFiles } from './helpers.js';
 
 // Formatting for money and big numbers.
-const mf = (n) => formatMoney(n);
-const nf = (n) => formatNumberShort(n);
+const mf = (n) => formatMoney(n, 6, 2);
+const nf = (n) => formatNumberShort(n, 3);
 const _ = globalThis._; // lodash
 /** @typedef {import('./index.js').NS} NS */
 /** @typedef {import('./index.js').Division} Division */
@@ -22,8 +22,8 @@ export const argsSchema = [
     ['reserve-amount', 1e9], // Don't spend the corporation's last $billion if we can help it.
     ['v', false], // Print extra log messages.
     ['verbose', false],
-    ['can-accept-funding', false], // When we run low on money, should we look for outside funding?
-    ['can-go-public', false], // If we can't get private funding, should we go public?
+    ['can-accept-funding', true], // When we run low on money, should we look for outside funding?
+    ['can-go-public', true], // If we can't get private funding, should we go public?
     ['issue-shares', 0], // If we go public, how many shares should we issue?
     ['can-spend-hashes', true], // Can we spend hacknet hashes (assuming we have them)?
     ['o', false],
@@ -106,7 +106,6 @@ const industries = [
     Industry.fromObject({ name: 'Pharmaceutical', reFac: 0.05, sciFac: 0.8, hwFac: 0.15, robFac: 0.25, aiFac: 0.2, advFac: 0.16, reqMats: { Chemicals: 2, Energy: 1, Water: 0.5 }, prodMats: ['Drugs'], makesProducts: true, startupCost: 200e9 }),
     Industry.fromObject({ name: 'Computer', reFac: 0.2, sciFac: 0.62, robFac: 0.36, aiFac: 0.19, advFac: 0.17, reqMats: { Metal: 2, Energy: 1 }, prodMats: ['Hardware'], makesProducts: true, startupCost: 500e9 }),
     Industry.fromObject({ name: 'RealEstate', robFac: 0.6, aiFac: 0.6, advFac: 0.25, sciFac: 0.05, hwFac: 0.05, reqMats: { Metal: 5, Energy: 5, Water: 2, Hardware: 4 }, prodMats: ['RealEstate'], makesProducts: true, startupCost: 600e9 }),
-    Industry.fromObject({ name: 'Real Estate', robFac: 0.6, aiFac: 0.6, advFac: 0.25, sciFac: 0.05, hwFac: 0.05, reqMats: { Metal: 5, Energy: 5, Water: 2, Hardware: 4 }, prodMats: ['RealEstate'], makesProducts: true, startupCost: 600e9 }),
     Industry.fromObject({ name: 'Healthcare', reFac: 0.1, sciFac: 0.75, advFac: 0.11, hwFac: 0.1, robFac: 0.1, aiFac: 0.1, reqMats: { Robots: 10, AICores: 5, Energy: 5, Water: 5 }, makesProducts: true, startupCost: 750e9 }),
     Industry.fromObject({ name: 'Robotics', reFac: 0.32, sciFac: 0.65, aiFac: 0.36, advFac: 0.18, hwFac: 0.19, reqMats: { Hardware: 5, Energy: 3 }, prodMats: ['Robots'], makesProducts: true, startupCost: 1e12 }),
 ];
@@ -156,11 +155,17 @@ export async function main(ns) {
         ns.exit();
     }
 
+    // If we already have a corporation, make sure we didn't leave any workers waiting for assignment.
+    if (hasCorporation) {
+        for (const division of myCorporation.divisions) {
+            for (const city of division.cities) {
+                fillSpaceQueue.push(`${division.name}/${city}`);
+            }
+        }
+    }
+
     // We've set up the initial corporation, now run it over time.
     while (true) {
-        log(ns, '');
-        log(ns, '----------');
-
         // Do all our spending and expanding.
         if (shouldManage) await doManageCorporation(ns);
 
@@ -171,13 +176,14 @@ export async function main(ns) {
         await fillOpenPositionsFromQueue(ns);
 
         if (runOnce) {
-            log(ns, 'Ran once through the corporation loop.');
+            log(ns, 'Ran once through the corporation loop. Exiting.');
             ns.exit();
         }
 
         // Sleep until the next time we go into the 'START' phase
-        await ns.sleep(50);
         await sleepWhileNotInStartState(ns, true);
+
+        log(ns, '');
     }
 }
 
@@ -189,21 +195,19 @@ async function doManageCorporation(ns) {
     // Assess the current state of the corporation, and figure out our budget.
     myCorporation = ns.corporation.getCorporation();
     let netIncome = myCorporation.revenue - myCorporation.expenses;
+    let now = new Date().toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    if (verbose) log(ns, `----- [ ${myCorporation.name} Quarterly Report ${now} ] -----`);
     log(ns, `Corporate cash on hand: ${mf(myCorporation.funds)} (Gross: ${mf(myCorporation.revenue)}/s, Net: ${mf(netIncome)}/s)`);
+
+    // See if we can raise more money.
+    await tryRaiseCapital(ns);
+
+    myCorporation = ns.corporation.getCorporation();
     let budget = myCorporation.funds - options['reserve-amount'] - extraReserve;
     budget = Math.max(0, budget);
-    if (budget < 10e9) {
-        // $10b seems reasonable
-        if (verbose) log(ns, `Our budget is running low (${mf(budget)}). Attempting to raise money.`);
-        await tryRaiseCapital(ns);
-        // Reset our budget data now that we've, potentially, raised money.
-        myCorporation = ns.corporation.getCorporation();
-        budget = myCorporation.funds - options['reserve-amount'] - extraReserve;
-        // TODO: Should we manipulate our dividend percentage since we're poor?
-        //ns.corporation.issueDividends(0.1);
-    }
-    budget = Math.max(0, budget);
-    log(ns, `Working with a corporate budget of ${mf(budget)}`);
+    if (verbose) log(ns, ``);
+    if (verbose) log(ns, `Working with a corporate budget of ${mf(budget)}`);
 
     // Let's figure out all of the things we'd like to do, before we commit to anything.
     let tasks = [];
@@ -227,7 +231,10 @@ async function doManageCorporation(ns) {
             tasks.push(new Task('Unlock ' + unlockable, () => ns.corporation.unlockUpgrade(unlockable), cost, 110));
         } else if (unlockable === 'Warehouse API' && cost < budget * 0.25) shouldBuy = true;
         else if (unlockable === 'Office API' && cost < budget * 0.25) shouldBuy = true;
-        else if (unlockable === 'Export' && cost < budget * 0.1) shouldBuy = true;
+        else if (unlockable === 'Shady Accounting' && cost < budget * 0.5) shouldBuy = true;
+        else if (unlockable === 'Government Partnership' && cost < budget * 0.5) shouldBuy = true;
+        // else if (unlockable === 'Export' && cost < budget * 0.1) shouldBuy = true;
+
         // Put the task on our to-do list. Put all unlocks at priority 0 as "nice-to-haves".
         if (shouldBuy) tasks.push(new Task('Unlock ' + unlockable, () => ns.corporation.unlockUpgrade(unlockable), cost, 0));
     }
@@ -293,8 +300,8 @@ async function doManageCorporation(ns) {
                 log(ns, `  ${mf(industry.startupCost)} - ${industry.name}`);
             }
         } else if (verbose) log(ns, `INFO: We would like to create a new division but we cannot afford one. Willing to spend ${mf(budget)}.`);
-        // ... and just pick RealEstate for now.
-        // Complicated choices. I didn't like software because of the production factors. Tobacco is okay, but the lack of produced mats is annoying. Computers was okay.
+        // ... and just pick something static for now.
+        //        let newIndustry = possibleIndustries.find((ind) => ind.name == 'Pharmaceutical');
         let newIndustry = possibleIndustries.find((ind) => ind.name == 'RealEstate');
         if (newIndustry) {
             tasks.push(new Task(`Add a production division, '${newIndustry.name}'`, () => doCreateNewDivision(ns, newIndustry, newDivisionBudget), newDivisionBudget, 100));
@@ -316,8 +323,8 @@ async function doManageCorporation(ns) {
      * adjustments over time.
      */
     let spent = await runTasks(ns, tasks, budget);
-    if (spent > 0) log(ns, `Spent ${mf(spent)} of our budget of ${mf(budget)}.`);
     if (spent) budget -= spent;
+    if (spent > 0 && verbose) log(ns, `Spent ${mf(spent)} of our budget of ${mf(budget)}.`);
 
     /**
      * Even though we've done all of our desired high level tasks, we still need to tend to each division individually.
@@ -346,16 +353,21 @@ async function tryRaiseCapital(ns) {
     if (options['spend-hashes']) await doSpendHashes(ns, 'Sell for Corporation Funds');
     // If we're not public, then raise private funding.
     if (!myCorporation.public) {
-        // TODO: Evaluate a new funding round before just accepting?
         let offer = ns.corporation.getInvestmentOffer();
+        // If we've finished round 4, clear our raising capital flag.
+        if (offer.round > 4) raisingCapital = 0;
         let willAccept = true;
-        if (offer) {
-            if (verbose) log(ns, `Considering raising private capital round ${offer.round}. Offered ${mf(offer.funds)} for ${nf(offer.shares)} shares.`);
+        if (offer && offer.round <= 4) {
+            log(ns, `Considering raising private capital round ${offer.round}. Offered ${mf(offer.funds)} for ${nf(offer.shares)} shares.`);
 
             // Make sure all employees are happy.
             let satisfied = allEmployeesSatisfied(ns);
-            if (satisfied) willAccept = true;
-            else log(ns, `  Round ${offer.round} financing waiting on employees stats to stabilize.`);
+            if (!satisfied) {
+                let prefix = '    *';
+                if (!willAccept) prefix = '     ';
+                log(ns, `${prefix}  Round ${offer.round} financing waiting on employee stats to stabilize.`);
+                willAccept = false;
+            }
 
             // Make sure we have filled a reasonable amount of our warehouses with materials.
             for (const division of myCorporation.divisions) {
@@ -364,9 +376,11 @@ async function tryRaiseCapital(ns) {
                     let warehouse = ns.corporation.getWarehouse(division.name, city);
                     let warehouseSpaceRequiredForCycle = getReservedWarehouseSpace(ns, industry, division, city);
                     let warehouseSpaceAvailable = warehouse.size - warehouseSpaceRequiredForCycle - warehouse.sizeUsed;
-                    if (warehouseSpaceAvailable > warehouse.size * 0.25) {
+                    if (warehouseSpaceAvailable > warehouseSpaceRequiredForCycle * 0.2) {
+                        let prefix = '    *';
+                        if (!willAccept) prefix = '     ';
+                        log(ns, `${prefix}  Round ${offer.round} financing waiting on ${division.name} warehouses to gain materials.`);
                         willAccept = false;
-                        if (verbose) log(ns, `  Round ${offer.round} financing waiting on ${division.name} warehouses to gain materials.`);
                         break;
                     }
                 }
@@ -376,14 +390,18 @@ async function tryRaiseCapital(ns) {
                 const maxProducts = getMaxProducts(ns, division.name);
                 let industry = industries.find((i) => i.name === division.type);
                 if (industry.makesProducts && division.products.length < maxProducts) {
-                    if (verbose) log(ns, `  Round ${offer.round} financing waiting on ${division.name} division to create products (${division.products.length}/${maxProducts})`);
+                    let prefix = '    *';
+                    if (!willAccept) prefix = '     ';
+                    log(ns, `${prefix}  Round ${offer.round} financing waiting on ${division.name} division to create products (${division.products.length}/${maxProducts})`);
                     willAccept = false;
                 }
                 if (offer.round >= 4 && industry.makesProducts) {
                     // Wait for the last product to finish researching
                     let completeProducts = division.products.map((prodName) => ns.corporation.getProduct(division.name, prodName)).filter((prod) => prod.developmentProgress >= 100);
                     if (completeProducts.length < maxProducts) {
-                        if (verbose) log(ns, `  Round ${offer.round} financing waiting on ${division.name} division to complete products (${division.products.length}/${maxProducts})`);
+                        let prefix = '    *';
+                        if (!willAccept) prefix = '     ';
+                        log(ns, `${prefix}  Round ${offer.round} financing waiting on ${division.name} division to complete products (${completeProducts.length}/${maxProducts})`);
                         willAccept = false;
                     }
                 }
@@ -397,9 +415,15 @@ async function tryRaiseCapital(ns) {
             // If we've passed all the checks, then accept the next round of funding.
             if (options['can-accept-funding'] && raisingCapital > 4 && !options.mock) {
                 let success = ns.corporation.acceptInvestmentOffer();
+                raisingCapital = 0;
                 if (success) log(ns, `WARNING: Accepted round ${offer.round} funding. Took ${mf(offer.funds)} for ${nf(offer.shares)} shares.`);
                 else log(ns, `ERROR: Tried to accept round ${offer.round} funding, but something went wrong.`);
+            } else if (options['can-accept-funding'] && raisingCapital > 0) {
+                log(ns, `SUCCESS: Raising capital in ${5 - raisingCapital} cycles.`);
             }
+        } else {
+            // We're public, so we can't be raising capital.
+            raisingCapital = 0;
         }
         // Finally, if we're out of private funding, we may as well go public
         offer = ns.corporation.getInvestmentOffer();
@@ -407,7 +431,12 @@ async function tryRaiseCapital(ns) {
             // Looks like we're out of private funding. Time to go public.
             log(ns, `SUCCESS: Private funding complete. Time to IPO. Selling ${options['issue-shares']} shares.`);
             ns.corporation.goPublic(options['issue-shares']);
+            // and set our dividend to 10%
+            ns.corporation.issueDividends(0.1);
         }
+    } else {
+        // We're public, so we can't be raising capital.
+        raisingCapital = 0;
     }
 }
 
@@ -542,8 +571,8 @@ async function doManageDivision(ns, division, budget) {
      * much about spending the whole budget. Anything we don't spend now will get passed on
      * to other divisions, or recycled in the next pass.
      */
-    log(ns, '');
-    log(ns, `Managing ${division.name} division with a budget of ${mf(budget)}.`);
+    if (verbose) log(ns, '');
+    if (verbose) log(ns, `Managing ${division.name} division with a budget of ${mf(budget)}.`);
     let spent = 0;
     let tasks = [];
 
@@ -569,6 +598,7 @@ async function doManageDivision(ns, division, budget) {
     // Update our status
     myCorporation = ns.corporation.getCorporation();
     division = ns.corporation.getDivision(division.name);
+    let hasMarketTA2 = ns.corporation.hasResearched(division.name, 'Market-TA.II');
 
     // Division wide tasks
     // Can we buy advertising? This is how we go exponential in our production industry.
@@ -576,14 +606,24 @@ async function doManageDivision(ns, division, budget) {
     let adPrice = ns.corporation.getHireAdVertCost(division.name);
     if (industry.makesProducts && adPrice < budget * 0.9) {
         tasks.push(new Task(`Buy advertising campaign #${adCount + 1} for ${division.name}`, () => ns.corporation.hireAdVert(division.name), adPrice, 60));
+        adCount++;
     }
+    // Buy the first advertising campaign for non-product industries
     if (adCount == 0 && !industry.makesProducts && adPrice < budget * 0.9) {
         // Buy one advertising campaign in material markets
         tasks.push(new Task(`Buy advertising campaign #${adCount + 1} for ${division.name}`, () => ns.corporation.hireAdVert(division.name), adPrice, 60));
     }
+    // Consider buying more advertising. All industires with MarketTA2, or a second one for production industries.
+    if ((industry.makesProducts || hasMarketTA2) && adPrice < budget * 0.5) {
+        tasks.push(new Task(`Buy advertising campaign #${adCount + 1} for ${division.name}`, () => ns.corporation.hireAdVert(division.name), adPrice, 20));
+    }
 
     // Should we spend any research?
-    let researchToSpend = division.research * (1 - industry.factors.Science); // Willing to spend in inverse proportion to how much stored science helps this product.
+    let researchToSpend = division.research;
+    if (industry.makesProducts || hasMarketTA2) {
+        // Willing to spend in inverse proportion to how much stored science helps this product.
+        researchToSpend = division.research * (1 - industry.factors.Science);
+    }
     let researchTypes = ['Hi-Tech R&D Laboratory', 'uPgrade: Fulcrum', 'uPgrade: Capacity.I', 'uPgrade: Capacity.II', 'Market-TA.I', 'Market-TA.II'];
     for (const researchType of researchTypes) {
         let hasResearch = false;
@@ -608,24 +648,29 @@ async function doManageDivision(ns, division, budget) {
         const maxProducts = getMaxProducts(ns, division.name);
         let products = division.products.map((p) => ns.corporation.getProduct(division.name, p));
         let progress = products.map((p) => p.developmentProgress).filter((cmp) => cmp < 100)[0];
+        if (progress == undefined) progress = 100;
         if (verbose) log(ns, `Projects: ${products.length}/${maxProducts}. Current project: ${nf(progress)}% complete.`);
-        if (progress === 100 || progress === undefined) {
+        if (progress === 100) {
             // No product being researched. Consider creating a new one.
             if (products.length < maxProducts) {
                 // We're not full, so go ahead.
                 spent += createNewProduct(ns, division);
                 budget -= spent;
             } // Discontinue an existing product for a new one if we're not raising capital.
-            else if (raisingCapital === 0) {
-                if (extraReserve > 0 && myCorporation.funds > extraReserve) {
-                    // We have enough money saved up. Time to ditch the product with the lowest budget.
-                    products.sort((a, b) => budgetFromProductName(a.name) - budgetFromProductName(b.name));
-                    let lowBudgetProduct = products[0];
-                    ns.corporation.discontinueProduct(division.name, lowBudgetProduct.name);
+            else {
+                // log(ns, `Considering creating a new product. rC: ${raisingCapital} eR: ${mf(extraReserve)}`);
+                if (raisingCapital === 0) {
+                    if (extraReserve > 0 && myCorporation.funds > extraReserve) {
+                        // We have enough money saved up. Time to ditch the product with the lowest budget.
+                        products.sort((a, b) => budgetFromProductName(a.name) - budgetFromProductName(b.name));
+                        let lowBudgetProduct = products[0];
+                        ns.corporation.discontinueProduct(division.name, lowBudgetProduct.name);
+                        myCorporation = ns.corporation.getCorporation();
+                    }
+                    // Try to create the Product. If it fails, it will set a reserve for us.
+                    spent += createNewProduct(ns, division);
+                    budget -= spent;
                 }
-                // Try to create the Product. If it fails, it will set a reserve for us.
-                spent += createNewProduct(ns, division);
-                budget -= spent;
             }
         }
     }
@@ -706,15 +751,17 @@ async function doManageDivision(ns, division, budget) {
         // TODO The amounts we buy still needs to be tuned, probably based on corporate income or something?
         // We don't want to drive the corp too deeply negative with material purchases, or else nothing else
         // will ever be bought, and employees will never get happy.
-        let warehouseSpaceAvailable = warehouse.size - warehouseSpaceRequiredForCycle - warehouse.sizeUsed;
-        let enoughSpace = warehouseSpaceAvailable >= warehouse.size * 0.05; // Don't try to fill the last few percent.
+        let freeSpace = warehouse.size - warehouse.sizeUsed;
+        let warehouseSpaceAvailable = freeSpace - warehouseSpaceRequiredForCycle;
+        let tolerance = warehouseSpaceRequiredForCycle * 0.01;
+        let enoughSpace = warehouseSpaceAvailable >= tolerance; // Tiny safety margin
         const satisfied = allEmployeesSatisfied(ns);
         if ((budget > 0 || satisfied) && enoughSpace && raisingCapital === 0) {
             // We have a decent amount of space to fill.
-            if (verbose) log(ns, `   ${division.name}/${city} warehouse: Want ${nf(warehouseSpaceAvailable)} m² more matierials. ${nf(warehouseSpaceRequiredForCycle)} m² reserved.`);
+            if (verbose) log(ns, `   ${division.name}/${city} warehouse: Wants +${nf(warehouseSpaceAvailable)} m² materials. ${nf(warehouseSpaceRequiredForCycle)} m² reserved.`);
             for (const material of bonusMaterials) {
-                if (industry.prodMats.includes(material)) continue; // Don't buy the materials we make.
-                let amt = industry.scaledMaterialBonus[material] * warehouseSpaceAvailable;
+                //if (industry.prodMats.includes(material)) continue; // Don't buy the materials we make.
+                let amt = (industry.scaledMaterialBonus[material] * warehouseSpaceAvailable) / 4;
                 // somewhat scale the amount we buy with our budget
                 let scaleFactor = Math.log10(budget) - 11; // Don't go full speed until our budget is $100b or more.
                 scaleFactor = Math.max(-2, scaleFactor);
@@ -730,41 +777,85 @@ async function doManageDivision(ns, division, budget) {
                 ns.corporation.buyMaterial(division.name, city, material, 0);
             }
         }
+        // It's possible to get into a situation where we've grown production faster than warehouse space.
+        if (warehouseSpaceAvailable < -tolerance) {
+            // Start clearing things out.
+            if (verbose) log(ns, `   ${division.name}/${city} warehouse: Wants to reserve ${nf(warehouseSpaceRequiredForCycle)} of ${nf(warehouse.size)} m², but only ${nf(freeSpace)} m² free! Selling some materials.`);
+            for (const material of allMaterials) {
+                let amt = ns.corporation.getMaterial(division.name, city, material).qty;
+                let sellAmt = amt * 0.025;
+                ns.corporation.sellMaterial(division.name, city, material, sellAmt.toFixed(2), 'MP*0.80');
+            }
+        } else {
+            // Make sure we reset. It should be safe to sell '0' here, because the things we want to sell will get reset in the price discovery loop.
+            for (const material of allMaterials) {
+                ns.corporation.sellMaterial(division.name, city, material, '0', 'MP');
+            }
+        }
     }
-    if (verbose) log(ns, `${tasks.length} items in the task queue.`);
     // Figure out which tasks we can afford to run, and in which order.
     tasks.sort((a, b) => a.cost - b.cost).reverse();
     tasks.sort((a, b) => a.priority - b.priority).reverse();
     // Finally, run all the tasks we've collected.
     spent += await runTasks(ns, tasks, budget);
-    if (spent > 0) log(ns, `Spent ${mf(spent)} of our budget of ${mf(totalBudget)}.`);
+    if (spent > 0 && verbose) log(ns, `Spent ${mf(spent)} of our budget of ${mf(totalBudget)}.`);
 
     return spent;
 }
 
+/**
+ * How much space do we need to leave fee in this warehouse for a full cycle of production?
+ * @param {NS} ns
+ * @param {Industry} industry
+ * @param {Division} division
+ * @param {string} city
+ * @returns {number}
+ */
 function getReservedWarehouseSpace(ns, industry, division, city) {
     let rawMaterialSize = 0;
+    let warehouseSpaceRequiredForCycle = 0;
+    let maxProd = 0;
+
+    // Products take the same space as what was used to create it.
     for (const matName in industry.reqMats) {
         let matAmt = industry.reqMats[matName];
         rawMaterialSize += matAmt * materialSizes[matName];
     }
-    let warehouseSpaceRequiredForCycle = 0;
+
+    // Max production is based on a bunch of production multipliers.
+    maxProd = getMaximumProduction(ns, division, city);
+
+    // How many materials could we produce? Material sizes are predefined.
     for (const matName of industry.prodMats) {
-        let mat = ns.corporation.getMaterial(division.name, city, matName);
-        warehouseSpaceRequiredForCycle += rawMaterialSize * mat.prod;
+        warehouseSpaceRequiredForCycle += materialSizes[matName] * maxProd;
     }
-    for (const prodName of division.products) {
-        let prod = ns.corporation.getProduct(division.name, prodName).cityData[city][1];
-        warehouseSpaceRequiredForCycle += rawMaterialSize * prod;
+
+    if (industry.makesProducts) {
+        const maxProducts = getMaxProducts(ns, division.name);
+        warehouseSpaceRequiredForCycle += maxProducts * maxProd * rawMaterialSize;
     }
+
     // We produce stuff 10 times per cycle
     warehouseSpaceRequiredForCycle *= 10;
 
     // If we don't have automatic price discovery, we'll need some extra free space.
     let hasMarketTA2 = ns.corporation.hasResearched(division.name, 'Market-TA.II');
-    if (!hasMarketTA2) warehouseSpaceRequiredForCycle *= 4;
+    if (!hasMarketTA2) warehouseSpaceRequiredForCycle *= 3;
     else warehouseSpaceRequiredForCycle *= 1.5;
+
     return warehouseSpaceRequiredForCycle;
+}
+
+function getMaximumProduction(ns, division, city) {
+    let office = ns.corporation.getOffice(division.name, city);
+    let officeMult = getOfficeProductivity(office); // Workers
+    let prodMult = division.prodMult; // Materials
+    let corpMult = 1 + 0.03 * ns.corporation.getUpgradeLevel('Smart Factories'); // Corporate upgrades.
+    let resMult = 1;
+    if (ns.corporation.hasResearched(division.name, 'Drones - Assembly')) resMult *= 1.2;
+    if (ns.corporation.hasResearched(division.name, 'Self-Correcting Assemblers')) resMult *= 1.1;
+    let maxProd = officeMult * prodMult * corpMult * resMult;
+    return maxProd;
 }
 
 /**
@@ -868,13 +959,11 @@ async function fillOpenPositionsFromQueue(ns) {
     fillSpaceQueue = [...new Set(fillSpaceQueue)]; // Unique
     // Try not to run past the end of a cycle..
     while (['START'].includes(myCorporation.state) && fillSpaceQueue.length > 0) {
-        if (verbose) log(ns, `Filling office space. Current state: ${myCorporation.state}`);
         let office = fillSpaceQueue.shift();
         let divisionName = office.split('/')[0];
         let cityName = office.split('/')[1];
         await fillOpenPositions(ns, divisionName, cityName);
         myCorporation = ns.corporation.getCorporation();
-        if (verbose) log(ns, `Office space Filled. Current state: ${myCorporation.state}`);
     }
 }
 
@@ -896,7 +985,7 @@ async function fillOpenPositions(ns, divisionName, cityName) {
     openJobs += numUnassigned;
     office = ns.corporation.getOffice(divisionName, cityName);
     if (openJobs > 0) {
-        log(ns, `Assigning ${openJobs} new employees to work in ${divisionName}/${cityName}`);
+        if (verbose) log(ns, `Assigning ${openJobs} new employees to work in ${divisionName}/${cityName}`);
         let employeesPerJob = Math.floor(office.employees.length / jobs.length);
         let employeesLeft = office.employees.length % jobs.length;
         for (let i = 0; i < jobs.length; i++) {
@@ -914,7 +1003,8 @@ async function fillOpenPositions(ns, divisionName, cityName) {
  * @param {NS} ns
  */
 async function doPriceDiscovery(ns) {
-    log(ns, ``);
+    if (verbose) log(ns, ``);
+    if (verbose) log(ns, `Doing price discovery for products.`);
     myCorporation = ns.corporation.getCorporation();
     for (const division of myCorporation.divisions) {
         const industry = industries.find((i) => i.name === division.type);
@@ -943,12 +1033,13 @@ async function doPriceDiscovery(ns) {
         // Go through each product, and see if the price needs to be adjusted. We can only
         // adjust the price on a per-product basis (desipe the UI letting you do it
         // manually, the API is busted.)
+        let prevProductMultiplier = 1.0;
         for (const productName of division.products) {
             const product = ns.corporation.getProduct(division.name, productName);
             if (product.developmentProgress < 100) continue;
             let sPrice = product.sCost;
-            // sPrice ought to be of the form 'MP * 123.45'. If not, assume MP * 1.0
-            let lastPriceMultiplier = 1.0;
+            // sPrice ought to be of the form 'MP * 123.45'. If not, we should use the price of the last product we calculated.
+            let lastPriceMultiplier = prevProductMultiplier;
             try {
                 let sMult = sPrice.split('*')[1];
                 lastPriceMultiplier = Number.parseFloat(sMult);
@@ -963,7 +1054,7 @@ async function doPriceDiscovery(ns) {
 
                 if (produced == sold && qty == 0) {
                     // We sold every item we produced. Vote to double the price.
-                    votes.push(lastPriceMultiplier * 1.2);
+                    votes.push(lastPriceMultiplier * 2);
                 }
                 // If we've accumulated a big stockpile, reduce our prices.
                 else if (qty > produced * 100) {
@@ -1002,11 +1093,11 @@ async function doPriceDiscovery(ns) {
             votes.sort((a, b) => a - b);
             let newMultiplier = votes[0];
             let newPrice = `MP*${newMultiplier.toFixed(3)}`;
-            let prefix = 'INFO: ';
-            if (newMultiplier > lastPriceMultiplier) prefix = 'WARNING: ';
             // if (verbose) log(ns, `${prefix}Votes: ${votes.map((n) => nf(n)).join(', ')}.`);
-            if (verbose) log(ns, `${prefix}Adjusting '${product.name}' price from ${sPrice} to ${newPrice}.`);
+            let sChange = percentChange(lastPriceMultiplier, newMultiplier);
+            if (verbose) log(ns, `Adjusting '${product.name}' price from ${sPrice} to ${newPrice} (${sChange}).`);
             ns.corporation.sellProduct(division.name, hqCity, product.name, 'MAX', newPrice, true);
+            prevProductMultiplier = newMultiplier;
         } // end for-products
     } // end for-divisions
 }
@@ -1066,4 +1157,32 @@ function budgetFromProductName(projectName) {
     let exp = Number.parseFloat(sExp);
     let budget = Math.pow(10, exp);
     return budget;
+}
+
+function getOfficeProductivity(office, forProduct = false) {
+    const opProd = office.employeeProd.Operations;
+    const engrProd = office.employeeProd.Engineer;
+    const mgmtProd = office.employeeProd.Management;
+    const total = opProd + engrProd + mgmtProd;
+    if (total <= 0) return 0;
+
+    const mgmtFactor = 1 + mgmtProd / (1.2 * total);
+    const prod = (Math.pow(opProd, 0.4) + Math.pow(engrProd, 0.3)) * mgmtFactor;
+    const balancingMult = 0.05;
+
+    if (forProduct) return 0.5 * balancingMult * prod;
+    else return balancingMult * prod;
+}
+
+/**
+ * Return the percentage change from from oldVal to NewVal.
+ * @param {number} oldVal
+ * @param {number} newVal
+ * @returns {string} formatted as "+99.9%"
+ */
+function percentChange(oldVal, newVal) {
+    let percentChange = (newVal / oldVal) * 100 - 100;
+    let sChange = nf(percentChange) + '%';
+    if (percentChange >= 0) sChange = '+' + sChange;
+    return sChange;
 }
