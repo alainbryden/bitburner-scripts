@@ -1141,7 +1141,7 @@ async function doSpendHashes(ns, spendOn) {
             let numHashes = ns.hacknet.numHashes();
             ns.hacknet.spendHashes(spendOn);
             spentHashes = numHashes - ns.hacknet.numHashes();
-            if (spentHashes > 0) log(ns, `Spent ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes on ${shortName}`, 'success');
+            if (spentHashes > 0) log(ns, `  Spent ${nf(Math.round(spentHashes / 100) * 100)} hashes on ${shortName}`, 'success');
         } while (spentHashes > 0);
     }
 }
