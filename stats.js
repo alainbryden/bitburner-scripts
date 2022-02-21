@@ -29,7 +29,7 @@ export async function main(ns) {
             const values = [];
 
             // Show what bitNode we're currently playing
-            headers.push("bitNode");
+            headers.push("BitNode");
             values.push(`${bitNode}.${1 + (dictSourceFiles[bitNode] || 0)}`);
 
             if (9 in dictSourceFiles || 9 == bitNode) { // Section not relevant if you don't have access to hacknet servers
