@@ -14,6 +14,7 @@ let stockValue = 0; // If the player holds stocks, their liquidation value will 
 let joinedFactions = [];
 let ownedAugmentations = [];
 let factionData = {};
+let favorToDonate;
 let gangFaction = null;
 let augmentationData = {};
 let allAugStats = [];
@@ -115,6 +116,7 @@ export async function main(ns) {
         (await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt')).filter(a => a != strNF);
     if (options['neuroflux-disabled']) omitAugs.push(strNF);
     log(ns, 'Getting all faction data...');
+    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt')
     await updateFactionData(ns, allFactions, omitFactions);
     log(ns, 'Getting all augmentation data...');
     await updateAugmentationData(ns, options['stat-desired'], desiredAugs);
@@ -189,7 +191,7 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
         joined: joinedFactions.includes(faction),
         reputation: dictFactionReps[faction] || 0,
         favor: dictFactionFavors[faction],
-        donationsUnlocked: dictFactionFavors[faction] >= ns.getFavorToDonate() && faction !== gangFaction // Can't donate to gang factions for rep
+        donationsUnlocked: dictFactionFavors[faction] >= favorToDonate && faction !== gangFaction // Can't donate to gang factions for rep
             && faction !== "Church of the Machine God", // Can't donate to this faction either
         augmentations: dictFactionAugs[faction],
         unownedAugmentations: function (includeNf = false) { return this.augmentations.filter(aug => !ownedAugmentations.includes(aug) && (aug != strNF || includeNf)) },
