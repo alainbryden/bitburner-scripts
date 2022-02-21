@@ -153,8 +153,9 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
-    const commandToFile = `let result = ""; try { result = JSON.stringify(${command}); } catch { }
-        if (ns.read("${fName}") != result) await ns.write("${fName}", result, 'w')`;
+    const commandToFile = `let result="";try{result=JSON.stringify(
+        ${command}
+        );}catch{} const f="${fName}"; if(ns.read(f)!=result) await ns.write(f,result,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, false, maxRetries, retryDelayMs);
     // Wait for the process to complete
@@ -288,13 +289,13 @@ export function scanAllServers(ns) {
 
 /** @param {NS} ns 
  * Get a dictionary of active source files, taking into account the current active bitnode as well. **/
-export async function getActiveSourceFiles(ns) {
-    return await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
+export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode = true) {
+    return await getActiveSourceFiles_Custom(ns, getNsDataThroughFile, includeLevelsFromCurrentBitnode);
 }
 
 /** @param {NS} ns 
  * getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
-export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile) {
+export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, includeLevelsFromCurrentBitnode = true) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
     let tempFile = '/Temp/owned-source-files.txt';
     // Find out what source files the user has unlocked
@@ -305,7 +306,10 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile) {
         dictSourceFiles = dictSourceFiles ? JSON.parse(dictSourceFiles) : {};
     }
     // If the user is currently in a given bitnode, they will have its features unlocked
-    dictSourceFiles[(await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN] = 3;
+    if (includeLevelsFromCurrentBitnode) {
+        const bitNodeN = (await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN;
+        dictSourceFiles[bitNodeN] = Math.max(3, dictSourceFiles[bitNodeN] || 0);
+    }
     return dictSourceFiles;
 }
 
