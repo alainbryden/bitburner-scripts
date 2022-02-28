@@ -952,12 +952,7 @@ async function performScheduling(ns, currentTarget, snapshot) {
             const discriminationArg = `Batch ${schedObj.batchNumber}-${schedItem.description}`;
             // Args spec: [0: Target, 1: DesiredStartTime (used to delay tool start), 2: ExpectedEndTime (informational), 3: Duration (informational), 4: DoStockManipulation, 5: DisableWarnings]
             const args = [currentTarget.name, schedItem.start.getTime(), schedItem.end.getTime(), schedItem.end - schedItem.start, discriminationArg];
-            if (["hack", "grow"].includes(schedItem.toolShortName)) // Push an arg used by remote hack/grow tools to determine whether it should manipulate the stock market
-                args.push(stockMode && (schedItem.toolShortName == "hack" && shouldManipulateHack[currentTarget.name] || schedItem.toolShortName == "grow" && shouldManipulateGrow[currentTarget.name]) ? 1 : 0);
-            if (["hack", "weak"].includes(schedItem.toolShortName))
-                args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
-                    (schedItem.toolShortName == "hack" && (bitnodeMults.ScriptHackMoneyGain == 0 || playerStats.bitNodeN == 8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
-            args.push(loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
+            args.push(...getFlagsArgs(schedItem.toolShortName, currentTarget.name));
             if (recoveryThreadPadding > 1 && ["weak", "grow"].includes(schedItem.toolShortName))
                 schedItem.threadsNeeded *= recoveryThreadPadding; // Only need to pad grow/weaken threads
             if (options.i && currentTerminalServer?.name == currentTarget.name && schedItem.toolShortName == "hack")
@@ -974,6 +969,18 @@ async function performScheduling(ns, currentTarget, snapshot) {
         log(`Scheduled ${cyclesScheduled} x ${getTargetSummary(currentTarget)} Took: ${Date.now() - start}ms`);
     currentTarget.previousCycle = `${cyclesScheduled} x ${getTargetSummary(currentTarget)}`
     return true;
+}
+
+/** Produce additional args based on the hack tool name and command line flags set */
+function getFlagsArgs(toolName, target) {
+    const args = []
+    if (["hack", "grow"].includes(toolName)) // Push an arg used by remote hack/grow tools to determine whether it should manipulate the stock market
+        args.push(stockMode && (toolName == "hack" && shouldManipulateHack[target] || toolName == "grow" && shouldManipulateGrow[target]) ? 1 : 0);
+    if (["hack", "weak"].includes(toolName))
+        args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
+            (toolName == "hack" && (bitnodeMults.ScriptHackMoneyGain == 0 || playerStats.bitNodeN == 8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
+    args.push(loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
+    return args;
 }
 
 // returns an object that contains all 4 timed events start and end times as dates
@@ -1255,7 +1262,7 @@ let lastCycleTotalRam = 0; // Cache of total ram on the server to check whether 
 /** @param {NS} ns 
  * Gain a bunch of hack XP early after a new Augmentation by filling a bunch of RAM with weaken() against a relatively easy target */
 async function kickstartHackXp(ns, percentOfFreeRamToConsume = 1, verbose = false, targets = undefined) {
-    if (!xpOnly)
+    if (!xpOnly && !loopingMode)
         return await scheduleHackExpCycle(ns, getXPFarmServer(), percentOfFreeRamToConsume, verbose, false); // Grind some XP from the single best target for farming XP
     // Otherwise, target multiple servers until we can't schedule any more. Each next best target should get the next best (biggest) server
     sortServerList("totalram");
@@ -1282,7 +1289,7 @@ async function kickstartHackXp(ns, percentOfFreeRamToConsume = 1, verbose = fals
     for (let i = 0; i < targets; i++) {
         let lastSchedulingResult;
         singleServerMode = singleServerMode || (i >= (jobHosts.length - 1 - singleServerLimit) || jobHosts[i + 1].totalRam() < 1000); // Switch to single-server mode if running out of hosts with high ram
-        etas.push(lastSchedulingResult = (await scheduleHackExpCycle(ns, targetsByExp[i], 1, verbose, tryAdvanceMode, jobHosts[i], singleServerMode)) || Number.MAX_SAFE_INTEGER);
+        etas.push(lastSchedulingResult = (await scheduleHackExpCycle(ns, targetsByExp[i], percentOfFreeRamToConsume, verbose, tryAdvanceMode, jobHosts[i], singleServerMode)) || Number.MAX_SAFE_INTEGER);
         if (lastSchedulingResult == Number.MAX_SAFE_INTEGER) break; // Stop scheduling targets if the last attempt failed
     }
     // TODO: waitForCycleEnd - if any targets are within 200ms? (one game tick) of the end of their cycle, wait for it to end and trigger the next cycle immediately?
@@ -1331,11 +1338,16 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
             expTool = getTool("grow");
             expTime = server.timeToGrow();
         }
+        let loopRunning = false;
         if (server.isXpFarming()) {
-            if (verbose && activeCycleTimeLeft < -50) // Warn about big misfires (sign of lag)
-                log(`WARNING: ${server.name} FarmXP process is ` + (eta ? `more than ${formatDuration(-activeCycleTimeLeft)} overdue...` :
-                    `still in progress from a prior run. ETA unknown, assuming '${expTool.name}' time: ${formatDuration(expTime)}`));
-            return eta ? (activeCycleTimeLeft > 0 ? activeCycleTimeLeft : 10 /* If we're overdue, sleep only 10 ms before checking again */) : expTime /* Have no ETA, sleep for expTime */;
+            if (loopingMode)
+                loopRunning = true;
+            else {
+                if (verbose && activeCycleTimeLeft < -50) // Warn about big misfires (sign of lag)
+                    log(`WARNING: ${server.name} FarmXP process is ` + (eta ? `more than ${formatDuration(-activeCycleTimeLeft)} overdue...` :
+                        `still in progress from a prior run. ETA unknown, assuming '${expTool.name}' time: ${formatDuration(expTime)}`));
+                return eta ? (activeCycleTimeLeft > 0 ? activeCycleTimeLeft : 10 /* If we're overdue, sleep only 10 ms before checking again */) : expTime /* Have no ETA, sleep for expTime */;
+            }
         }
         let threads = Math.floor(((allocatedServer == null ? expTool.getMaxThreads() : allocatedServer.ramAvailable() / expTool.cost) * percentOfFreeRamToConsume).toPrecision(14));
         if (threads == 0)
@@ -1366,13 +1378,15 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
         let scheduleTime = now + scheduleDelay;
         let cycleTime = scheduleDelay + expTime + 10; // Wake up this long after a hack has fired (to ensure we don't wake up too early)
         nextXpCycleEnd[server.name] = now + cycleTime; // Store when this server's next cycle is expected to end
+        const additionalArgs = advancedMode ? getFlagsArgs(expTool.shortName, server.name) : []; // Add e.g. looping mode args if we are in advanced farming mode
         // Schedule the FarmXP threads first, ensuring that they are not split (if they our split, our hack threads above 'effectiveHackThreads' lose their free ride)
-        let success = await arbitraryExecution(ns, expTool, threads, [server.name, scheduleTime, 0, expTime, "FarmXP"], allocatedServer?.name);
+        let success = loopRunning ? true :
+            await arbitraryExecution(ns, expTool, threads, [server.name, scheduleTime, 0, expTime, "FarmXP"].concat(additionalArgs), allocatedServer?.name);
 
         if (advancedMode) { // Need to keep server money above zero, and security at minimum to farm xp from hack(); 
             const scheduleGrow = scheduleTime + cycleTime * 2 / 15 - scheduleDelay; // Time this to resolve at 1/3 * cycleTime after each hack fires
             const scheduleWeak = scheduleTime + cycleTime * 2 / 3 - scheduleDelay; //  Time this to resolve at 2/3 * cycleTime after each hack fires
-            success &&= await arbitraryExecution(ns, getTool("grow"), growThreadsNeeded, [server.name, scheduleGrow, 0, server.timeToGrow(), "growForXp"],
+            success &&= await arbitraryExecution(ns, getTool("grow"), growThreadsNeeded, [server.name, scheduleGrow, 0, server.timeToGrow(), "growForXp"], // Node we do not loop these atm as they need to dynamically hacking misfires
                 singleServer ? allocatedServer?.name : null, !singleServer);
             success &&= await arbitraryExecution(ns, getTool("weak"), weakenThreadsNeeded, [server.name, scheduleWeak, 0, server.timeToWeaken(), "weakenForXp"],
                 singleServer ? allocatedServer?.name : null, !singleServer);
