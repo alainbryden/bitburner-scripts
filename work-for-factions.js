@@ -127,7 +127,7 @@ export async function main(ns) {
                 return log(ns, "ERROR: You cannot automate working for factions until you have unlocked singularity access (SF4).", true, 'error');
             else if (dictSourceFiles[4] < 3)
                 log(ns, `WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
-                    `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`, false, 'warn');
+                    `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`, false, 'warning');
 
             let bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
             repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
