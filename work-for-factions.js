@@ -183,7 +183,7 @@ export async function main(ns) {
             loadingComplete = true;
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' + err, true, 'warning');
-            ns.sleep(5000);
+            await ns.sleep(5000);
         }
     }
 
@@ -271,7 +271,7 @@ export async function main(ns) {
             if (scope <= 8) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' + err, true, 'warning');
-            ns.sleep(5000);
+            await ns.sleep(5000);
             scope--; // Cancel out work scope increasing on the next iteration.
         }
         await ns.sleep(1); // Infinite loop protection in case somehow we loop without doing any meaningful work
@@ -328,7 +328,7 @@ async function earnFactionInvite(ns, factionName) {
         ns.print(`${reasonPrefix} you have insufficient kills. Need: ${requirement}, Have: ${player.numPeopleKilled}`);
         doCrime = true;
     }
-    //let deficientStats;
+    let deficientStats; // TODO: Not doing anything with this info yet. Maybe do some targeted training if there's only one?
     if ((requirement = requiredCombatByFaction[factionName]) &&
         (deficientStats = [{ name: "str", value: player.strength }, { name: "str", value: player.defense }, { name: "str", value: player.dexterity }, { name: "str", value: player.agility }]
             .filter(stat => stat.value < requirement)).length > 0
