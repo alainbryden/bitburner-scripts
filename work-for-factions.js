@@ -682,9 +682,9 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatus = "", lastStatusUpdateTime = 0, repGainRatePerMs = 0;
-    let lastRepMeasurement = await getCompanyReputation(ns, factionName);
+    let lastRepMeasurement = await getCompanyReputation(ns, companyName);
     let studying = false, working = false, backdoored = false;
-    while (((currentReputation = (await getCompanyReputation(ns, factionName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
+    while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
         player = (await getPlayerInfo(ns));
         // Determine the next promotion we're striving for (the sooner we get promoted, the faster we can earn company rep)
         const getTier = job => Math.min(job.reqRep.filter(r => r <= currentReputation).length, job.reqHack.filter(h => h <= player.hacking).length, job.reqCha.filter(c => c <= player.charisma).length) - 1;
@@ -744,7 +744,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             if (await getNsDataThroughFile(ns, `ns.workForCompany('${companyName}',  ${shouldFocusAtWork})`, '/Temp/work-for-company.txt')) {
                 working = true;
                 if (shouldFocusAtWork) ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep stealing focus
-                currentReputation = await getCompanyReputation(ns, factionName); // Update to capture the reputation earned when restarting work
+                currentReputation = await getCompanyReputation(ns, companyName); // Update to capture the reputation earned when restarting work
                 lastActionRestart = Date.now(); repGainRatePerMs = (await getPlayerInfo(ns)).workRepGainRate; // Note: In order to get an accurate rep gain rate, we must wait for the first game tick (200ms) after starting work
                 while (repGainRatePerMs === (await getPlayerInfo(ns)).workRepGainRate && (Date.now() - lastActionRestart < 400)) await ns.sleep(1); // TODO: Remove this if/when the game bug is fixed
                 repGainRatePerMs = (await getPlayerInfo(ns)).workRepGainRate / 200 * (hasFocusPenaly && !shouldFocusAtWork ? 0.8 : 1 /* penalty if we aren't focused but don't have the aug to compensate */);
@@ -759,7 +759,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             const cancellationMult = backdoored ? 0.75 : 0.5; // We will lose some of our gained reputation when we stop working early
             repGainRatePerMs *= cancellationMult;
             // Actually measure how much reputation we've earned since our last update, to give a more accurate ETA including external sources of rep
-            let measuredRepGainRatePerMs = ((await getCompanyReputation(ns, factionName)) - lastRepMeasurement) / (Date.now() - lastStatusUpdateTime);
+            let measuredRepGainRatePerMs = ((await getCompanyReputation(ns, companyName)) - lastRepMeasurement) / (Date.now() - lastStatusUpdateTime);
             if (currentReputation > lastRepMeasurement + statusUpdateInterval * repGainRatePerMs * 2) // Detect a sudden increase in rep, but don't use it to update the expected rate
                 ns.print('SUCCESS: Reputation spike! (Perhaps a coding contract was just solved?) ETA reduced.');
             else if (lastStatusUpdateTime != 0 && Math.abs(measuredRepGainRatePerMs - repGainRatePerMs) / repGainRatePerMs > 0.05) // Stick to the game-provided rate if we measured something within 5% of that number
