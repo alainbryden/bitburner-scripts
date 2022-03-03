@@ -5,12 +5,11 @@ let ns;
 
 const sum = a => a.reduce((acc, x) => acc + x);
 
-let noBuys = true;
 let options;
 let totalCost = 0;
 const argsSchema = [
-  ['s', 'MAX'], // sell price
-  ['n', false], // no-buys
+  ['s', 'MAX'], // sell amount
+  ['n', false], // no buying, just cost print
   ['p', 0], // phase
 ];
 
@@ -35,18 +34,29 @@ export async function main(_ns) {
   ns = _ns;
 
   options = ns.flags(argsSchema);
-  noBuys = options.n;
-  const sellAmt = options.s;
-  const phase = options.p;
+  options.noBuys = options.n;
+  options.sellAmt = options.s;
+  options.phase = options.p;
 
-  const divName = ns.args[0];
-  const division = ns.corporation.getDivision(divName);
-
+  const corp = ns.corporation.getCorporation();
+  const division = pickDivision(corp);
   totalCost = 0;
   if (division.type == 'Agriculture') {
+    const ups = options.phase == 0 ? 2 : 5;
+    const upgradeGoals = {
+      'Smart Factories': ups,
+      'Smart Storage': 0,
+      'DreamSense': 0,
+      'Wilson Analytics': 0,
+      'Nuoptimal Nootropic Injector Implants': ups,
+      'Speech Processor Implants': ups,
+      'Neural Accelerators': ups,
+      'FocusWires': ups,
+      'ABC SalesBots': 0,
+      'Project Insight': 0,
+    }
     const employeeGoals = {
-      'other': phase == 1 ? [2, 2, 2, 1, 0] : [2, 2, 4, 1, 0],
-      // 'other': [2, 2, 1, 2, 0],
+      'other': options.phase == 0 ? [2, 1, 2, 1, 0] : [2, 1, 4, 1, 0],
     };
     const materialGoals = { // ???
       'Hardware': 930,
@@ -55,19 +65,22 @@ export async function main(_ns) {
       'Real Estate': 23000,
     }
 
-    ns.tprint(`Selling all Agri materials: ${sellAmt} per cycle`);
+    ns.tprint(`Selling all Agri materials: ${options.sellAmt} per cycle`);
     for (var cityName of division.cities) {
-      ns.corporation.sellMaterial(divName, cityName, 'Plants', sellAmt, 'MP');
-      ns.corporation.sellMaterial(divName, cityName, 'Food', sellAmt, 'MP');
+      ns.corporation.sellMaterial(division.name, cityName, 'Plants', options.sellAmt, 'MP');
+      ns.corporation.sellMaterial(division.name, cityName, 'Food', options.sellAmt, 'MP');
     }
-    await hireEmployees(division, employeeGoals);
-    await setupWarehouse(division, materialGoals, phase == 1 ? 600 : 1400);
+    await buyUpgrades(division, upgradeGoals);
+    await hireEmployees(division, employeeGoals, options.phase == 0);  // wait for morale before spending all our cash in first phase
+    await setupWarehouse(division, materialGoals, options.phase == 0 ? 600 : 1400);
   } else if (division.type == 'Tobacco') {
-    const amt = [10, 25, 30][phase];
-    const researchers = [10, 60, 90][phase];
-    const wh = 1; // make sure warehouse upgrade = wh*10
+    const aevum = [10, 25, 30][options.phase];
+    const researchers = [10, 60, 90][options.phase];
+    const upgradeGoals = {
+      'Nootropic': 10,
+    }
     const employeeGoals = {
-      'Aevum': [amt, amt, amt, amt, amt],
+      'Aevum': [aevum, aevum, aevum, aevum, aevum],
       'other': [2, 2, 2, 2, researchers],
     };
     const materialGoals = { //costs $40b
@@ -76,48 +89,93 @@ export async function main(_ns) {
       'AI Cores': 1200,
       'Real Estate': 40000,
     }
-    await hireEmployees(division, employeeGoals);
-    await setupWarehouse(division, materialGoals, 2500 * wh);
+    await buyUpgrades(division, upgradeGoals);
+    await hireEmployees(division, employeeGoals, false);
+    await setupWarehouse(division, materialGoals, options.phase == 0 ? 2500 : 10000);
   }
   ns.tprint(`Corp costs: ${formatMoney(totalCost)}`);
 }
 
-const jobNames = [
-  'Operations',
-  'Engineer',
-  'Business',
-  'Management',
-  'Research & Development',
-];
-
 function addCost(str, cost) {
   totalCost += cost;
-  ns.tprint(`${str} costs ${formatMoney(cost)}; total cost ${formatMoney(totalCost)}`);
+  ns.tprint(`${str}; costs ${formatMoney(cost)}; total cost ${formatMoney(totalCost)}`);
+}
+
+/** @param {Corporation} corp **/
+function pickDivision(corp) {
+  const cities = ['Aevum', 'Chongqing', 'Sector-12', 'New Tokyo', 'Ishima', 'Volhaven'];
+
+  let division;
+  if (corp.divisions.length == 0) {
+    ns.corporation.expandIndustry('Agriculture', 'A');
+    division = ns.corporation.getDivision('A');
+  } else if (corp.divisions.length == 1) {
+    division = corp.divisions[0];
+  } else {
+    division = corp.divisions.find(d => d.type == 'Tobacco');
+  }
+
+  // One-time setup.
+  if (!ns.corporation.hasUnlockUpgrade('Smart Supply'))
+    ns.corporation.unlockUpgrade('Smart Supply');
+  if (ns.corporation.getHireAdVertCount(division.name) < 1)
+    ns.corporation.hireAdVert(division.name);
+  for (var cityName of cities) {
+    if (!division.cities.includes(cityName))
+      ns.corporation.expandCity(division.name, cityName);
+    if (!ns.corporation.hasWarehouse(division.name, cityName))
+      ns.corporation.purchaseWarehouse(division.name, cityName);
+  }  
+  return ns.corporation.getDivision(division.name); // refresh
 }
 
 /** @param {Division} division **/
-async function hireEmployees(division, employeeGoals) {
+async function buyUpgrades(division, upgradeGoals) {
+  let cost = 0;
+  for (var up in upgradeGoals) {
+    const goal = upgradeGoals[up] || 0;
+    cost += ns.corporation.getUpgradeLevelCost(up) * Math.max(0, goal - ns.corporation.getUpgradeLevel(up));
+    if (!options.noBuys) {
+      while (ns.corporation.getUpgradeLevel(up) < goal)
+        ns.corporation.levelUpgrade(up);
+    }
+  }
+  addCost(`Upgrading stuff (estimated)`, cost);
+}
+
+/** @param {Division} division **/
+async function hireEmployees(division, employeeGoals, waitForMorale) {
+  // Upgrade office size first.
   for (var cityName of division.cities) {
     let office = ns.corporation.getOffice(division.name, cityName);
     let goals = employeeGoals[cityName] || employeeGoals['other'];
     let goalSize = sum(goals);
     let employeesNeeded = goalSize - office.size;
     if (employeesNeeded > 0) {
-      addCost(`Upgrading ${division.name};${cityName} to ${goalSize}`,
+      addCost(`Hiring employees in ${division.name};${cityName} to ${goalSize}`,
         ns.corporation.getOfficeSizeUpgradeCost(division.name, cityName, employeesNeeded));
-      if (!noBuys)
+      if (!options.noBuys)
         ns.corporation.upgradeOfficeSize(division.name, cityName, employeesNeeded);
     }
-    ns.tprint(`Hiring ${employeesNeeded} employees in ${cityName}`);
-    while (employeesNeeded-- > 0)
-      ns.corporation.hireEmployee(division.name, cityName);
+  }
+  // Hire and assign employees.
+  let jobPromises = [];
+  for (var cityName of division.cities) {
+    while (ns.corporation.hireEmployee(division.name, cityName))
+      ;
     while (await assignJob(division, cityName, employeeGoals))
+      ;
+  }
+  for (var cityName of division.cities) {
+    while (waitForMorale && await waitForEmployeeMorale(division, cityName))
       ;
   }
 }
 
 /** @param {Division} division **/
 async function assignJob(division, cityName, employeeGoals) {
+  const jobNames = ['Operations', 'Engineer', 'Business', 'Management', 'Research & Development'];
+
   let office = ns.corporation.getOffice(division.name, cityName);
   let goals = employeeGoals[cityName] || employeeGoals['other'];
   let jobCounts = {};
@@ -140,6 +198,21 @@ async function assignJob(division, cityName, employeeGoals) {
 }
 
 /** @param {Division} division **/
+async function waitForEmployeeMorale(division, cityName) {
+  let office = ns.corporation.getOffice(division.name, cityName);
+  const avgProd = office.employees.reduce((total, ename) => {
+    const e = ns.corporation.getEmployee(division.name, cityName, ename);
+    return total + (e.ene + e.hap + e.mor)/3 / office.employees.length;
+  }, 0);
+  if (avgProd < 95) {
+    ns.tprint(`Waiting for employee morale in to hit 95%. Current average in ${cityName}: ${avgProd}.`);
+    await ns.sleep(10000);
+    return true;
+  }
+  return false;
+}
+
+/** @param {Division} division **/
 async function setupWarehouse(division, materialGoals, warehouseSize) {
   for (var cityName of division.cities) {
     let warehouse = ns.corporation.getWarehouse(division.name, cityName);
@@ -147,7 +220,7 @@ async function setupWarehouse(division, materialGoals, warehouseSize) {
     let timesToBuy = Math.max(0, warehouseSize - warehouse.size) / perLevel;
     addCost(`Ensuring ${warehouseSize} storage in ${cityName} (${timesToBuy} upgrades)`,
       ns.corporation.getUpgradeWarehouseCost(division.name, cityName) * timesToBuy);
-    if (!noBuys) {
+    if (!options.noBuys) {
       while (true) {
         let warehouse = ns.corporation.getWarehouse(division.name, cityName);
         if (warehouse.size >= warehouseSize)
@@ -162,12 +235,13 @@ async function setupWarehouse(division, materialGoals, warehouseSize) {
       for (var matName of Object.keys(materialGoals)) {
         let mat = ns.corporation.getMaterial(division.name, cityName, matName);
         let need = i == 1 ? 0 : Math.max(0, materialGoals[matName] - mat.qty);
-        ns.tprint(`Buying ${need} ${matName} in ${cityName}; have ${mat.qty}, want ${materialGoals[matName]}`);
-        if (!noBuys)
+        if (i == 0 && need > 0)
+          ns.tprint(`Buying ${need} ${matName} in ${cityName}; have ${mat.qty}, want ${materialGoals[matName]}`);
+        if (!options.noBuys)
           ns.corporation.buyMaterial(division.name, cityName, matName, need / 10);
       }
     }
-    if (!noBuys)
+    if (!options.noBuys)
       await ns.sleep(10000);
   }
 }
