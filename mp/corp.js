@@ -59,10 +59,10 @@ export async function main(_ns) {
       'other': options.phase == 0 ? [2, 1, 2, 1, 0] : [2, 1, 4, 1, 0],
     };
     const materialGoals = { // ???
-      'Hardware': 930,
-      'Robots': 72,
-      'AI Cores': 630,
-      'Real Estate': 23000,
+      'Hardware': 450,
+      'Robots': 35,
+      'AI Cores': 300,
+      'Real Estate': 12000,
     }
 
     ns.tprint(`Selling all Agri materials: ${options.sellAmt} per cycle`);
