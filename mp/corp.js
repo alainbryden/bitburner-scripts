@@ -8,9 +8,10 @@ const sum = a => a.reduce((acc, x) => acc + x);
 let options;
 let totalCost = 0;
 const argsSchema = [
-  ['s', 'MAX'], // sell amount
+  ['s', '0'], // sell amount (can be MAX)
   ['n', false], // no buying, just cost print
   ['p', 0], // phase
+  ['fu', null], // force upgrades to this
 ];
 
 // Step 1: Agri phase=0
@@ -42,7 +43,7 @@ export async function main(_ns) {
   const division = pickDivision(corp);
   totalCost = 0;
   if (division.type == 'Agriculture') {
-    const ups = options.phase == 0 ? 2 : 5;
+    const ups = options.fu || (options.phase == 0 ? 2 : 5);
     const upgradeGoals = {
       'Smart Factories': ups,
       'Smart Storage': 0,
@@ -65,7 +66,7 @@ export async function main(_ns) {
       'Real Estate': 12000,
     }
 
-    ns.tprint(`Selling all Agri materials: ${options.sellAmt} per cycle`);
+    ns.tprint(`Selling all Agri materials: ${options.s} per cycle`);
     for (var cityName of division.cities) {
       ns.corporation.sellMaterial(division.name, cityName, 'Plants', options.sellAmt, 'MP');
       ns.corporation.sellMaterial(division.name, cityName, 'Food', options.sellAmt, 'MP');
@@ -76,9 +77,19 @@ export async function main(_ns) {
   } else if (division.type == 'Tobacco') {
     const aevum = [10, 25, 30][options.phase];
     const researchers = [10, 60, 90][options.phase];
+    const ups = options.fu || [10, 25, 75][options.phase];
     const upgradeGoals = {
-      'Nootropic': 10,
-    }
+      'Smart Factories': 10,
+      'Smart Storage': 10,
+      'DreamSense': 0,
+      'Wilson Analytics': 0,
+      'Nuoptimal Nootropic Injector Implants': ups,
+      'Speech Processor Implants': ups,
+      'Neural Accelerators': ups,
+      'FocusWires': ups,
+      'ABC SalesBots': 0,
+      'Project Insight': 0,
+    };
     const employeeGoals = {
       'Aevum': [aevum, aevum, aevum, aevum, aevum],
       'other': [2, 2, 2, 2, researchers],
