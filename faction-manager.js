@@ -13,6 +13,7 @@ let playerData = null;
 let stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let joinedFactions = [];
 let ownedAugmentations = [];
+let simulatedOwnedAugmentations = [];
 let factionData = {};
 let favorToDonate;
 let gangFaction = null;
@@ -36,7 +37,8 @@ const argsSchema = [
     ['verbose', true], // Same as above
     ['i', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
     ['ignore-player-data', false], // Same as above
-    ['ignore-stocks', false], // Set to true to ignore the liquidation value of stocks currentlyheld when running
+    ['ignore-stocks', false], // Set to true to ignore the liquidation value of stocks currently held when running
+    ['ignore-stanek', false], // Set to true to ignore the fact that stanek is not yet taken before purchasing your first augs
     ['ignore-faction', []], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
     ['u', false], // When displaying total aug stats for a faction, only include augs not given by a faction further up the list
     ['unique', false], // Same as above
@@ -112,8 +114,8 @@ export async function main(ns) {
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
     log(ns, 'In factions: ' + joinedFactions);
     // Get owned augmentations (whether they've been installed or not). Ignore strNF because you can always buy more.
-    ownedAugmentations = ignorePlayerData ? [] :
-        (await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt')).filter(a => a != strNF);
+    ownedAugmentations = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt');
+    simulatedOwnedAugmentations = ignorePlayerData ? [] : ownedAugmentations.filter(a => a != strNF);
     if (options['neuroflux-disabled']) omitAugs.push(strNF);
     log(ns, 'Getting all faction data...');
     favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt')
@@ -131,7 +133,10 @@ export async function main(ns) {
     }
     await manageUnownedAugmentations(ns, omitAugs, verbose);
     displayFactionSummary(ns, verbose, sort, options.u || options.unique, afterFactions, options['hide-stat']);
-    if (options.purchase && purchaseableAugs)
+    if (options.purchase && ownedAugmentations.length <= 1 && 13 in ownedSourceFiles && !options['ignore-stanek'])
+        log(ns, `WARNING: You have not yet accepted Stanek's Gift from the church in Chongqing. Purchasing augs will ` +
+            `prevent you from doing so for the rest of this BN. (Run with '--ignore-stanek' to bypass this warning.)`, true);
+    else if (options.purchase && purchaseableAugs)
         await purchaseDesiredAugs(ns, verbose);
 }
 
@@ -194,7 +199,7 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
         donationsUnlocked: dictFactionFavors[faction] >= favorToDonate && faction !== gangFaction // Can't donate to gang factions for rep
             && faction !== "Church of the Machine God", // Can't donate to this faction either
         augmentations: dictFactionAugs[faction],
-        unownedAugmentations: function (includeNf = false) { return this.augmentations.filter(aug => !ownedAugmentations.includes(aug) && (aug != strNF || includeNf)) },
+        unownedAugmentations: function (includeNf = false) { return this.augmentations.filter(aug => !simulatedOwnedAugmentations.includes(aug) && (aug != strNF || includeNf)) },
         mostExpensiveAugCost: function () { return this.augmentations.map(augName => augmentationData[augName]).reduce((max, aug) => Math.max(max, aug.price), 0) },
         totalUnownedMults: function () {
             return this.unownedAugmentations().map(augName => augmentationData[augName])
@@ -215,7 +220,7 @@ async function updateAugmentationData(ns, desiredStatsFilters, desiredAugs) {
         desiredStatsFilters = ownedAugmentations.length < 40 ? default_desired_stats : ['_']; // While few augs are installed, use the default priority stats filter, otherwise, treat all augs as desired
     augmentationData = Object.fromEntries(augmentationNames.map(aug => [aug, {
         name: aug,
-        owned: ownedAugmentations.includes(aug),
+        owned: simulatedOwnedAugmentations.includes(aug),
         reputation: dictAugRepReqs[aug],
         price: dictAugPrices[aug],
         stats: dictAugStats[aug],
@@ -384,7 +389,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
     do {
         subsetLength = subset.length
         for (const aug of subset.slice())
-            if (aug.prereqs.length > 0 && aug.prereqs.some(prereq => !(ownedAugmentations.includes(prereq) || subset.some(a => a.name === prereq))))
+            if (aug.prereqs.length > 0 && aug.prereqs.some(prereq => !(simulatedOwnedAugmentations.includes(prereq) || subset.some(a => a.name === prereq))))
                 subset.splice(subset.indexOf(aug), 1);
     } while (subsetLength !== subset.length);
     // Sort the filtered subset into its optimal purchase order
@@ -557,7 +562,7 @@ function displayFactionSummary(ns, alsoPrintToTerminal, sortBy, unique, override
     // Apply any override faction options
     joinedFactions.push(...overrideFinishedFactions.filter(f => !joinedFactions.includes(f)));
     for (const faction of overrideFinishedFactions)
-        ownedAugmentations.push(...factionData[faction].unownedAugmentations());
+        simulatedOwnedAugmentations.push(...factionData[faction].unownedAugmentations());
     // Grab disctinct augmentations stats 
     const relevantAugStats = allAugStats.filter(s => !excludedStats.find(excl => s.includes(excl)) &&
         undefined !== summaryFactions.find(f => f.unownedAugmentations().find(aug => 1 != (augmentationData[aug].stats[s] || 1))));
@@ -594,16 +599,16 @@ function displayFactionSummary(ns, alsoPrintToTerminal, sortBy, unique, override
         for (const faction of summaryFactions.sort(sortFunction))
             summary += getSeparator(faction) + getFactionSummary(faction);
     else { // Each faction's stats computed as though the faction sorted above it was joined and bought out first, so only showing new augs
-        const actualOwnedAugs = ownedAugmentations;
+        const actualOwnedAugs = simulatedOwnedAugmentations;
         const actualUnjoinedFactions = summaryFactions;
         do {
             summaryFactions.sort(sortFunction);
             const faction = summaryFactions.shift();
             summary += getSeparator(faction) + getFactionSummary(faction);
             joinedFactions.push(faction.name);  // Simulate that we've now joined and bought out all this factions augs
-            ownedAugmentations.push(...faction.unownedAugmentations())
+            simulatedOwnedAugmentations.push(...faction.unownedAugmentations())
         } while (summaryFactions.length > 0)
-        ownedAugmentations = actualOwnedAugs; // Restore the original lists once the simulation is complete
+        simulatedOwnedAugmentations = actualOwnedAugs; // Restore the original lists once the simulation is complete
         summaryFactions = actualUnjoinedFactions;
     }
     log(ns, summary, alsoPrintToTerminal);
