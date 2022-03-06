@@ -51,7 +51,7 @@ export async function main(ns) {
                     `indicating that it has been charged while there was ${formatRam(2 * fragment.avgCharge)} or more free RAM on home, ` +
                     `but currently there is only ${formatRam(availableRam)} available, which would reduce the average charge and lower your stats. ` +
                     `This update will be skipped, and you should free up RAM on home to resume charging.`, false, 'warning');
-                ns.sleep(1000);
+                await ns.sleep(1000);
                 continue;
             }
             const pid = ns.run(getFilePath('/stanek.js.charge.js'), threads, fragment.x, fragment.y);
