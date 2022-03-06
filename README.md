@@ -30,7 +30,7 @@ You may find it useful to set up one or more aliases with the default options yo
   - Doesn't save many keystrokes, but worth highlighting this script. You can run e.g. `reserve 100m` to globally reserve this much money. All scripts with an auto-spend component should respect this amount and leave it unspent. This is useful if e.g. you're saving up to buy something (SQLInject.exe, a big server, the next home RAM upgrade), saving money to spend at the casino, etc...
 - `alias liquidate="home; run stockmaster.js --liquidate; run spend-hacknet-hashes.js --liquidate;"`
   - Quickly sell all your stocks and hacknet hashes for money so that you can spend it (useful before resetting)
-- `facman="run faction-manager.js"`
+- `alias facman="run faction-manager.js"`
   - Quickly see what augmentations you can afford to purchase. Then use `facman --purchase` to pull the trigger.
 - `alias spend-on-ram="run Tasks/ram-manager.js --reserve 0 --budget 1 --tail"`
 - `alias spend-on-gangs="run gangs.js --reserve 0 --augmentations-budget 1 --equipment-budget 1 --tail"`
