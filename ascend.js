@@ -105,10 +105,11 @@ export async function main(ns) {
     // WAIT: For money to stop decreasing, so we know that external scripts have bought what they could.
     log(ns, 'Waiting for purchasing to stop...', true, 'info');
     let money = 0, lastMoney = 0, ticksWithoutPurchases = 0;
-    while (ticksWithoutPurchases < 25) { // 25 * 200ms (game tick time) = 5 seconds
+    while (ticksWithoutPurchases < 10) { // 10 * 200ms (game tick time) ~= 2 seconds
         while (lastMoney == (money = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable('home')`, '/Temp/player-money.txt')))
             await ns.sleep(50); // Wait for game to tick (money to change)
         ticksWithoutPurchases = money < lastMoney ? 0 : ticksWithoutPurchases + 1;
+        lastMoney = money;
     }
 
     // FINALLY: If configured, soft reset
