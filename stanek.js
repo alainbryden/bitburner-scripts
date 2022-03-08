@@ -7,6 +7,7 @@ const argsSchema = [
     ['max-charges', 100], // Stop charging when all fragments have this many charges (diminishing returns - num charges is ^0.07 )
     ['on-completion-script', 'daemon.js'], // Spawn this script when max-charges is reached
     ['on-completion-script-args', []], // Optional args to pass to the script when launched
+    ['no-tail', false], // By default, keeps a tail window open, because it's pretty important to know when this script is running (can't use home for anything else)
 ];
 
 export function autocomplete(data, args) {
@@ -24,6 +25,8 @@ export async function main(ns) {
     const maxCharges = options['max-charges']; // Don't bother adding charges beyond this amount
     const idealReservedRam = 32; // Reserve this much RAM, if it wouldnt make a big difference anyway
     while (true) {
+        if (!options['no-tail'])
+            ns.tail();
         // Make sure we have the latest information about all fragments
         let fragments = await getNsDataThroughFile(ns, 'ns.stanek.activeFragments()', '/Temp/stanek-fragments.txt'); //ns.stanek.activeFragments();
         if (fragments.length == 0) {
