@@ -9,10 +9,11 @@ const sum = a => a.reduce((acc, x) => acc + x);
 let options;
 let totalCost = 0;
 const argsSchema = [
-  ['s', '0'], // sell amount (can be MAX)
+  ['s', null], // sell amount (can be MAX)
   ['n', false], // no buying, just cost print
   ['p', 0], // phase
   ['fu', null], // force upgrades to this
+  ['mm', 1], // materials multiplier
 ];
 
 // Step 1: Agri phase=0
@@ -44,6 +45,17 @@ export async function main(_ns) {
   const division = pickDivision(corp);
   const divName = divName;
   totalCost = 0;
+
+  let aDiv = corp.divisions.find(d => d.type == 'Agriculture');
+  let tDiv = corp.divisions.find(d => d.type == 'Tobacco');
+  if (options.s) {
+    ns.tprint(`Selling all Agri materials: ${options.s} per cycle`);
+    for (var cityName of aDiv.cities) {
+      ns.corporation.sellMaterial(aDiv.name, cityName, 'Plants', options.sellAmt, 'MP');
+      ns.corporation.sellMaterial(aDiv.name, cityName, 'Food', options.sellAmt, 'MP');
+    }
+  }
+
   if (division.type == 'Agriculture') {
     const ups = options.fu || (options.phase == 0 ? 2 : 5);
     const upgradeGoals = {
@@ -62,22 +74,17 @@ export async function main(_ns) {
       'other': options.phase == 0 ? [2, 1, 2, 1, 0] : [2, 1, 4, 1, 0],
     };
     const materialGoals = { // ???
-      'Hardware': 450,
-      'Robots': 35,
-      'AI Cores': 300,
-      'Real Estate': 12000,
+      'Hardware': 450 * options.mm,
+      'Robots': 35 * options.mm,
+      'AI Cores': 300 * options.mm,
+      'Real Estate': 12000 * options.mm,
     }
 
-    ns.tprint(`Selling all Agri materials: ${options.s} per cycle`);
-    for (var cityName of cities) {
-      ns.corporation.sellMaterial(divName, cityName, 'Plants', options.sellAmt, 'MP');
-      ns.corporation.sellMaterial(divName, cityName, 'Food', options.sellAmt, 'MP');
-    }
-    await buyUpgrades(divName, upgradeGoals);
-    await hireEmployees(divName, employeeGoals, options.phase == 0);  // wait for morale before spending all our cash in first phase
-    await setupWarehouse(divName, materialGoals, options.phase == 0 ? 600 : 1400);
+    await buyUpgrades(division, upgradeGoals);
+    await hireEmployees(division, employeeGoals, options.phase == 0);  // wait for morale before spending all our cash in first phase
+    await setupWarehouse(division, materialGoals, options.phase == 0 ? 600 : 1400);
   } else if (division.type == 'Tobacco') {
-    const aevum = [10, 25, 30][options.phase];
+    const aevum = [10, 25, 40][options.phase];
     const researchers = [10, 60, 90][options.phase];
     const ups = options.fu || [10, 25, 75][options.phase];
     const upgradeGoals = {
@@ -97,10 +104,10 @@ export async function main(_ns) {
       'other': [2, 2, 2, 2, researchers],
     };
     const materialGoals = { //costs $40b
-      'Hardware': 2000,
-      'Robots': 600,
-      'AI Cores': 1200,
-      'Real Estate': 40000,
+      'Hardware': 2000 * options.mm,
+      'Robots': 600 * options.mm,
+      'AI Cores': 1200 * options.mm,
+      'Real Estate': 40000 * options.mm,
     }
     await buyUpgrades(divName, upgradeGoals);
     await hireEmployees(divName, employeeGoals, false);
