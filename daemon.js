@@ -164,14 +164,20 @@ export function autocomplete(data, args) {
 /** @param {NS} ns **/
 export async function main(ns) {
     _ns = ns;
-    daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
-    await updatePlayerStats();
-    dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
-    log("The following source files are active: " + JSON.stringify(dictSourceFiles));
-    //ns.disableLog('ALL');
     disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan']);
 
+    // Ensure no other copies of this script are running (they share memory)
+    const scriptName = ns.getScriptName();
+    const competingDaemons = ns.ps("home").filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
+    if (competingDaemons.length > 0) {
+        const strDaemonPids = JSON.stringify(competingDaemons.map(p => p.pid));
+        log(`WARN: Detected ${competingDaemons.length} other '${scriptName}' instance is running at home (pids: ${strDaemonPids}) - shutting it down...`, true, 'warning')
+        const killPid = await runCommand(ns, `${strDaemonPids}.forEach(ns.kill)`, '/Temp/kill-daemons.js');
+        await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), killPid);
+    }
+
     // Reset global vars on startup since they persist in memory in certain situations (such as on Augmentation)
+    daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
     lastUpdate = "";
     lastUpdateTime = Date.now();
     maxTargets = 2;
@@ -184,6 +190,10 @@ export async function main(ns) {
     tools = [];
     toolsByShortName = [];
     psCache = [];
+
+    await updatePlayerStats();
+    dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
+    log("The following source files are active: " + JSON.stringify(dictSourceFiles));
 
     // Process command line args (if any)
     options = ns.flags(argsSchema);
