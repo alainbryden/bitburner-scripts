@@ -175,7 +175,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
  */
 export async function runCommand(ns, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
     checkNsInstance(ns, '"runCommand"');
-    if (!verbose) disableLogs(ns, ['run', 'sleep']);
+    if (!verbose) disableLogs(ns, ['run', 'asleep']);
     return await runCommand_Custom(ns, ns.run, command, fileName, verbose, maxRetries, retryDelayMs, ...args);
 }
 
@@ -219,12 +219,12 @@ export async function waitForProcessToComplete(ns, pid, verbose) {
  **/
 export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose) {
     checkNsInstance(ns, '"waitForProcessToComplete_Custom"');
-    if (!verbose) disableLogs(ns, ['sleep']);
+    if (!verbose) disableLogs(ns, ['asleep']);
     // Wait for the PID to stop running (cheaper than e.g. deleting (rm) a possibly pre-existing file and waiting for it to be recreated)
     for (var retries = 0; retries < 1000; retries++) {
         if (!fnIsAlive(pid)) break; // Script is done running
         if (verbose && retries % 100 === 0) ns.print(`Waiting for pid ${pid} to complete... (${retries})`);
-        await ns.sleep(10);
+        await ns.asleep(10);
     }
     // Make sure that the process has shut down and we haven't just stopped retrying
     if (fnIsAlive(pid)) {
@@ -251,7 +251,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             const errorLog = `${fatal ? 'FAIL' : 'WARN'}: (${maxRetries} retries remaining): ${String(error)}`
             log(ns, errorLog, fatal, !verbose ? undefined : (fatal ? 'error' : 'warning'))
             if (fatal) throw error;
-            await ns.sleep(retryDelayMs);
+            await ns.asleep(retryDelayMs);
             retryDelayMs *= backoffRate;
         }
     }

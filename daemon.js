@@ -3,7 +3,7 @@ import {
     scanAllServers, hashCode, disableLogs, log as logHelper, getFilePath,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
-    getFnRunViaNsExec, getFnIsAliveViaNsPs
+    getFnRunViaNsExec, getFnIsAliveViaNsPs, autoRetry
 } from './helpers.js'
 
 // the purpose of the daemon is: it's our global starting point.
@@ -164,7 +164,8 @@ export function autocomplete(data, args) {
 /** @param {NS} ns **/
 export async function main(ns) {
     _ns = ns;
-    disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan']);
+    disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan', 'asleep']);
+    daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
 
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
@@ -177,7 +178,6 @@ export async function main(ns) {
     }
 
     // Reset global vars on startup since they persist in memory in certain situations (such as on Augmentation)
-    daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
     lastUpdate = "";
     lastUpdateTime = Date.now();
     maxTargets = 2;
@@ -359,10 +359,34 @@ async function tryRunTool(ns, tool) {
     return false;
 }
 
+let dictScriptsRun = {}; // Keep a cache of every script run on every host, and sleep if it's our first run (to work around a bitburner bug)
+
+/** Workaround a current bitburner bug by yeilding briefly to the game after executing something.
+ * @param {NS} ns 
+ * @param {String} script - Filename of script to execute.
+ * @param {int} host - Hostname of the target server on which to execute the script.
+ * @param {int} numThreads - Optional thread count for new script. Set to 1 by default. Will be rounded to nearest integer.
+ * @param args - Additional arguments to pass into the new script that is being run. Note that if any arguments are being passed into the new script, then the third argument numThreads must be filled in with a value.
+ * @returns — Returns the PID of a successfully started script, and 0 otherwise.
+ * Workaround a current bitburner bug by yeilding briefly to the game after executing something. **/
+async function exec(ns, script, host, numThreads, ...args) {
+    // The Bitburner "does not have a main function" bug (https://github.com/danielyxie/bitburner/issues/1714) appears to only happen the first time a script is called after the game has been started, or the script has been saved / copied
+    const key = `${host}|${script}`;
+    const firstRun = !(key in dictScriptsRun);
+    dictScriptsRun[key] = true;
+    // Try to run the script with auto-retry if it fails to start
+    const pid = await autoRetry(ns, async () => {
+        const p = ns.exec(script, host, numThreads, ...args)
+        if (firstRun) await ns.asleep(5); // Reports have come in that putting a brief sleep after the calls to exec works around the issue
+        return p;
+    }, p => p !== 0, () => `Attempt to exec ${script} on ${host} returned no pid.\nYou may be too low on RAM, or the script may be invalid.`);
+    return pid; // Caller is responsible for handling errors if final pid returned is 0 (indicating failure)
+}
+
 /** @param {NS} ns 
  * Execute an external script that roots a server, and wait for it to complete. **/
 async function doRoot(ns, server) {
-    const pid = ns.exec(getFilePath('/Tasks/crack-host.js'), 'home', 1, server.name);
+    const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), 'home', 1, server.name);
     await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
 }
 
@@ -374,7 +398,7 @@ async function doTargetingLoop(ns) {
     //var isHelperListLaunched = false; // Uncomment this and related code to keep trying to start helpers
     do {
         loops++;
-        if (loops > 0) await ns.sleep(loopInterval);
+        if (loops > 0) await ns.asleep(loopInterval); // Use asleep to avoid an error if another daemon is spawned to kill this one while it's asleep.
         try {
             var start = Date.now();
             psCache = []; // Clear the cache of the process list we update once per loop           
@@ -549,7 +573,7 @@ async function doTargetingLoop(ns) {
                 let time = await kickstartHackXp(ns, 1.00, verbose);
                 loopInterval = Math.min(1000, time || 1000); // Wake up earlier if we're almost done an XP cycle
             } else if (!isWorkCapped() && lowUtilizationIterations > 10) {
-                let expectedRunTime = getXPFarmServer().timeToHack();
+                let expectedRunTime = getXPFarmTarget().timeToHack();
                 let freeRamToUse = (expectedRunTime < loopInterval) ? // If expected runtime is fast, use as much RAM as we want, it'll all be free by our next loop.
                     1 - (1 - lowUtilizationThreshold) / (1 - utilizationPercent) : // Take us just up to the threshold for 'lowUtilization' so we don't cause unecessary server purchases
                     1 - (1 - maxUtilizationPreppingAboveHackLevel - 0.05) / (1 - utilizationPercent); // Otherwise, leave more room (e.g. for scheduling new batches.)
@@ -600,9 +624,11 @@ async function doTargetingLoop(ns) {
             //log('Prepping: ' + prepping.map(s => s.name).join(', '))
             //log('targeting: ' + targeting.map(s => s.name).join(', '))
         } catch (err) {
-            log('WARNING: Caught an error in the targeting loop: ' + err, true, 'warning');
+            // Sometimes a script is shut down by throwing an object contianing internal game script info. Detect this and exit silently
+            if (err?.env?.stopFlag) return;
             // Note netscript errors are raised as a simple string (no message property)
-            var errorMessage = String(err.message || err);
+            var errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
+            log(`WARNING: Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
             // Catch errors that appear to be caused by deleted servers, and remove the server from our lists.
             const expectedDeletedHostPhrase = "Invalid IP/hostname: ";
             let expectedErrorPhraseIndex = errorMessage.indexOf(expectedDeletedHostPhrase);
@@ -639,7 +665,7 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt');
     dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt');
     // Get the information about the relative profitability of each server
-    const pid = ns.exec(getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
+    const pid = await exec(ns, getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
     dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
     if (!dictServerProfitInfo) return log(ns, "WARN: analyze-hack info unavailable.");
@@ -1186,11 +1212,10 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
             if (verbose)
                 log(`Copying ${tool.name} from ${daemonHost} to ${targetServer.name} so that it can be executed remotely.`);
             await getNsDataThroughFile(ns, `await ns.scp(${JSON.stringify(missing_scripts)}, '${daemonHost}', '${targetServer.name}')`, '/Temp/copy-scripts.txt')
-            await ns.sleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
+            await ns.asleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
             just_copied = true;
         }
-        let pid = ns.exec(tool.name, targetServer.name, maxThreadsHere, ...(args || []));
-        if (just_copied) await ns.sleep(5); // I don't know why this would make a difference (based on my understanding of the above issue), but hear reports that putting a sleep after the call to exec works around the problem
+        let pid = await exec(ns, tool.name, targetServer.name, maxThreadsHere, ...(args || []));
         if (pid == 0) {
             log(`ERROR: Failed to exec ${tool.name} on server ${targetServer.name} with ${maxThreadsHere} threads`, false, 'error');
             return false;
@@ -1262,7 +1287,7 @@ async function prepServer(ns, currentTarget) {
     return prepSucceeding;
 }
 
-function getXPFarmServer(all = false) {
+function getXPFarmTarget(all = false) {
     const hackableServers = serverListByMaxRam.filter(server => (server.hasRoot() || server.canCrack()) && server.canHack() && server.shouldHack())
         .sort((a, b) => b.getExpPerSecond() - a.getExpPerSecond());
     return all ? hackableServers : hackableServers[0];
@@ -1275,15 +1300,15 @@ let lastCycleTotalRam = 0; // Cache of total ram on the server to check whether 
  * Gain a bunch of hack XP early after a new Augmentation by filling a bunch of RAM with weaken() against a relatively easy target */
 async function kickstartHackXp(ns, percentOfFreeRamToConsume = 1, verbose = false, targets = undefined) {
     if (!xpOnly && !loopingMode)
-        return await scheduleHackExpCycle(ns, getXPFarmServer(), percentOfFreeRamToConsume, verbose, false); // Grind some XP from the single best target for farming XP
-    // Otherwise, target multiple servers until we can't schedule any more. Each next best target should get the next best (biggest) server
+        return await scheduleHackExpCycle(ns, getXPFarmTarget(), percentOfFreeRamToConsume, verbose, false); // Grind some XP from the single best target for farming XP
+    // Otherwise, target multiple servers until we can't schedule any more. Each next best host should get the next best (biggest) server
     sortServerList("totalram");
     getTool("grow").isThreadSpreadingAllowed = true; // Only true when in XP mode - where each grow thread is expected to give 1$. "weak" can always spread.   
     var jobHosts = serverListByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 128); // Get the set of servers that can be reasonably expected to host decent-sized jobs
     if (jobHosts.length == 0) jobHosts = serverListByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 16); // Lower our standards if we're early-game and nothing qualifies
     var homeRam = Math.max(0, ns.getServerMaxRam("home") - homeReservedRam); // If home ram is large enough, the XP contributed by additional targets is insignificant compared to the risk of increased lag/latency.
-    targets = Math.min(maxTargets, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
-    let targetsByExp = getXPFarmServer(true);
+    let targetsByExp = getXPFarmTarget(true);
+    targets = Math.min(maxTargets, targetsByExp.length, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
     if (options.i) { // To farm intelligence, use manual hack on only the current connected server
         if (currentTerminalServer.name != "home") {
             targets = 1;
