@@ -141,6 +141,7 @@ export async function main(ns) {
         const thresholdToSell = pre4s ? options['pre-4s-sell-threshold-return'] : options['sell-threshold'];
         if (myStocks.length > 0)
             doStatusUpdate(ns, allStocks, myStocks, hudElement);
+        else if (hudElement) hudElement.innerText = "$0.000 ";
         if (pre4s && allStocks[0].priceHistory.length < minTickHistory) {
             log(ns, `Building a history of stock prices (${allStocks[0].priceHistory.length}/${minTickHistory})...`);
             await ns.sleep(sleepInterval);
@@ -548,7 +549,7 @@ function initializeHud() {
     htmlDisplay = stockValueTracker.querySelector("#stock-display-1");
     // Display label and default value
     stockValueTracker.querySelectorAll("p")[0].innerText = "Stock";
-    htmlDisplay.innerText = "$0.000"
+    htmlDisplay.innerText = "$0.000 "
     // Insert our element right after Money
     customElements.parentElement.insertBefore(stockValueTracker, customElements.parentElement.childNodes[2]);
     return htmlDisplay;
