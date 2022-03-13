@@ -1,10 +1,12 @@
 import { runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
 
 const argsSchema = [
+    ['reset', false], // By default (for now) does not actually install augmentations unless you use this flag
+    // Note: --force option results in passing faction-manager.js the flag to ignore stanek's gift not being accepted
     ['force', false], // There will be sanity checks - use this option to bypass them
     ['scripts-to-kill', ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-factions.js', 'farm-intelligence.js']], // Kill these money-spending scripts at launch
-    ['reset', false], // By default (for now) does not actually install augmentations unless you use this flag
-    ['on-reset-script', 'daemon.js'], // Spawn this script after installing augmentations (Note: Args not supported)
+    // Spawn this script after installing augmentations (Note: Args not supported)
+    ['on-reset-script', null], // By default, will run Stanek if you have stanek's gift, otherwise daemon.
 ];
 
 export function autocomplete(data, args) {
@@ -60,7 +62,7 @@ export async function main(ns) {
     // STEP 3: Buy as many augmentations as possible
     log(ns, 'Purchasing augmentations...', true, 'info');
     const facmanArgs = ['--purchase', '-v'];
-    if (options.force) facmanArgs.push('--force')
+    if (options.force) facmanArgs.push('--ignore-stanek')
     pid = ns.run('faction-manager.js', 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
@@ -116,6 +118,9 @@ export async function main(ns) {
     log(ns, '\nCatch you on the flippity-flip\n', true, 'success');
     if (options.reset) {
         await ns.sleep(1000); // Pause for effect?
-        await runCommand(ns, `ns.installAugmentations('${options['on-reset-script']}')`, '/Temp/soft-reset.js');
+        const resetScript = options['on-reset-script'] ??
+            // Default script (if none is specified) is stanek.js if we have it (which in turn will spawn daemon.js when done)
+            (purchasedAugmentations.includes(`Stanek's Gift - Genesis`) ? 'stanek.js' : 'daemon.js');
+        await runCommand(ns, `ns.installAugmentations('${resetScript}')`, '/Temp/soft-reset.js');
     }
 }
