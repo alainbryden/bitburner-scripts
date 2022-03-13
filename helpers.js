@@ -12,12 +12,15 @@ export function formatMoney(num, maxSignificantFigures = 6, maxDecimalPlaces = 3
 const symbols = ["", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "e33", "e36", "e39"];
 
 /**
- * Return a formatted representation of the monetary amount using scale sympols (e.g. 6.50M) 
+ * Return a formatted representation of the monetary amount using scale sympols (e.g. 6.50M)
  * @param {number} num - The number to format
  * @param {number=} maxSignificantFigures - (default: 6) The maximum significant figures you wish to see (e.g. 123, 12.3 and 1.23 all have 3 significant figures)
  * @param {number=} maxDecimalPlaces - (default: 3) The maximum decimal places you wish to see, regardless of significant figures. (e.g. 12.3, 1.2, 0.1 all have 1 decimal)
  **/
 export function formatNumberShort(num, maxSignificantFigures = 6, maxDecimalPlaces = 3) {
+    let numThousands = Math.floor(Math.log10(num) / Math.log10(1000));
+    while (symbols.length < numThousands + 1) 
+        symbols.push(`e${numThousands * 3}`);
     for (var i = 0, sign = Math.sign(num), num = Math.abs(num); num >= 1000 && i < symbols.length; i++) num /= 1000;
     // TODO: A number like 9.999 once rounted to show 3 sig figs, will become 10.00, which is now 4 sig figs.
     return ((sign < 0) ? "-" : "") + num.toFixed(Math.max(0, Math.min(maxDecimalPlaces, maxSignificantFigures - Math.floor(1 + Math.log10(num))))) + symbols[i];
