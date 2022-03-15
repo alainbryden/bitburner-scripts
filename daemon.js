@@ -251,7 +251,11 @@ export async function main(ns) {
         // Buy tor as soon as we can if we haven't already, and all the port crackers
         { interval: 29000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !addedServerNames.includes("darkweb") },
         { interval: 30000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers() != 5 && (getNumPortCrackers() < 3 || shouldImproveHacking()) },
-        { interval: 31000, name: "/Tasks/ram-manager.js", shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && (getTotalNetworkUtilization() > 0.85 || xpOnly) && shouldImproveHacking() },
+        {
+            interval: 31000, name: "/Tasks/ram-manager.js", args: ['--utilization-trigger', '0', 'reserve-percent', '0.8'], // Spend about 20% of un-reserved cash on RAM upgrades when needed
+            shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && shouldImproveHacking() && // Only trigger if we have SF4, not saving for anything, and hack income is importnat
+                (getTotalNetworkUtilization() > 0.80 && maxTargets < 30 /* Heuristic: We could use more RAM if we're using more than 80% of RAM while hacking fewer than 30 targets */)
+        },
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money
         { interval: 32000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
         { interval: 33000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
@@ -580,10 +584,13 @@ async function doTargetingLoop(ns) {
                 await kickstartHackXp(ns, freeRamToUse, verbose && (expectedRunTime > 10000 || lowUtilizationIterations % 10 == 0), 1);
             }
 
-            // Use any unspent RAM on share.
+            // Use any unspent RAM on share if we are currently working for a faction
             const maxShareUtilization = options['share-max-utilization']
-            if (failed.length <= 0 && utilizationPercent < maxShareUtilization && (Date.now() - lastShareTime) > options['share-cooldown'] &&
-                !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) { // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
+            if (failed.length <= 0 && utilizationPercent < maxShareUtilization && // Only share RAM if we have succeeded in all hack cycle scheduling and have RAM to space
+                playerStats.isWorking && playerStats.workType == "Working for Faction" && // No point in sharing RAM if we aren't currently working for a faction.
+                (Date.now() - lastShareTime) > options['share-cooldown'] && // Respect the share rate-limit if configured to leave gaps for scheduling
+                !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
+            {
                 let shareTool = getTool("share");
                 let maxThreads = shareTool.getMaxThreads(); // This many threads would use up 100% of the (1-utilizationPercent)% RAM remaining
                 if (xpOnly) maxThreads -= Math.floor(getServerByName('home').ramAvailable() / shareTool.cost); // Reserve home ram entirely for XP cycles when in xpOnly mode
