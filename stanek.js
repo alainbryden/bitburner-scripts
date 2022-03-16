@@ -7,10 +7,10 @@ const argsSchema = [
     ['max-charges', 100], // Stop charging when all fragments have this many charges (diminishing returns - num charges is ^0.07 )
     // By default, starting an augmentation with stanek.js will still spawn daemon.js, but will instruct it not to schedule any hack cycles against home by 'reserving' all its RAM
     ['on-startup-script', 'daemon.js'], // Spawn this script when stanek is launched (HACK: to support running stanek as the installAugmentations startup script)
-    ['on-startup-script-args', ['--reserved-ram', Number.MAX_SAFE_INTEGER, '--tail']],
+    ['on-startup-script-args', ['--reserved-ram', Number.MAX_SAFE_INTEGER]],
     // When stanek completes, it will run daemon.js again (which will terminate the initial ram-starved daemon that is running)
     ['on-completion-script', 'daemon.js'], // Spawn this script when max-charges is reached
-    ['on-completion-script-args', ['-v', '--stock-manipulation', '--tail']], // Optional args to pass to the script when launched
+    ['on-completion-script-args', ['-v', '--stock-manipulation']], // Optional args to pass to the script when launched
     ['no-tail', false], // By default, keeps a tail window open, because it's pretty important to know when this script is running (can't use home for anything else)
     ['average-charge-sensitivity', 0.95], // Monitor available ram and do not charge fragments if current available RAM is less than this percentage of the current average charge.
 ];
