@@ -2,7 +2,7 @@ import { formatMoney, formatRam } from './helpers.js'
 
 let options;
 const argsSchema = [
-    ['budget', 0.1], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
+    ['budget', 0.2], // Spend up to this much of current cash on ram upgrades per tick (Default is high, because these are permanent for the rest of the BN)
     ['reserve', null], // Reserve this much cash before determining spending budgets (defaults to contents of reserve.txt if not specified)
 ];
 
