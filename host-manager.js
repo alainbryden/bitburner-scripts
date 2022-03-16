@@ -52,7 +52,7 @@ export async function main(ns) {
     if (!keepRunning)
         ns.print(`host-manager will run once. Run with argument "-c" to run continuously.`)
     do {
-        tryToBuyBestServerPossible(ns);
+        await tryToBuyBestServerPossible(ns);
         if (keepRunning)
             await ns.sleep(interval);
     } while (keepRunning);
@@ -75,7 +75,7 @@ function announce(log, toastStyle = 'info') {
 
 /** @param {NS} ns 
   * Attempts to buy a server at or better than your home machine. **/
-function tryToBuyBestServerPossible(ns) {
+async function tryToBuyBestServerPossible(ns) {
     // Scan the set of all servers on the network that we own (or rooted) to get a sense of RAM utilization
     let rootedServers = [];
     let ignoredServers = [];
@@ -215,7 +215,7 @@ function tryToBuyBestServerPossible(ns) {
         }
     }
 
-    let purchasedServer = getNsDataThroughFile(ns, `ns.purchaseServer('${purchasedServerName}', ${maxRamPossibleToBuy})`, '/Temp/purchase-server.txt');
+    let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer('${purchasedServerName}', ${maxRamPossibleToBuy})`, '/Temp/purchase-server.txt');
     if (!purchasedServer)
         setStatus(prefix + `Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
