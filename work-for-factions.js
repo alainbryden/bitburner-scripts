@@ -78,8 +78,8 @@ const argsSchema = [
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
-    ['no-focus', false], // Disable doing work that requires focusing (crime, studying, or focused faction/company work)
-    ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements (Also disabled with --no-focus)
+    ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
+    ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
     ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
@@ -104,7 +104,7 @@ export async function main(ns) {
     const firstFactions = options.first = (options.first || []).map(f => f.replaceAll('_', ' '));
     let skipFactionsConfig = options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
     noFocus = options['no-focus'];
-    noStudying = options['no-studying'] || noFocus; // Can't study if we aren't allowed to steal focus
+    noStudying = options['no-studying'];
     noCrime = options['no-crime'] || noFocus; // Can't crime if we aren't allowed to steal focus
     crimeFocus = options['crime-focus'];
     prioritizeInvites = options['prioritize-invites'];
@@ -437,9 +437,9 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 }
 
 /** @param {NS} ns */
-async function studyForCharisma(ns) {
+async function studyForCharisma(ns, focus) {
     await goToCity(ns, 'Volhaven');
-    if (await getNsDataThroughFile(ns, `ns.universityCourse('ZB Institute Of Technology', 'Leadership')`, '/Temp/study.txt')) {
+    if (await getNsDataThroughFile(ns, `ns.universityCourse('ZB Institute Of Technology', 'Leadership', ${focus})`, '/Temp/study.txt')) {
         lastActionRestart = Date.now();
         announce(ns, `Started studying 'Leadership' at 'ZB Institute Of Technology`, 'success');
         return true;
@@ -719,14 +719,14 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
             }
             if (!studying) { // Study at ZB university if CHA is the limiter.
-                if (await studyForCharisma(ns))
+                if (await studyForCharisma(ns, shouldFocusAtWork))
                     working = !(studying = true);
             }
             if (requiredCha - player.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await getNsDataThroughFile(ns, 'ns.hacknet.numHashes() + ns.hacknet.spendHashes("Improve Studying") - ns.hacknet.numHashes()', '/Temp/spend-hacknet-hashes.txt');
                 if (spentHashes > 0) {
                     announce(ns, 'Bought a "Improve Studying" upgrade.', 'success');
-                    await studyForCharisma(ns); // We must restart studying for the upgrade to take effect.
+                    await studyForCharisma(ns, shouldFocusAtWork); // We must restart studying for the upgrade to take effect.
                 }
             }
         } else if (studying) { // If we no longer need to study and we currently are, turn off study mode and get back to work!
