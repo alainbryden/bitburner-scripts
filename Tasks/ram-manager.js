@@ -1,5 +1,7 @@
 import { formatMoney, formatRam } from './helpers.js'
 
+const max_ram = 2 ** 30;
+
 let options;
 const argsSchema = [
     ['budget', 0.2], // Spend up to this much of current cash on ram upgrades per tick (Default is high, because these are permanent for the rest of the BN)
@@ -20,7 +22,7 @@ export async function main(ns) {
     while (true) {
         let cost = ns.getUpgradeHomeRamCost();
         let currentRam = ns.getServerMaxRam("home");
-        if (cost >= Number.MAX_VALUE)
+        if (cost >= Number.MAX_VALUE || currentRam == max_ram)
             return ns.print(`We're at max home RAM (${formatRam(currentRam)})`);
         const nextRam = currentRam * 2;
         const upgradeDesc = `home RAM from ${formatRam(currentRam)} to ${formatRam(nextRam)}`;

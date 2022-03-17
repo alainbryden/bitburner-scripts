@@ -456,7 +456,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
         let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
         const augNfFaction = factionData[augNf.getFromJoined()];
         log(ns, `nfPurchased: ${nfPurchased}, augNfFaction: ${augNfFaction.name} (rep: ${augNfFaction.reputation}), augNf.price: ${augNf.price}, augNf.reputation: ${augNf.reputation}`);
-        while (nfPurchased < 50) {
+        while (nfPurchased < 200) {
             const nextNfCost = augNf.price * (augCountMult ** purchaseableAugs.length) * (nfCountMult ** nfPurchased);
             const nextNfRep = augNf.reputation * (nfCountMult ** nfPurchased);
             let nfMsg = `Cost of NF ${nfPurchased + 1} is ${formatMoney(nextNfCost)} and will require ${formatNumberShort(nextNfRep)} reputation`
