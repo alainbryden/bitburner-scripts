@@ -265,7 +265,7 @@ export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = 
     checkNsInstance(ns, '"log"');
     ns.print(message);
     if (alsoPrintToTerminal) ns.tprint(message);
-    if (toastStyle) ns.toast(message.length <= maxToastLength ? message : message.substring(0, maxToastLength - 3) + "...", toastStyle);
+    if (toastStyle) ns.toast(message.length <= maxToastLength ? message : message.substring(0, maxToastLength - 3) + "...", toastStyle, 5000);
     return message;
 }
 
