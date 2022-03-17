@@ -1,4 +1,4 @@
-import { runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
+import { getFilePath,runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
 
 const argsSchema = [
     ['reset', false], // By default (for now) does not actually install augmentations unless you use this flag
@@ -32,15 +32,15 @@ export async function main(ns) {
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
     // Kill any other scripts that may interfere with our spending
-    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(options['scripts-to-kill'])}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
+    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(options['scripts-to-kill'])}.includes(getFilePath(s.filename))).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
-    ns.run('spend-hacknet-hashes.js', 1, '--liquidate');
+    ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
     let stockValue = null;
     if (playerData.hasTixApiAccess) {
-        ns.run('stockmaster.js', 1, '--liquidate');
+        ns.run(getFilePath('stockmaster.js'), 1, '--liquidate');
         const stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
         while (stockValue !== 0) { // It takes a bit of time for things to get sold. Wait until we see no stock holdings
             stockValue = await getNsDataThroughFile(ns, JSON.stringify(stkSymbols) +
@@ -54,7 +54,7 @@ export async function main(ns) {
 
     // STEP 2: Buy Home RAM Upgrades (more important than squeezing in a few extra augs)
     log(ns, 'Try Upgrade Home RAM...', true, 'info');
-    pid = ns.run('Tasks/ram-manager.js', 1, '--reserve', '0', '--budget', '0.8');
+    pid = ns.run(getFilePath('Tasks/ram-manager.js'), 1, '--reserve', '0', '--budget', '0.8');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
 
     // TODO: (SF13) If Stanek is unlocked, and we have not yet accepted Stanek's gift, now's our last chance to do it (before purchasing augs)
@@ -63,7 +63,7 @@ export async function main(ns) {
     log(ns, 'Purchasing augmentations...', true, 'info');
     const facmanArgs = ['--purchase', '-v'];
     if (options.force) facmanArgs.push('--ignore-stanek')
-    pid = ns.run('faction-manager.js', 1, ...facmanArgs);
+    pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
     // Sanity check, if we are not slated to install any augmentations, ABORT
@@ -85,14 +85,14 @@ export async function main(ns) {
     // STEP 5: (SF10) Buy whatever sleeve upgrades we can afford
     if (10 in dictSourceFiles) {
         log(ns, 'Try Upgrade Sleeves...', true, 'info');
-        ns.run('sleeve.js', 1, '--reserve', '0', '--aug-budget', '1', '--min-aug-batch', '1', '--buy-cooldown', '0');
+        ns.run(getFilePath('sleeve.js'), 1, '--reserve', '0', '--aug-budget', '1', '--min-aug-batch', '1', '--buy-cooldown', '0');
         await ns.sleep(500); // Give it time to make its initial purchases. Note that we do not block on the process shutting down - it will keep running.
     }
 
     // STEP 6: (SF2) Buy whatever gang equipment we can afford
     if (2 in dictSourceFiles) {
         log(ns, 'Try Upgrade Gangs...', true, 'info');
-        ns.run('gangs.js', 1, '--reserve', '0', '--augmentations-budget', '1', '--equipment-budget', '1');
+        ns.run(getFilePath('gangs.js'), 1, '--reserve', '0', '--augmentations-budget', '1', '--equipment-budget', '1');
         await ns.sleep(500); // Give it time to make its initial purchases. Note that we do not block on the process shutting down - it will keep running.
     }
 
@@ -120,7 +120,7 @@ export async function main(ns) {
         await ns.sleep(1000); // Pause for effect?
         const resetScript = options['on-reset-script'] ??
             // Default script (if none is specified) is stanek.js if we have it (which in turn will spawn daemon.js when done)
-            (purchasedAugmentations.includes(`Stanek's Gift - Genesis`) ? 'stanek.js' : 'daemon.js');
+            (purchasedAugmentations.includes(`Stanek's Gift - Genesis`) ? getFilePath('stanek.js') : getFilePath('daemon.js'));
         await runCommand(ns, `ns.installAugmentations('${resetScript}')`, '/Temp/soft-reset.js');
     }
 }
