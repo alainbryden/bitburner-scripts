@@ -21,6 +21,7 @@ export function autocomplete(data, args) {
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
     const options = ns.flags(argsSchema);
+	options['scripts-to-kill'] = options['scripts-to-kill'].map(s => getFilePath(s));
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');
@@ -32,7 +33,7 @@ export async function main(ns) {
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
     // Kill any other scripts that may interfere with our spending
-    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(options['scripts-to-kill'])}.includes(getFilePath(s.filename))).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
+    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(options['scripts-to-kill'])}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
