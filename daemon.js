@@ -477,14 +477,17 @@ async function doTargetingLoop(ns) {
                 // Pull additional data about servers that infrequently changes
                 await refreshDynamicServerData(ns, addedServerNames);
                 // Occassionally print our current targetting order (todo, make this controllable with a flag or custom UI?)
-                if (verbose && loops % 600 == 0)
-                    log('Targetting Order:\n  ' + serverListByTargetOrder.filter(s => s.shouldHack()).map(s =>
+                if (verbose && loops % 600 == 0) {
+                    const targetsLog = 'Targetting Order:\n  ' + serverListByTargetOrder.filter(s => s.shouldHack()).map(s =>
                         `${s.isPrepped() ? '*' : ' '} ${s.canHack() ? '✓' : 'X'} Money: ${formatMoney(s.getMoney(), 4)} of ${formatMoney(s.getMaxMoney(), 4)} ` +
                         `(${formatMoney(s.getMoneyPerRamSecond(), 4)}/ram.sec), Sec: ${formatNumber(s.getSecurity(), 3)} of ${formatNumber(s.getMinSecurity(), 3)}, ` +
                         `TTW: ${formatDuration(s.timeToWeaken())}, Hack: ${s.requiredHackLevel} - ${s.name}` +
                         (!stockMode || !serverStockSymbols[s.name] ? '' : ` Sym: ${serverStockSymbols[s.name]} Owned: ${serversWithOwnedStock.includes(s.name)} ` +
                             `Manip: ${shouldManipulateGrow[s.name] ? "grow" : shouldManipulateHack[s.name] ? "hack" : '(disabled)'}`))
-                        .join('\n  '));
+                        .join('\n  ');
+                    log(targetsLog);
+                    await ns.write("/Temp/targets.txt", targetsLog, "w");
+                }
             }
             var prepping = [];
             var preppedButNotTargeting = [];
