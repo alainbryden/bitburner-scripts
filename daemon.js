@@ -518,11 +518,11 @@ async function doTargetingLoop(ns) {
             // check for servers that need to be rooted
             // simultaneously compare our current target to potential targets
             for (var i = 0; i < serverListByTargetOrder.length; i++) {
-                if ((Date.now() - start) >= maxLoopTime) { // To avoid lagging the game, completely break out of the loop if we start to run over
-                    skipped = skipped.concat(serverListByTargetOrder.slice(i));
-                    workCapped = true;
-                    break;
-                }
+                //if ((Date.now() - start) >= maxLoopTime) { // To avoid lagging the game, completely break out of the loop if we start to run over
+                    //skipped = skipped.concat(serverListByTargetOrder.slice(i));
+                    //workCapped = true;
+                    //break;
+                //}
 
                 const server = serverListByTargetOrder[i];
                 // Attempt to root any servers that are not yet rooted
