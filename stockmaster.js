@@ -37,7 +37,7 @@ const argsSchema = [
     ['liquidate', false],
     ['mock', false], // If set to true, will "mock" buy/sell but not actually buy/sell anything
     ['noisy', false], // If set to true, tprints and announces each time stocks are bought/soldgetHostnames
-    ['disable-shorts', false], // If set to true, will "mock" buy/sell but not actually buy/sell anything
+    ['disable-shorts', false], // If set to true, will not short any stocks. Will be set depending on having SF8.2 by default.
     ['reserve', null], // A fixed amount of money to not spend
     ['fracB', 0.4], // Fraction of assets to have as liquid before we consider buying more stock
     ['fracH', 0.2], // Fraction of assets to retain as cash in hand when buying
@@ -319,7 +319,7 @@ async function updateForecast(ns, allStocks, has4s) {
         // We want stocks that have the best expected return, averaged over a long window for greater precision, but the game will occasionally invert probabilities
         // (45% chance every 75 updates), so we also compute a near-term forecast window to allow for early-detection of inversions so we can ditch our position.
         stk.nearTermForecast = forecast(stk.priceHistory.slice(0, nearTermForecastWindowLength));
-        let preNearTermWindowProb = forecast(stk.priceHistory.slice(nearTermForecastWindowLength)); // Used to detect the probability before the potential inversion event.
+        let preNearTermWindowProb = forecast(stk.priceHistory.slice(nearTermForecastWindowLength, nearTermForecastWindowLength + marketCycleLength)); // Used to detect the probability before the potential inversion event.
         // Detect whether it appears as though the probability of this stock has recently undergone an inversion (i.e. prob => 1 - prob)
         stk.possibleInversionDetected = has4s ? detectInversion(stk.prob, stk.lastTickProbability || stk.prob) : detectInversion(preNearTermWindowProb, stk.nearTermForecast);
         stk.lastTickProbability = stk.prob;
@@ -345,7 +345,7 @@ async function updateForecast(ns, allStocks, has4s) {
     for (const stk of allStocks) {
         // Don't "trust" (act on) a detected inversion unless it's near the time when we're capable of detecting market cycle start. Avoids most false-positives.
         if (stk.possibleInversionDetected && (has4s && detectedCycleTick == 0 ||
-            (!has4s && (detectedCycleTick > nearTermForecastWindowLength / 2 - 1) && (detectedCycleTick <= nearTermForecastWindowLength + inversionLagTolerance))))
+            (!has4s && (detectedCycleTick >= nearTermForecastWindowLength / 2) && (detectedCycleTick <= nearTermForecastWindowLength + inversionLagTolerance))))
             stk.lastInversion = detectedCycleTick; // If we "trust" a probability inversion has occurred, probability will be calculated based on only history since the last inversion.
         else
             stk.lastInversion++;

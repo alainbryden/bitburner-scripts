@@ -50,13 +50,15 @@ export async function main(ns) {
         let minCharges = Number.MAX_SAFE_INTEGER;
         for (const fragment of fragments) {
             statusUpdate += `Fragment ${String(fragment.id).padStart(2)} at [${fragment.x},${fragment.y}] ` +
-                `charge: ${fragment.numCharge} avg: ${formatNumberShort(fragment.avgCharge)}\n`;
-            minCharges = Math.min(minCharges, fragment.numCharge)
+                (fragment.id < 100 ? `charge: ${fragment.numCharge} avg: ${formatNumberShort(fragment.avgCharge)}` :
+                    `(booster, no charge effect)`) + `\n`;
+            if (fragment.id < 100)
+                minCharges = Math.min(minCharges, fragment.numCharge)
         }
         log(ns, statusUpdate);
         if (minCharges >= maxCharges) break;
         // Charge each fragment one at a time
-        for (const fragment of fragments.filter(f => f.numCharge < maxCharges)) {
+        for (const fragment of fragments.filter(f => f.numCharge < maxCharges && /* Don't charge boosters */ f.id < 100)) {
             let availableRam = ns.getServerMaxRam('home') - ns.getServerUsedRam('home');
             let reservedRam = (idealReservedRam / availableRam < 0.05) ? options['reserved-ram-ideal'] : options['reserved-ram'];
             const threads = Math.floor((availableRam - reservedRam) / 2.0);
