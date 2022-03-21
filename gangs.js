@@ -40,16 +40,18 @@ let importantStats = [];
 
 let options;
 const argsSchema = [
-    ['training-percentage', 0.20], // Spend this percent of time training gang members versus doing crime
+    ['training-percentage', 0.05], // Spend this percent of time randomly training gang members versus doing crime
     ['no-training', false], // Don't train unless all other tasks generate no gains
     ['no-auto-ascending', false], // Don't ascend members
     ['ascend-multi-threshold', 1.05], // Ascend member #12 if a primary stat multi would increase by more than this amount
     ['ascend-multi-threshold-spacing', 0.05], // Members will space their acention multis by this amount to ensure they are ascending at different rates 
     // Note: given the above two defaults, members would ascend at multis [1.6, 1.55, 1.50, ..., 1.1, 1.05] once you have 12 members.
-    ['min-training-ticks', 20], // Require this many ticks of training after ascending or recruiting
+    ['min-training-ticks', 40], // Require this many ticks of training after ascending or recruiting to rebuild stats
     ['reserve', null], // Reserve this much cash before determining spending budgets (defaults to contents of reserve.txt if not specified)
     ['augmentations-budget', null], // Percentage of non-reserved cash to spend per tick on permanent member upgrades (If not specified, uses defaultMaxSpendPerTickPermanentEquipment)
     ['equipment-budget', null], // Percentage of non-reserved cash to spend per tick on permanent member upgrades (If not specified, uses defaultMaxSpendPerTickTransientEquipment)
+    ['money-focus', false], // Always optimize gang crimes for maximum monetary gain. Is otherwise balanced.
+    ['reputation-focus', false], // Always optimize gang crimes for maximum reputation gain. Is otherwise balanced.
 ];
 
 export function autocomplete(data, _) {
@@ -257,7 +259,9 @@ async function optimizeGangCrime(ns, myGangInfo) {
     }
     if (factionRep == -1) // Estimate current gang rep based on respect. Game gives 1/75 rep / respect. This is an underestimate, because it doesn't take into account spent/lost respect on ascend/recruit/death. 
         factionRep = myGangInfo.respect / 75;
-    const optStat = factionRep > requiredRep ? "money" : (playerData.money > 1E11 || myGangInfo.respect) < 9000 ? "respect" : "both money and respect"; // Change priority based on achieved rep/money
+    const optStat = options['reputation-focus'] ? "respect" : options['money-focus'] ? "money" :
+        // If not specified, automatically change focus based on achieved rep/money
+        factionRep > requiredRep ? "money" : (playerData.money > 1E11 || myGangInfo.respect) < 9000 ? "respect" : "both money and respect";
     // Pre-compute how every gang member will perform at every task
     const memberTaskRates = Object.fromEntries(Object.values(dictMembers).map(m => [m.name, allTaskNames.map(taskName => ({
         name: taskName,

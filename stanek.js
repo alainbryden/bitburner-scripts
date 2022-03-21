@@ -52,7 +52,8 @@ export async function main(ns) {
             statusUpdate += `Fragment ${String(fragment.id).padStart(2)} at [${fragment.x},${fragment.y}] ` +
                 (fragment.id < 100 ? `charge: ${fragment.numCharge} avg: ${formatNumberShort(fragment.avgCharge)}` :
                     `(booster, no charge effect)`) + `\n`;
-            minCharges = Math.min(minCharges, fragment.numCharge)
+            if (fragment.id < 100)
+                minCharges = Math.min(minCharges, fragment.numCharge)
         }
         log(ns, statusUpdate);
         if (minCharges >= maxCharges) break;
