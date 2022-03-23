@@ -53,7 +53,10 @@ export async function main(ns) {
             statusUpdate += `Fragment ${String(fragment.id).padStart(2)} at [${fragment.x},${fragment.y}] ` +
                 (fragment.id < 100 ? `charge: ${fragment.numCharge} avg: ${formatNumberShort(fragment.avgCharge)}` :
                     `(booster, no charge effect)`) + `\n`;
-            if (fragment.id < 100 && (fragment.numCharge > 0 || (knownCharges[fragment.id] || 0) == 0))
+            if (fragment.numCharge == 0 && (knownCharges[fragment.id] || 0) > 0) {
+                if (knownCharges[fragment.id] == 1 && fragment.id < 100)
+                    log(ns, `WARNING: Detected that fragment ${fragment.id} at [${fragment.x},${fragment.y}] is not accepting charge (root overlaps with another segment root?)`, true, 'warning');
+            } else if (fragment.id < 100)
                 minCharges = Math.min(minCharges, fragment.numCharge) // Track the least-charge fragment (ignoring fragments that take no charge)
         }
         log(ns, statusUpdate);
