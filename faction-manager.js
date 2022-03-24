@@ -7,7 +7,8 @@ const preferredFactionOrder = [
     "Tian Di Hui", "Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven", // Location Based
     "Slum Snakes", "Tetrads" // Crime Based
 ];
-const defaultGangFaction = 'Slum Snakes'; // If not in a gang, we will keep joining this faction until we're in a gang
+// If not in a gang, and we are nearing unlocking gangs (54K Karma) we will attempt to join any/all of these factions
+const potentialGangFactions = ["Slum Snakes", "The Black Hand", "The Syndicate", "The Dark Army", "Speakers for the Dead"];
 let factionNames = [];
 let playerData = null;
 let stockValue = 0; // If the player holds stocks, their liquidation value will be determined
@@ -33,7 +34,7 @@ const argsSchema = [
     ['all', false], // Same as above
     ['after-faction', []], // Pretend we were to buy all augs offered by these factions. Show us only what remains.
     ['join-only', false], // Don't generate output, just join factions that can/should be joined
-    ['force-join', ['Slum Snakes']], // Always join these factions if we have an invite (useful to force join a gang faction)
+    ['force-join', null], // Always join these factions if we have an invite (useful to force join a gang faction)
     // Display-related options - controls what information is displayed and how
     ['v', false], // Print the terminal as well as the script logs
     ['verbose', null], // Same as above, defaults to true in code now, but can be disabled with an explicit `--verbose false`
@@ -129,8 +130,11 @@ export async function main(ns) {
     //ns.tprint(Object.values(augmentationData).map(a => a.name).sort()); Print a list of all augmentation names
     if (!ignorePlayerData) {
         log(ns, 'Joining available factions...');
-        // Unless overridden, if gangs are ulocked and we're not yet in a gang, always try to join the default gang faction.
-        let forceJoinFactions = options['force-join'] || (!gangFaction && 2 in ownedSourceFiles ? [defaultGangFaction] : []);
+        let forceJoinFactions = options['force-join'];
+        if (!forceJoinFactions && !gangFaction && 2 in ownedSourceFiles && ns.heart.break() <= -53000) {
+            forceJoinFactions = potentialGangFactions; // Unless overridden, try to join a gang faction as we near unlocking gangs
+            log(ns, `INFO: Will join any gang faction because Karma is at ${formatNumberShort(ns.heart.break())}`, printToTerminal, printToTerminal ? 'info' : undefined);
+        }
         await joinFactions(ns, forceJoinFactions);
         if (options['join-only']) return;
         displayJoinedFactionSummary(ns);
