@@ -7,7 +7,8 @@ const preferredFactionOrder = [
     "Tian Di Hui", "Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven", // Location Based
     "Slum Snakes", "Tetrads" // Crime Based
 ];
-const defaultGangFaction = 'Slum Snakes'; // If not in a gang, we will keep joining this faction until we're in a gang
+// If not in a gang, and we are nearing unlocking gangs (54K Karma) we will attempt to join any/all of these factions
+const potentialGangFactions = ["Slum Snakes", "The Black Hand", "The Syndicate", "The Dark Army", "Speakers for the Dead"];
 let factionNames = [];
 let playerData = null;
 let stockValue = 0; // If the player holds stocks, their liquidation value will be determined
@@ -20,6 +21,8 @@ let gangFaction = null;
 let augmentationData = {};
 let allAugStats = [];
 let options = null; // A copy of the options used at construction time
+let printToTerminal;
+let desiredStatsFilters = [];
 let purchaseableAugs = [];
 let purchaseFactionDonations = [];
 // Factors that control how augmentation prices scale
@@ -31,10 +34,10 @@ const argsSchema = [
     ['all', false], // Same as above
     ['after-faction', []], // Pretend we were to buy all augs offered by these factions. Show us only what remains.
     ['join-only', false], // Don't generate output, just join factions that can/should be joined
-    ['force-join', ['Slum Snakes']], // Always join these factions if we have an invite (useful to force join a gang faction)
+    ['force-join', null], // Always join these factions if we have an invite (useful to force join a gang faction)
     // Display-related options - controls what information is displayed and how
-    ['v', true], // Print the terminal as well as the script logs
-    ['verbose', true], // Same as above
+    ['v', false], // Print the terminal as well as the script logs
+    ['verbose', null], // Same as above, defaults to true in code now, but can be disabled with an explicit `--verbose false`
     ['i', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
     ['ignore-player-data', false], // Same as above
     ['ignore-stocks', false], // Set to true to ignore the liquidation value of stocks currently held when running
@@ -53,12 +56,14 @@ const argsSchema = [
     ['neuroflux-disabled', false], // Set to true to skip including as many neuroflux upgrades as we can afford
 ];
 
-const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
+const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
 
+// For auto-complete convenience
 const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "company_rep", "crime_money", "crime_success", "defense_exp", "defense", "dexterity_exp", "dexterity",
     "faction_rep", "hacking_chance", "hacking_exp", "hacking_grow", "hacking_money", "hacking", "hacking_speed", "strength_exp", "strength", "work_money",
     "bladeburner_analysis", "bladeburner_max_stamina", "bladeburner_stamina_gain", "bladeburner_success_chance",
     "hacknet_node_core_cost", "hacknet_node_level_cost", "hacknet_node_money", "hacknet_node_purchase_cost", "hacknet_node_ram_cost"];
+const statShortcuts = ["agi_exp", "agi", "cha_exp", "cha", "cmp_rep", "crm_$", "crm_prob", "def_exp", "def", "dex_exp", "dex", "fac_rep", "hack_prob", "hack_exp", "hack_grow", "hack_$", "hack", "hack_speed", "str_exp", "str", "work_$", 'bladeburner', 'hacknet'];
 
 const factions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
@@ -66,12 +71,11 @@ const factions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp",
 
 const augmentations = ["ADR-V1 Pheromone Gene", "ADR-V2 Pheromone Gene", "Artificial Bio-neural Network Implant", "Artificial Synaptic Potentiation", "Augmented Targeting I", "Augmented Targeting II", "Augmented Targeting III", "BLADE-51b Tesla Armor", "BLADE-51b Tesla Armor: Energy Shielding Upgrade", "BLADE-51b Tesla Armor: IPU Upgrade", "BLADE-51b Tesla Armor: Omnibeam Upgrade", "BLADE-51b Tesla Armor: Power Cells Upgrade", "BLADE-51b Tesla Armor: Unibeam Upgrade", "Bionic Arms", "Bionic Legs", "Bionic Spine", "BitRunners Neurolink", "BitWire", "Blade's Runners", "BrachiBlades", "CRTX42-AA Gene Modification", "CashRoot Starter Kit", "Combat Rib I", "Combat Rib II", "Combat Rib III", "CordiARC Fusion Reactor", "Cranial Signal Processors - Gen I", "Cranial Signal Processors - Gen II", "Cranial Signal Processors - Gen III", "Cranial Signal Processors - Gen IV", "Cranial Signal Processors - Gen V", "DataJack", "DermaForce Particle Barrier", "ECorp HVMind Implant", "EMS-4 Recombination", "Embedded Netburner Module", "Embedded Netburner Module Analyze Engine", "Embedded Netburner Module Core Implant", "Embedded Netburner Module Core V2 Upgrade", "Embedded Netburner Module Core V3 Upgrade", "Embedded Netburner Module Direct Memory Access Upgrade", "Enhanced Myelin Sheathing", "Enhanced Social Interaction Implant", "EsperTech Bladeburner Eyewear", "FocusWire", "GOLEM Serum", "Graphene Bionic Arms Upgrade", "Graphene Bionic Legs Upgrade", "Graphene Bionic Spine Upgrade", "Graphene Bone Lacings", "Graphene BrachiBlades Upgrade", "Hacknet Node CPU Architecture Neural-Upload", "Hacknet Node Cache Architecture Neural-Upload", "Hacknet Node Core Direct-Neural Interface", "Hacknet Node Kernel Direct-Neural Interface", "Hacknet Node NIC Architecture Neural-Upload", "HemoRecirculator", "Hydroflame Left Arm", "HyperSight Corneal Implant", "Hyperion Plasma Cannon V1", "Hyperion Plasma Cannon V2", "I.N.T.E.R.L.I.N.K.E.D", "INFRARET Enhancement", "LuminCloaking-V1 Skin Implant", "LuminCloaking-V2 Skin Implant", "NEMEAN Subdermal Weave", "Nanofiber Weave", "Neotra", "Neural Accelerator", "Neural-Retention Enhancement", "Neuralstimulator", "Neuregen Gene Modification", "NeuroFlux Governor", "Neuronal Densification", "Neuroreceptor Management Implant", "Neurotrainer I", "Neurotrainer II", "Neurotrainer III", "Nuoptimal Nootropic Injector Implant", "NutriGen Implant", "ORION-MKIV Shoulder", "OmniTek InfoLoad", "PC Direct-Neural Interface", "PC Direct-Neural Interface NeuroNet Injector", "PC Direct-Neural Interface Optimization Submodule", "PCMatrix", "Photosynthetic Cells", "Power Recirculation Core", "SPTN-97 Gene Modification", "SmartJaw", "SmartSonar Implant", "Social Negotiation Assistant (S.N.A)", "Speech Enhancement", "Speech Processor Implant", "Synaptic Enhancement Implant", "Synfibril Muscle", "Synthetic Heart", "TITN-41 Gene-Modification Injection", "The Black Hand", "The Blade's Simulacrum", "The Red Pill", "The Shadow's Simulacrum", "Unstable Circadian Modulator", "Vangelis Virus", "Vangelis Virus 3.0", "Wired Reflexes", "Xanipher", "nextSENS Gene Modification"]
 const strNF = "NeuroFlux Governor"
-
 export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
-    if (lastFlag == "--sort")
-        return stat_multis;
+    if (lastFlag == "--sort" || lastFlag == "--stat-desired" || lastFlag == "--hide-stat")
+        return statShortcuts.concat(stat_multis);
     if (lastFlag == "--ignore-faction" || lastFlag == "--after-faction")
         return factions.map(f => f.replaceAll(" ", "_")).sort(); // Command line doesn't like spaces
     if (lastFlag == "--omit-aug" || lastFlag == "--aug-desired")
@@ -83,7 +87,7 @@ export function autocomplete(data, args) {
 /** @param {NS} ns **/
 export async function main(ns) {
     options = ns.flags(argsSchema);
-    const verbose = options.v || options.verbose && !options['join-only'];
+    printToTerminal = (options.v || options.verbose === true || options.verbose === null) && !options['join-only'];
     const allFactions = options.a || options.all;
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
     const omitFactions = options['ignore-faction'].map(f => f.replaceAll("_", " "));
@@ -121,28 +125,32 @@ export async function main(ns) {
     favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt')
     await updateFactionData(ns, allFactions, omitFactions);
     log(ns, 'Getting all augmentation data...');
-    await updateAugmentationData(ns, options['stat-desired'], desiredAugs);
+    desiredStatsFilters = options['stat-desired'];
+    await updateAugmentationData(ns, desiredAugs);
     //ns.tprint(Object.values(augmentationData).map(a => a.name).sort()); Print a list of all augmentation names
     if (!ignorePlayerData) {
         log(ns, 'Joining available factions...');
-        // Unless overridden, if gangs are ulocked and we're not yet in a gang, always try to join the default gang faction.
-        let forceJoinFactions = options['force-join'] || (!gangFaction && 2 in ownedSourceFiles ? [defaultGangFaction] : []);
+        let forceJoinFactions = options['force-join'] || [];
+        if (!forceJoinFactions && !gangFaction && 2 in ownedSourceFiles && ns.heart.break() <= -53000) {
+            forceJoinFactions.push(potentialGangFactions); // Try to join all gang factions as we near unlocking gangs, regardless of their augmentations
+            log(ns, `INFO: Will join any gang faction because Karma is at ${formatNumberShort(ns.heart.break())}`, printToTerminal, printToTerminal ? 'info' : undefined);
+        }
         await joinFactions(ns, forceJoinFactions);
         if (options['join-only']) return;
-        displayJoinedFactionSummary(ns, verbose);
+        displayJoinedFactionSummary(ns);
     }
-    await manageUnownedAugmentations(ns, omitAugs, verbose);
-    displayFactionSummary(ns, verbose, sort, options.u || options.unique, afterFactions, options['hide-stat']);
+    await manageUnownedAugmentations(ns, omitAugs);
+    displayFactionSummary(ns, sort, options.u || options.unique, afterFactions, options['hide-stat']);
     if (options.purchase && ownedAugmentations.length <= 1 && 13 in ownedSourceFiles && !ownedAugmentations.includes(`Stanek's Gift - Genesis`) && !options['ignore-stanek'])
         log(ns, `WARNING: You have not yet accepted Stanek's Gift from the church in Chongqing. Purchasing augs will ` +
             `prevent you from doing so for the rest of this BN. (Run with '--ignore-stanek' to bypass this warning.)`, true);
     else if (options.purchase && purchaseableAugs)
-        await purchaseDesiredAugs(ns, verbose);
+        await purchaseDesiredAugs(ns);
 }
 
-function log(ns, log, alsoPrintToTerminal, toastStyle) {
+function log(ns, log, printToTerminal, toastStyle) {
     ns.print(log);
-    if (alsoPrintToTerminal) ns.tprint(log);
+    if (printToTerminal) ns.tprint(log);
     if (toastStyle) ns.toast(log, toastStyle);
 }
 
@@ -209,7 +217,7 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
 }
 
 /** @param {NS} ns **/
-async function updateAugmentationData(ns, desiredStatsFilters, desiredAugs) {
+async function updateAugmentationData(ns, desiredAugs) {
     const augmentationNames = [...new Set(Object.values(factionData).flatMap(f => f.augmentations))]; // augmentations.slice();
     const augsDictCommand = command => `Object.fromEntries(${JSON.stringify(augmentationNames)}.map(aug => [aug, ${command}]))`;
     const dictAugRepReqs = await getNsDataThroughFile(ns, augsDictCommand('ns.getAugmentationRepReq(aug)'), '/Temp/aug-repreqs.txt');
@@ -285,7 +293,8 @@ async function joinFactions(ns, forceJoinFactions) {
             `${desiredAugs.length} with desirable stats` + (desiredAugs.length == 0 ? ' (not joining)' : `: ${JSON.stringify(desiredAugs)}`));
         if (desiredAugs.length == 0 && !forceJoinFactions.includes(faction.name)) continue;
         if (manualJoin.includes(faction.name) && !forceJoinFactions.includes(faction.name))
-            log(ns, `Faction ${faction.name} must be manually joined.`);
+            log(ns, `INFO: You have an invite from faction ${faction.name}, but it will not be automatically joined, ` +
+                `because this would prevent you from joining some other factions.`, printToTerminal, printToTerminal ? 'info' : undefined);
         else {
             log(ns, `Joining faction ${faction.name} which has ${desiredAugs.length} desired augmentations: ${desiredAugs}`);
             let response;
@@ -293,9 +302,9 @@ async function joinFactions(ns, forceJoinFactions) {
                 faction.joined = true;
                 faction.augmentations.forEach(aug => accessibleAugmentations.add(aug));
                 joinedFactions.push(faction.name);
-                log(ns, `Joined faction ${faction.name} (Response: ${response})`, true, 'success')
+                log(ns, `SUCCESS: Joined faction ${faction.name} (Response: ${response})`, true, 'success')
             } else
-                log(ns, `Error joining faction ${faction.name}. Response: ${response}`, false, 'error')
+                log(ns, `ERROR: Error joining faction ${faction.name}. Response: ${response}`, false, 'error')
         }
     }
 }
@@ -353,10 +362,10 @@ function sortAugs(ns, augs = []) {
 
 /** @param {NS} ns 
  * Display all information about all augmentations, including lists of available / desired / affordable augmentations in their optimal purchase order.  */
-async function manageUnownedAugmentations(ns, ignoredAugs, alsoPrintToTerminal) {
+async function manageUnownedAugmentations(ns, ignoredAugs) {
     const outputRows = [`Currently have ${ownedAugmentations.length}/30 Augmentations required for Daedalus.`];
     const unownedAugs = Object.values(augmentationData).filter(aug => (!aug.owned || aug.name == strNF) && !ignoredAugs.includes(aug.name));
-    if (unownedAugs.length == 0) return log(ns, `All ${Object.keys(augmentationData).length} augmentations are either owned or ignored!`, alsoPrintToTerminal)
+    if (unownedAugs.length == 0) return log(ns, `All ${Object.keys(augmentationData).length} augmentations are either owned or ignored!`, printToTerminal)
     let unavailableAugs = unownedAugs.filter(aug => aug.getFromJoined() == null);
     let firstListPrinted = unavailableAugs.length > 0;
     if (firstListPrinted) await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, true);
@@ -375,7 +384,7 @@ async function manageUnownedAugmentations(ns, ignoredAugs, alsoPrintToTerminal) 
         await manageFilteredSubset(ns, outputRows, 'Desired Within Rep', augsWithRep.filter(aug => aug.desired), undefined, true);
     }
     // Print all rows of output that were prepped
-    log(ns, outputRows.join("\n  "), alsoPrintToTerminal);
+    log(ns, outputRows.join("\n  "), printToTerminal);
 }
 
 /** @param {NS} ns 
@@ -401,7 +410,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
     let totalRepCost = Object.values(repCostByFaction).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(subsetSorted);
     if (printList === true || printList === undefined && !subset.every((v, i) => v == subsetSorted[i])) // If the purchase order is unchanged after filtering out augmentations, don't bother reprinting the full list
-        outputRows.push(`${subset.length} ${subsetName} Augmentations in Optimized Purchase Order (*'s are desired augs and/or stats: ${options['stat-desired'].join(", ")}):\n  ${subsetSorted.join('\n  ')}`);
+        outputRows.push(`${subset.length} ${subsetName} Augmentations in Optimized Purchase Order (*'s are desired augs and/or stats: ${desiredStatsFilters.join(", ")}):\n  ${subsetSorted.join('\n  ')}`);
     outputRows.push(`Total Cost of ${subset.length} ${subsetName}:`.padEnd(37) + ` ${formatMoney(totalRepCost + totalAugCost)}` +
         (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)})  Donate: ${JSON.stringify(repCostByFaction).replaceAll(",", ", ")}`));
     if (!purchaseable) return subsetSorted; // The remainder of the logic only applies if we are preparing a purchase order
@@ -515,35 +524,35 @@ function computeAugsRepReqDonationByFaction(ns, augmentations) {
 
 /** @param {NS} ns 
  * Donate any required rep and purchase the desired augmentations */
-async function purchaseDesiredAugs(ns, verbose) {
+async function purchaseDesiredAugs(ns) {
     let totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(purchaseableAugs);
     if (stockValue > 0)
         return log(ns, `ERROR: For your own protection, --purchase will not run while you are holding stocks (current stock value: ${formatMoney(stockValue)}). ` +
-            `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, verbose, 'error')
+            `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
     if (totalAugCost + totalRepCost > playerData.money)
         return log(ns, `ERROR: Purchase order total cost (${formatMoney(totalRepCost + totalAugCost)}` + (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)}))`) +
-            ` is more than current player money (${formatMoney(playerData.money)}).`, verbose, 'error')
+            ` is more than current player money (${formatMoney(playerData.money)}).`, printToTerminal, 'error')
     // Donate to factions if necessary (using a ram-dodging script of course)
     if (Object.keys(purchaseFactionDonations).length > 0 && Object.values(purchaseFactionDonations).some(v => v > 0)) {
         if (await getNsDataThroughFile(ns, JSON.stringify(Object.keys(purchaseFactionDonations).map(f => ({ faction: f, repDonation: purchaseFactionDonations[f] }))) +
             '.reduce((success, o) => success && ns.donateToFaction(o.faction, o.repDonation), true)', '/Temp/facman-donate.txt'))
-            log(ns, `SUCCESS: Donated to ${Object.keys(purchaseFactionDonations).length} factions to gain access to desired augmentations.`, verbose, 'success')
+            log(ns, `SUCCESS: Donated to ${Object.keys(purchaseFactionDonations).length} factions to gain access to desired augmentations.`, printToTerminal, 'success')
         else
-            log(ns, `ERROR: One or more attempts to donate to factions for reputation failed. Go investigate!`, verbose, 'error');
+            log(ns, `ERROR: One or more attempts to donate to factions for reputation failed. Go investigate!`, printToTerminal, 'error');
     }
     // Purchase desired augs (using a ram-dodging script of course)
     if (purchaseableAugs.length == 0)
-        log(ns, `INFO: Cannot afford to buy any augmentations at this time.`, verbose)
+        log(ns, `INFO: Cannot afford to buy any augmentations at this time.`, printToTerminal)
     else if (await getNsDataThroughFile(ns, JSON.stringify(purchaseableAugs.map(aug => ({ faction: aug.getFromJoined(), augmentation: aug.name }))) +
         '.reduce((success, o) => ns.purchaseAugmentation(o.faction, o.augmentation) && success, true)', '/Temp/facman-purchase-augs.txt'))
-        log(ns, `SUCCESS: Purchased ${purchaseableAugs.length} desired augmentations in optimal order!`, verbose, 'success')
+        log(ns, `SUCCESS: Purchased ${purchaseableAugs.length} desired augmentations in optimal order!`, printToTerminal, 'success')
     else
-        log(ns, `ERROR: Failed to purchase one or more augmentations.`, verbose, 'error');
+        log(ns, `ERROR: Failed to purchase one or more augmentations.`, printToTerminal, 'error');
 }
 
 /** @param {NS} ns **/
-function displayJoinedFactionSummary(ns, alsoPrintToTerminal) {
+function displayJoinedFactionSummary(ns) {
     let joinedFactions = Object.values(factionData).filter(f => f.joined);
     let summary = `${joinedFactions.length} Joined Factions:`
     let noaugs = joinedFactions.filter(f => f.unownedAugmentations().length == 0)
@@ -551,14 +560,14 @@ function displayJoinedFactionSummary(ns, alsoPrintToTerminal) {
         summary += `\n  ${noaugs.length} joined factions have no unowned augs remaining: "${noaugs.map(f => f.name).join('", "')}"`;
     for (const faction of joinedFactions.filter(f => !noaugs.includes(f)))
         summary += `\n  ${faction.name}: ${faction.unownedAugmentations().length} augs remaining (${faction.unownedAugmentations().join(", ")})`;
-    log(ns, summary, alsoPrintToTerminal);
+    log(ns, summary, printToTerminal);
 }
 
 /** @param {NS} ns **/
-function displayFactionSummary(ns, alsoPrintToTerminal, sortBy, unique, overrideFinishedFactions, excludedStats) {
+function displayFactionSummary(ns, sortBy, unique, overrideFinishedFactions, excludedStats) {
     let noAugs = Object.values(factionData).filter(f => f.unownedAugmentations().length == 0);
     if (noAugs.length > 0)
-        log(ns, `${noAugs.length} factions have no augmentations to purchase (excluding NF): ${JSON.stringify(noAugs.map(a => a.name))}`, alsoPrintToTerminal);
+        log(ns, `${noAugs.length} factions have no augmentations to purchase (excluding NF): ${JSON.stringify(noAugs.map(a => a.name))}`, printToTerminal);
     let summaryFactions = Object.values(factionData).filter(f => f.unownedAugmentations().length > 0 && !overrideFinishedFactions.includes(f.name));
     if (summaryFactions.length == 0) return;
     // Apply any override faction options
@@ -613,5 +622,5 @@ function displayFactionSummary(ns, alsoPrintToTerminal, sortBy, unique, override
         simulatedOwnedAugmentations = actualOwnedAugs; // Restore the original lists once the simulation is complete
         summaryFactions = actualUnjoinedFactions;
     }
-    log(ns, summary, alsoPrintToTerminal);
+    log(ns, summary, printToTerminal);
 }

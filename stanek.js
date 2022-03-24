@@ -35,6 +35,7 @@ export async function main(ns) {
         await ns.sleep(1000); // Give time for the accompanying script to start up and consume its required RAM footprint.
     } else
         log(ns, `ERROR: Stanek.js has started successfully, but failed to launch accompanying 'on-startup-script': ${options['on-startup-script']}...`, true, 'error');
+    const knownCharges = {}; // We independently keep track of how many times we've charged each segment, to work around a placement bug where fragments can overlap, and then don't register charge
     // Start the main stanek loop
     while (true) {
         if (!options['no-tail'])
@@ -52,8 +53,11 @@ export async function main(ns) {
             statusUpdate += `Fragment ${String(fragment.id).padStart(2)} at [${fragment.x},${fragment.y}] ` +
                 (fragment.id < 100 ? `charge: ${fragment.numCharge} avg: ${formatNumberShort(fragment.avgCharge)}` :
                     `(booster, no charge effect)`) + `\n`;
-            if (fragment.id < 100)
-                minCharges = Math.min(minCharges, fragment.numCharge)
+            if (fragment.numCharge == 0 && (knownCharges[fragment.id] || 0) > 0) {
+                if (knownCharges[fragment.id] == 1 && fragment.id < 100)
+                    log(ns, `WARNING: Detected that fragment ${fragment.id} at [${fragment.x},${fragment.y}] is not accepting charge (root overlaps with another segment root?)`, true, 'warning');
+            } else if (fragment.id < 100)
+                minCharges = Math.min(minCharges, fragment.numCharge) // Track the least-charge fragment (ignoring fragments that take no charge)
         }
         log(ns, statusUpdate);
         if (minCharges >= maxCharges) break;
@@ -73,6 +77,7 @@ export async function main(ns) {
             }
             const pid = ns.run(getFilePath('/stanek.js.charge.js'), threads, fragment.x, fragment.y);
             await waitForProcessToComplete(ns, pid);
+            knownCharges[fragment.id] = 1 + (knownCharges[fragment.id] || 0);
         }
         await ns.sleep(100);
     }
