@@ -53,7 +53,7 @@ const argsSchema = [
     ['neuroflux-disabled', false], // Set to true to skip including as many neuroflux upgrades as we can afford
 ];
 
-const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
+const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
 
 const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "company_rep", "crime_money", "crime_success", "defense_exp", "defense", "dexterity_exp", "dexterity",
     "faction_rep", "hacking_chance", "hacking_exp", "hacking_grow", "hacking_money", "hacking", "hacking_speed", "strength_exp", "strength", "work_money",

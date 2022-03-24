@@ -77,7 +77,7 @@ const argsSchema = [
     ['first', []], // Grind rep with these factions first. Also forces a join of this faction if we normally wouldn't (e.g. no desired augs or all augs owned)
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
-    ['desired-stats', ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
+    ['desired-stats', null], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
@@ -111,7 +111,8 @@ export async function main(ns) {
     if (crimeFocus && noFocus)
         return log(ns, "ERROR: Cannot use --no-focus and --crime-focus at the same time. You need to focus to do crime!", true, 'error');
     if (desiredAugStats.length == 0)
-        desiredAugStats.push(...(crimeFocus ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacking', 'hacknet'] : ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet']))
+        desiredAugStats.push(...(crimeFocus ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacking', 'hacknet', 'crime'] :
+            ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']))
     fastCrimesOnly = options['fast-crimes-only'];
     // Log command line args used
     if (firstFactions.length > 0) ns.print(`--first factions: ${firstFactions.join(", ")}`);
