@@ -130,9 +130,9 @@ export async function main(ns) {
     //ns.tprint(Object.values(augmentationData).map(a => a.name).sort()); Print a list of all augmentation names
     if (!ignorePlayerData) {
         log(ns, 'Joining available factions...');
-        let forceJoinFactions = options['force-join'];
+        let forceJoinFactions = options['force-join'] || [];
         if (!forceJoinFactions && !gangFaction && 2 in ownedSourceFiles && ns.heart.break() <= -53000) {
-            forceJoinFactions = potentialGangFactions; // Unless overridden, try to join a gang faction as we near unlocking gangs
+            forceJoinFactions.push(potentialGangFactions); // Try to join all gang factions as we near unlocking gangs, regardless of their augmentations
             log(ns, `INFO: Will join any gang faction because Karma is at ${formatNumberShort(ns.heart.break())}`, printToTerminal, printToTerminal ? 'info' : undefined);
         }
         await joinFactions(ns, forceJoinFactions);
