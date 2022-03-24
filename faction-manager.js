@@ -57,10 +57,12 @@ const argsSchema = [
 
 const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
 
+// For auto-complete convenience
 const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "company_rep", "crime_money", "crime_success", "defense_exp", "defense", "dexterity_exp", "dexterity",
     "faction_rep", "hacking_chance", "hacking_exp", "hacking_grow", "hacking_money", "hacking", "hacking_speed", "strength_exp", "strength", "work_money",
     "bladeburner_analysis", "bladeburner_max_stamina", "bladeburner_stamina_gain", "bladeburner_success_chance",
     "hacknet_node_core_cost", "hacknet_node_level_cost", "hacknet_node_money", "hacknet_node_purchase_cost", "hacknet_node_ram_cost"];
+const statShortcuts = ["agi_exp", "agi", "cha_exp", "cha", "cmp_rep", "crm_$", "crm_prob", "def_exp", "def", "dex_exp", "dex", "fac_rep", "hack_prob", "hack_exp", "hack_grow", "hack_$", "hack", "hack_speed", "str_exp", "str", "work_$", 'bladeburner', 'hacknet'];
 
 const factions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
@@ -71,8 +73,8 @@ const strNF = "NeuroFlux Governor"
 export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
-    if (lastFlag == "--sort")
-        return stat_multis;
+    if (lastFlag == "--sort" || lastFlag == "--stat-desired" || lastFlag == "--hide-stat")
+        return statShortcuts.concat(stat_multis);
     if (lastFlag == "--ignore-faction" || lastFlag == "--after-faction")
         return factions.map(f => f.replaceAll(" ", "_")).sort(); // Command line doesn't like spaces
     if (lastFlag == "--omit-aug" || lastFlag == "--aug-desired")
