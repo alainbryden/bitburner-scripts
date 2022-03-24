@@ -226,7 +226,8 @@ async function updateAugmentationData(ns, desiredAugs) {
     const dictAugPrereqs = await getNsDataThroughFile(ns, augsDictCommand('ns.getAugmentationPrereq(aug)'), '/Temp/aug-prereqs.txt');
     if ((desiredStatsFilters?.length ?? 0) == 0 && (desiredAugs?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
         desiredStatsFilters = ownedAugmentations.length > 40 ? ['_'] : // Once we have more than 40 augs, switch to buying up anything and everything
-            gangFaction ? ['faction_rep','hacking'] : // If in a gang (provider of all augs), we can focus on hacking augs only - we won't be grinding rep with corps/factions to unlock augs
+            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
+                gangFaction ? ['faction rep','hacking'] : // If in a gang (provider of all augs), we can focus on hacking augs only - we won't be grinding rep with corps/factions to unlock augs
                 default_desired_stats; // While few augs are installed, use the default priority stats (hacking + rep boosting, etc. for unlocking augs)
     augmentationData = Object.fromEntries(augmentationNames.map(aug => [aug, {
         name: aug,
