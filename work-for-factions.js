@@ -181,7 +181,7 @@ export async function main(ns) {
     let scope = 1; // Scope increases each time we complete a type of work and haven't progressed enough to unlock more factions
     while (true) { // After each loop, we will repeat all prevous work "strategies" to see if anything new has been unlocked, and add one more "strategy" to the queue
         //try {
-        if (Date.now() > mainLoopStart + checkForNewPrioritiesInterval)
+        if (Date.now() <= mainLoopStart + checkForNewPrioritiesInterval)
             scope++; // Increase the scope of work if the last iteration completed early (i.e. due to all work within that scope being complete)
         mainLoopStart = Date.now();
         ns.print(`INFO: Starting main work loop with scope: ${scope}...`);
@@ -263,14 +263,16 @@ export async function main(ns) {
         if (scope <= 7) continue;
 
         // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
-        let factionsWeCanWorkFor = knownFactions.filter(f => !skipFactionsConfig.includes(f) && !(allGangFactions || []).includes(f));
+        let factionsWeCanWorkFor = joinedFactions.filter(f => !skipFactionsConfig.includes(f) && !(allGangFactions || []).includes(f));
+        let foundWork = false;
         if (factionsWeCanWorkFor.length > 0 && !crimeFocus) {
             // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
             let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
             let targetRep = 1000 + (await getFactionReputation(ns, mostFavorFaction)) * 1.05; // Hack: Grow rep by ~5%, plus 1000 incase it's currently 0
             ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
-            await workForSingleFaction(ns, mostFavorFaction, false, false, targetRep);
-        } else if (!noCrime) { // Otherwise, kill some time by doing crimes for a little while
+            foundWork = await workForSingleFaction(ns, mostFavorFaction, false, false, targetRep);
+        }
+        if (!foundWork && !noCrime) { // Otherwise, kill some time by doing crimes for a little while
             ns.print(`INFO: Nothing to do. Doing a little crime...`);
             await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
         } else { // If our hands our tied, twiddle our thumbs a bit
@@ -391,7 +393,7 @@ async function earnFactionInvite(ns, factionName) {
     if (workedForInvite) // If we took some action to earn the faction invite, wait for it to come in
         return await waitForFactionInvite(ns, factionName);
     else
-        return ns.print(`Noting we can do at this time to earn an invitation to faction "${factionName}"...`);
+        return ns.print(`Nothing we can do at this time to earn an invitation to faction "${factionName}"...`);
 }
 
 /** @param {NS} ns */
