@@ -104,7 +104,7 @@ const breakToMainLoop = () => Date.now() > mainLoopStart + checkForNewPriorities
 export async function main(ns) {
     disableLogs(ns, ['sleep']);
     options = ns.flags(argsSchema);
-    const desiredAugStats = (options['desired-stats'] || []);
+    const desiredAugStats = (options['desired-stats'].split(',') || []);
     firstFactions = options.first = (options.first || []).map(f => f.replaceAll('_', ' '));
     let skipFactionsConfig = options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
     noFocus = options['no-focus'];
