@@ -1,7 +1,7 @@
 import { getFilePath,runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
 
 const argsSchema = [
-    ['reset', false], // By default (for now) does not actually install augmentations unless you use this flag
+    ['reset', true], // By default (for now) does not actually install augmentations unless you use this flag
     // Note: --force option results in passing faction-manager.js the flag to ignore stanek's gift not being accepted
     ['force', false], // There will be sanity checks - use this option to bypass them
     ['scripts-to-kill', ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']], // Kill these money-spending scripts at launch
