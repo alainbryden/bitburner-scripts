@@ -45,7 +45,7 @@ const argsSchema = [
     ['ignore-faction', []], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
     ['u', false], // When displaying total aug stats for a faction, only include augs not given by a faction further up the list
     ['unique', false], // Same as above
-    ['sort', 'hacking'], // What stat is the table of total faction stats sorted by
+    ['sort', null], // What stat is the table of total faction stats sorted by
     ['hide-stat', ['bladeburner', 'hacknet']], // Stats to exclude from the final table (partial matching works)
     // Augmentation purchasing-related options. Controls what augmentations are included in cost calculations, and optionally purchased
     ['aug-desired', []], // These augs will be marked as "desired" whether or not they match desired-stats
@@ -94,7 +94,8 @@ export async function main(ns) {
     const omitAugs = options['omit-aug'].map(f => f.replaceAll("_", " "));
     const desiredAugs = options['aug-desired'].map(f => f.replaceAll("_", " "));
     const ignorePlayerData = options.i || options['ignore-player-data'];
-    const sort = unshorten(options.sort); // Support the user leaving off the _mult suffix
+    log(ns, options.sort || options['stat-desired'][0] || default_desired_stats[0]);
+    const sort = unshorten(options.sort || options['stat-desired'][0] || default_desired_stats[0]);
     const ownedSourceFiles = await getActiveSourceFiles(ns);
     const sf4Level = ownedSourceFiles[4] || 0;
     const sf11Level = ownedSourceFiles[11] || 0;
@@ -164,9 +165,12 @@ function shorten(mult) {
 
 // Helper function to take a shortened multi name provided by the user and map it to a real multi
 function unshorten(strMult) {
+    if (!strMult) return strMult;
     if (stat_multis.includes(strMult)) return strMult + "_mult"; // They just omitted the "_mult" suffix shared by all
     if (stat_multis.includes(strMult.replace("_mult", ""))) return strMult; // It's fine as is
-    let match = stat_multis.find(m => shorten(m) == strMult);
+    let match = stat_multis.find(m => shorten(m) == strMult) || // Match on the short-form of a multiplier|| // Match on the short-form of a multiplier
+        stat_multis.find(m => m.startsWith(strMult)) || // Otherwise match on the first multiplier that starts with the provided string
+        stat_multis.find(m => m.includes(strMult)); // Otherwise match on the first multiplier that contains the provided string
     if (find !== undefined) return match + "_mult";
     throw `The specified stat name '${strMult}' does not match any of the known stat names: ${stat_multis.join(', ')}`;
 }
