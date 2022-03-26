@@ -65,6 +65,7 @@ const preferredCompanyFactionOrder = [
 const preferredCrimeFactionOrder = ["Netburners", "Slum Snakes", "NiteSec", "Tetrads", "The Black Hand", "The Syndicate", "The Dark Army", "Speakers for the Dead", "Daedalus"]
 // Gang factions in order of ease-of-invite. If gangs are available, as we near 54K Karma to unlock gangs (as per --karma-threshold-for-gang-invites), we will attempt to get into any/all of these.
 const desiredGangFactions = ["Slum Snakes", "The Syndicate", "The Dark Army", "Speakers for the Dead"];
+const allGangFactions = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Slum Snakes", "The Black Hand", "NiteSec"];
 
 const loopSleepInterval = 5000; // 5 seconds
 const restartWorkInteval = 30 * 1000; // 30 seconds Collect e.g. rep earned by stopping and starting work;
@@ -84,7 +85,6 @@ let crimeCount = 0; // A simple count of crime commited since last script restar
 let mostExpensiveAugByFaction = [];
 let mostExpensiveDesiredAugByFaction = [];
 let playerGang = null;
-let allGangFactions = null;
 let dictFactionFavors;
 let firstFactions = []; // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
 let mainLoopStart;
@@ -199,9 +199,7 @@ export async function main(ns) {
                 if (!playerGang) { // Check if we've joined a gang since our last iteration
                     const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
                     playerGang = gangInfo ? gangInfo.faction : null;
-                    if (playerGang) // If we're now in a gang, get information about other gangs (who we can now no longer work for)
-                        allGangFactions = await getNsDataThroughFile(ns, 'Object.keys(ns.gang.getOtherGangInformation())', '/Temp/gang-names.txt') || [];
-                    else if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
+                    if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
                         log(ns, `INFO: We are nearing the Karma required to unlock gangs (${formatNumberShort(ns.heart.break())} / -54K). Prioritize earning gang faction invites.`);
                         for (const factionName of desiredGangFactions)
                             await earnFactionInvite(ns, factionName);
@@ -271,7 +269,7 @@ export async function main(ns) {
             if (scope <= 7 || breakToMainLoop()) continue;
 
             // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
-            let factionsWeCanWorkFor = joinedFactions.filter(f => !skipFactionsConfig.includes(f) && !(allGangFactions || []).includes(f));
+            let factionsWeCanWorkFor = joinedFactions.filter(f => !skipFactionsConfig.includes(f) && !(playerGang ? allGangFactions : []).includes(f));
             let foundWork = false;
             if (factionsWeCanWorkFor.length > 0 && !crimeFocus) {
                 // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
@@ -547,7 +545,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     if (startingFavor >= repToDonate && !forceRep) // If we have already unlocked donations via favour - no need to grind for rep
         return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
     // Cannot work for gang factions. Detect if this is our gang faction!
-    if (factionName === playerGang || (allGangFactions || []).includes(factionName))
+    if (playerGang && allGangFactions.includes(factionName))
         return ns.print(`"${factionName}" is an active gang faction. Cannot work for gang factions...`);
     if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
         ns.print(`The last "${factionName}" aug is only ${mostExpensiveAugByFaction[factionName].toLocaleString()} rep, ` +
