@@ -199,13 +199,15 @@ export async function main(ns) {
                 if (!playerGang) { // Check if we've joined a gang since our last iteration
                     const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
                     playerGang = gangInfo ? gangInfo.faction : null;
-                    if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
+                }
+                if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
+                    if (!playerGang) {
                         log(ns, `INFO: We are nearing the Karma required to unlock gangs (${formatNumberShort(ns.heart.break())} / -54K). Prioritize earning gang faction invites.`);
                         for (const factionName of desiredGangFactions)
                             await earnFactionInvite(ns, factionName);
-                        // No point in working for any factions that will become gangs, since we will lose all rep with them
-                        skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
                     }
+                    // Whether we're in a gang or will be soon, there's no point in working for any factions that will become gangs, since we will lose all rep with them
+                    skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
                 }
             }
 
@@ -544,7 +546,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`We are not yet part of faction "${factionName}". Skipping working for faction...`);
     if (startingFavor >= repToDonate && !forceRep) // If we have already unlocked donations via favour - no need to grind for rep
         return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
-    // Cannot work for gang factions. Detect if this is our gang faction!
+    // Cannot work for gang factions. Detect if this is a gang faction!
     if (playerGang && allGangFactions.includes(factionName))
         return ns.print(`"${factionName}" is an active gang faction. Cannot work for gang factions...`);
     if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
