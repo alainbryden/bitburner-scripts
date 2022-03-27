@@ -10,6 +10,10 @@ export function autocomplete(data, args) {
     return [];
 }
 
+// TODO: Joining factions gives a small amount of int xp.
+// With singularity functions, soft reset, and the 10 corp factions you can create a script that farms int xp rather quickly.
+// This would be faster than the below travel-based method, which has been nerfed quite heavily
+
 /** @param {NS} ns 
  * Script contributed by https://github.com/ShawnPatton
  * Concept: A small amount of intelligence is granted when you (successfully) travel to a new city. This script converts money into intelligence exp! **/
