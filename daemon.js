@@ -341,6 +341,10 @@ async function kickstartHackXp(ns) {
         let maxXpCycles = 10;
         const maxXpTime = options['initial-hack-xp-time'];
         const start = Date.now();
+        const minCycleTime = getXPFarmTarget().timeToWeaken();
+        if (minCycleTime > maxXpTime * 1000)
+            return log(`INFO: Skipping XP cycle because the best target (${getXPFarmTarget()}) time to weaken (${formatDuration(minCycleTime)})` +
+                ` is greater than the configured --initial-hack-xp-time of ${maxXpTime} seconds.`);
         log(`INFO: Running Hack XP-focused cycles for ${maxXpTime} seconds to further boost hack XP and speed up main hack cycle times. (set --initial-hack-xp-time 0 to disable this step.)`);
         while (maxXpCycles-- > 0 && Date.now() - start < maxXpTime * 1000) {
             let cycleTime = await farmHackXp(ns, 1, verbose, 1);
