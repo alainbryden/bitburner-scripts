@@ -5,6 +5,7 @@ const updateInterval = 200; // We can improve our timing by updating more often 
 const wantedPenaltyThreshold = 0.0001; // Don't let the wanted penalty get worse than this
 let defaultMaxSpendPerTickTransientEquipment = 0.002; // If the --equipment-budget is not specified, spend up to this percent of non-reserved cash on temporary upgrades (equipment)
 let defaultMaxSpendPerTickPermanentEquipment = 0.2; // If the --augmentation-budget is not specified, spend up to this percent of non-reserved cash on permanent member upgrades
+const offStatCostPenalty = 50; // Equipment that doesn't contribute to our main stats suffers a percieved cost penalty of this multiple
 
 // Territory-related variables
 const gangsByPower = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Slum Snakes", /* Hack gangs don't scale as far */ "The Black Hand", /* "NiteSec" Been there, not fun. */]
@@ -394,14 +395,15 @@ async function tryUpgradeMembers(ns, dictMembers) {
     const purchaseOrder = [];
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     const homeMoney = playerData.money - (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
-    let budget = (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment) * homeMoney;
-    let augBudget = (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment) * homeMoney;
+    const maxBudget = 0.99; // Note: To avoid rounding issues and micro-spend race-conditions, only allow budgeting up to 99% of money per tick
+    let budget = Math.max(maxBudget, (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment)) * homeMoney;
+    let augBudget = Math.max(maxBudget, (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment)) * homeMoney;
     if (budget <= 0) return;
     // Find out what outstanding equipment can be bought within our budget
     for (const equip of equipments) {
         for (const member of Object.values(dictMembers)) { // Get this equip for each member before considering the next most expensive equip
             // Bit of a hack: Inflate the "cost" of equipment that doesn't contribute to our main stats so that we don't purchase them unless we have ample cash
-            let percievedCost = equip.cost * (Object.keys(equip.stats).some(stat => importantStats.some(i => stat.includes(i))) ? 1 : 50);
+            let percievedCost = equip.cost * (Object.keys(equip.stats).some(stat => importantStats.some(i => stat.includes(i))) ? 1 : offStatCostPenalty);
             if (percievedCost > augBudget) continue;
             if (equip.type != "Augmentation" && percievedCost > budget) continue;
             if (!member.upgrades.includes(equip.name) && !member.augmentations.includes(equip.name)) {
@@ -418,11 +420,18 @@ async function tryUpgradeMembers(ns, dictMembers) {
  * Spawn a temporary taask to upgrade members. **/
 async function doUpgradePurchases(ns, purchaseOrder) {
     if (purchaseOrder.length == 0) return;
-    const orderSummary = purchaseOrder.map(o => `${o.member} ${o.type}: "${o.equipmentName}"`).join(", ");
-    if (await getNsDataThroughFile(ns, `${JSON.stringify(purchaseOrder)}.reduce((success, o) => success && ns.gang.purchaseEquipment(o.member, o.equipmentName), true)`, '/Temp/gang-upgrade-members.txt'))
-        log(ns, `SUCCESS: Purchased ${purchaseOrder.length} gang member upgrades for ${formatMoney(purchaseOrder.reduce((t, e) => t + e.cost, 0))}. (${orderSummary})`, 'success')
+    const totalCost = purchaseOrder.reduce((t, e) => t + e.cost, 0);
+    const getOrderSummary = (items) => items.map(o => `${o.member} ${o.type}: "${o.equipmentName}"`).join(", ");
+    const orderOutcomes = await getNsDataThroughFile(ns, `${JSON.stringify(purchaseOrder)}.map(o => ` +
+        `ns.gang.purchaseEquipment(o.member, o.equipmentName))`, '/Temp/gang-upgrade-members.txt');
+    const succeeded = [], failed = [];
+    for (let i = 0; i < orderOutcomes.length; i++)
+        (orderOutcomes[i] ? succeeded : failed).push(purchaseOrder[i]);
+    if (succeeded.length == purchaseOrder.length)
+        log(ns, `SUCCESS: Purchased ${purchaseOrder.length} gang member upgrades for ${formatMoney(totalCost)}:\n${getOrderSummary(succeeded)}`, 'success');
     else
-        log(ns, `ERROR: Failed to purchase one or more gang member upgrades. (${orderSummary})`, 'error');
+        log(ns, `WARNING: Failed to purchase one or more gang upgrades totalling ${formatMoney(totalCost)} (Insufficient funds?).` +
+            `\n  Failed: ${getOrderSummary(failed)}\n  Succeeded: ${getOrderSummary(succeeded)}`, 'error');
 }
 
 /** @param {NS} ns 
