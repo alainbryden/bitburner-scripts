@@ -1,4 +1,6 @@
-import { disableLogs, formatDuration } from './helpers.js'
+import { disableLogs, formatDuration, log, formatNumberShort } from './helpers.js'
+
+const sellForMoney = 'Sell for Money';
 
 const argsSchema = [
     ['v', false], // Verbose
@@ -6,8 +8,9 @@ const argsSchema = [
     ['l', false], // Turn all hashes into money
     ['liquidate', false],
     ['interval', 1000], // Rate at which the program runs and spends hashes
-    ['spend-on', ['Sell for Money']],
+    ['spend-on', [sellForMoney]],
     ['spend-on-server', undefined],
+    ['no-capacity-upgrades', false], // By default, will try to buy capacity upgrades if you can't afford anything. Disable here.
 ];
 
 const basicSpendOptions = ['Sell for Money', 'Generate Coding Contract', 'Improve Studying', 'Improve Gym Training',
@@ -33,9 +36,9 @@ export async function main(ns) {
     const toBuy = options['spend-on'].map(s => s.replaceAll("_", " "));
     const spendOnServer = options['spend-on-server']?.replaceAll("_", " ") ?? undefined;
     disableLogs(ns, ['sleep']);
-    ns.print(`Starting spend-hacknet-hashes.js to ensure no hashes go unspent. Will check in every ${formatDuration(interval)}`);
-    ns.print(liquidate ? `-l --liquidate mode active! Will spend all hashes on money as soon as possible.` :
-        `Only spending hashes every when near capacity to avoid wasting them.`);
+    ns.print(`Starting spend-hacknet-hashes.js... Will check in every ${formatDuration(interval)}`);
+    ns.print(liquidate ? `-l --liquidate mode active! Will spend all hashes as soon as possible.` :
+        `Saving up hashes, only spending hashes when near capacity to avoid wasting them.`);
     while (true) {
         let capacity = ns.hacknet.hashCapacity() || 0;
         let startingHashes = ns.hacknet.numHashes() || 0;
@@ -49,15 +52,40 @@ export async function main(ns) {
         // Spend hashes before we lose them
         let reserve = 10 + globalProduction * interval / 1000; // If we are this far from our capacity, start spending
         let success = true;
-        while (success && ns.hacknet.numHashes() > (liquidate ? 4 : capacity - reserve))
-            for (const spendAction of toBuy) {
+        let minCost = Math.min(...toBuy.map(p => ns.hacknet.hashCost(p)));
+        while (success && ns.hacknet.numHashes() > (liquidate ? minCost : capacity - reserve)) {
+            for (const spendAction of toBuy.filter(p => ns.hacknet.numHashes() >= ns.hacknet.hashCost(p))) {
+                const cost = ns.hacknet.hashCost(spendAction);
+                if (cost > ns.hacknet.numHashes()) break;
                 success = ns.hacknet.spendHashes(spendAction, parameterizedSpendOptions.includes(spendAction) ? spendOnServer : undefined);
-                if (!success && !liquidate)
-                    ns.print(`Weird, failed to spend hashes on '${spendAction}'. (Have: ${ns.hacknet.numHashes()} Capacity: ${ns.hacknet.hashCapacity()}`);
-                if (verbose && ns.hacknet.numHashes() < startingHashes)
-                    ns.print(`Spent ${(startingHashes - ns.hacknet.numHashes()).toFixed(0)} hashes on '${spendAction}'` +
-                        (liquidate ? '' : ` to avoid reaching capacity (${capacity})`) + ` at ${globalProduction.toPrecision(3)} hashes per second`);
+                if (!success) // Minor warning, possible if there are multiple versions of this script running, one beats the other two the punch.
+                    ns.print(`WARN: Failed to spend hashes on '${spendAction}'. (Cost: ${formatNumberShort(cost, 6, 3)} ` +
+                        `Have: ${formatNumberShort(ns.hacknet.numHashes(), 6, 3)} Capacity: ${formatNumberShort(ns.hacknet.hashCapacity(), 6, 3)}`);
+                else if (spendAction != sellForMoney) // This would be to noisy late-game, since cost never scales
+                    log(ns, `SUCCESS: Spent ${cost} hashes on '${spendAction}'. ` +
+                        `Next upgrade will cost ${formatNumberShort(ns.hacknet.hashCost(spendAction), 6, 3)}.`, false, 'success');
             }
+            if (success) minCost = Math.min(...toBuy.map(p => ns.hacknet.hashCost(p))); // Establish the new cheapest upgrade
+        }
+        if (verbose && ns.hacknet.numHashes() < startingHashes)
+            ns.print(`SUCCESS: Spent ${(startingHashes - ns.hacknet.numHashes()).toFixed(0)} hashes ` +
+                (liquidate ? '' : ` to avoid reaching capacity (${capacity})`) + ` at ${globalProduction.toPrecision(3)} hashes per second`);
+        if (ns.hacknet.hashCapacity() - ns.hacknet.numHashes() < 1 || minCost > ns.hacknet.hashCapacity()) {
+            if (options['no-capacity-upgrades'])
+                log(ns, `WARNING: Hashes are at capacity, but we cannot afford to buy any of the specified upgrades (${toBuy.join(", ")}), ` +
+                    `and --no-capacity-upgrades is set, so we cannot increase our hash capacity.`, false, 'warning');
+            else { // Try to upgrade hacknet capacity so we can save up for more upgrades
+                let lowestLevel = Number.MAX_SAFE_INTEGER, lowestIndex = null;
+                for (let i = 0; i < ns.hacknet.numNodes(); i++)
+                    if (ns.hacknet.getNodeStats(i).hashCapacity < lowestLevel)
+                        lowestIndex = i, lowestLevel = ns.hacknet.getNodeStats(i).hashCapacity;
+                if (lowestIndex !== null && ns.hacknet.upgradeCache(lowestIndex, 1))
+                    log(ns, `SUCCESS: Upgraded hacknet node ${lowestIndex} hash capacity in order to avoid wasting hashes.`, false, 'success');
+                else
+                    log(ns, `WARNING: Hashes are at capacity, but we cannot afford to buy any of the specified upgrades (${toBuy.join(", ")}), ` +
+                        `and we failed to increase our hash capacity (cost: ${ns.hacknet.getCacheUpgradeCost(i, 1)}).`, false, 'warning');
+            }
+        }
         await ns.sleep(interval);
     }
 }

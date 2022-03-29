@@ -1,10 +1,13 @@
-import { getFilePath,runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
+import { getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
+
+const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']
+    .map(s => getFilePath(s));
 
 const argsSchema = [
     ['reset', false], // By default (for now) does not actually install augmentations unless you use this flag
     // Note: --force option results in passing faction-manager.js the flag to ignore stanek's gift not being accepted
     ['force', false], // There will be sanity checks - use this option to bypass them
-    ['scripts-to-kill', ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']], // Kill these money-spending scripts at launch
+    ['scripts-to-kill', []], // Kill these money-spending scripts at launch
     // Spawn this script after installing augmentations (Note: Args not supported)
     ['on-reset-script', null], // By default, will run Stanek if you have stanek's gift, otherwise daemon.
 ];
@@ -21,7 +24,8 @@ export function autocomplete(data, args) {
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
     const options = ns.flags(argsSchema);
-	options['scripts-to-kill'] = options['scripts-to-kill'].map(s => getFilePath(s));
+    let scriptsToKill = options['scripts-to-kill'];
+    if (scriptsToKill.length == 0) scriptsToKill = defaultScriptsToKill;
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');
@@ -33,8 +37,12 @@ export async function main(ns) {
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
     // Kill any other scripts that may interfere with our spending
-    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(options['scripts-to-kill'])}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
+    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(scriptsToKill)}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
+
+    // If the user is training, we have to stop them, or they will continue spending money forever
+    if (playerData.isWorking && (playerData.workType.includes('university') || playerData.workType.includes('gym')))
+        await getNsDataThroughFile(ns, 'ns.stopAction()', '/Temp/stop-player-action.txt');
 
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
@@ -114,6 +122,9 @@ export async function main(ns) {
         ticksWithoutPurchases = money < lastMoney ? 0 : ticksWithoutPurchases + 1;
         lastMoney = money;
     }
+
+    // Clean up our temp folder - it's good to do this once in a while to reduce the save footprint.
+    await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')), true);
 
     // FINALLY: If configured, soft reset
     log(ns, '\nCatch you on the flippity-flip\n', true, 'success');
