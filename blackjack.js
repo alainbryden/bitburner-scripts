@@ -3,7 +3,10 @@ let doc = eval("document");
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
 	// Step 1: Route to the blackjack screen. (I opted to pay the 4 GB RAM to have this be instant and fool-proof as possible)
-	if (ns.getPlayer().city != "Aevum") ns.travelToCity("Aevum");
+	if (ns.getPlayer().city != "Aevum") {
+		if (!ns.travelToCity("Aevum"))
+			return ns.tprint("ERROR: Sorry, you need at least 200k to travel to the casino.");
+	}
 	ns.goToLocation("Iker Molina Casino");
 	const btnBlackjack = find("//button[contains(text(), 'blackjack')]");
 	await click(btnBlackjack);
