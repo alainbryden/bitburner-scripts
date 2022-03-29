@@ -36,9 +36,9 @@ export async function main(ns) {
     const toBuy = options['spend-on'].map(s => s.replaceAll("_", " "));
     const spendOnServer = options['spend-on-server']?.replaceAll("_", " ") ?? undefined;
     disableLogs(ns, ['sleep']);
-    ns.print(`Starting spend-hacknet-hashes.js to ensure no hashes go unspent. Will check in every ${formatDuration(interval)}`);
-    ns.print(liquidate ? `-l --liquidate mode active! Will spend all hashes on money as soon as possible.` :
-        `Only spending hashes every when near capacity to avoid wasting them.`);
+    ns.print(`Starting spend-hacknet-hashes.js... Will check in every ${formatDuration(interval)}`);
+    ns.print(liquidate ? `-l --liquidate mode active! Will spend all hashes as soon as possible.` :
+        `Saving up hashes, only spending hashes when near capacity to avoid wasting them.`);
     while (true) {
         let capacity = ns.hacknet.hashCapacity() || 0;
         let startingHashes = ns.hacknet.numHashes() || 0;
@@ -70,7 +70,7 @@ export async function main(ns) {
         if (verbose && ns.hacknet.numHashes() < startingHashes)
             ns.print(`SUCCESS: Spent ${(startingHashes - ns.hacknet.numHashes()).toFixed(0)} hashes ` +
                 (liquidate ? '' : ` to avoid reaching capacity (${capacity})`) + ` at ${globalProduction.toPrecision(3)} hashes per second`);
-        if (ns.hacknet.hashCapacity() - ns.hacknet.numHashes() < 1) {
+        if (ns.hacknet.hashCapacity() - ns.hacknet.numHashes() < 1 || minCost > ns.hacknet.hashCapacity()) {
             if (options['no-capacity-upgrades'])
                 log(ns, `WARNING: Hashes are at capacity, but we cannot afford to buy any of the specified upgrades (${toBuy.join(", ")}), ` +
                     `and --no-capacity-upgrades is set, so we cannot increase our hash capacity.`, false, 'warning');
