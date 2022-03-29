@@ -40,6 +40,10 @@ export async function main(ns) {
     let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(scriptsToKill)}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
+    // If the user is training, we have to stop them, or they will continue spending money forever
+    if (playerData.isWorking && (playerData.workType.includes('university') || playerData.workType.includes('gym')))
+        await getNsDataThroughFile(ns, 'ns.stopAction()', '/Temp/stop-player-action.txt');
+
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
@@ -118,6 +122,9 @@ export async function main(ns) {
         ticksWithoutPurchases = money < lastMoney ? 0 : ticksWithoutPurchases + 1;
         lastMoney = money;
     }
+
+    // Clean up our temp folder - it's good to do this once in a while to reduce the save footprint.
+    await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')), true);
 
     // FINALLY: If configured, soft reset
     log(ns, '\nCatch you on the flippity-flip\n', true, 'success');
