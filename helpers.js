@@ -114,7 +114,7 @@ export function getFnRunViaNsExec(ns, host = "home") {
 export function getFnIsAliveViaNsIsRunning(ns) { return checkNsInstance(ns, '"getFnIsAliveViaNsIsRunning"').isRunning; }
 
 /** @param {NS} ns
- *  Use where a function is required to run a script and you have already referenced ns.exec in your script  */
+ *  Use where a function is required to run a script and you have already referenced ns.ps in your script  */
 export function getFnIsAliveViaNsPs(ns) {
     checkNsInstance(ns, '"getFnIsAliveViaNsPs"');
     return function (pid, host) { return ns.ps(host).some(process => process.pid === pid); }
