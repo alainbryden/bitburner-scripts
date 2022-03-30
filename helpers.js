@@ -162,7 +162,9 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails
     const fileData = await autoRetry(ns, () => ns.read(fName), f => f !== undefined && f !== "",
-        () => `ns.read('${fName}') somehow returned undefined or an empty string`,
+        () => `ns.read('${fName}') returned no result (command likely failed to run).` +
+            `\n  Command: ${command}\n  Script: ${fNameCommand}` +
+            `\nEnsure you have sufficient free RAM to run this temporary script.`,
         maxRetries, retryDelayMs, undefined, verbose);
     if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
     return JSON.parse(fileData); // Deserialize it back into an object/array and return
@@ -197,7 +199,9 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = 
     // To improve performance and save on garbage collection, we can skip writing this exact same script was previously written (common for repeatedly-queried data)
     if (ns.read(fileName) != script) await ns.write(fileName, script, "w");
     return await autoRetry(ns, () => fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
-        () => `Run command returned no pid.\n  Destination: ${fileName}\n  Command: ${command}\nEnsure you have sufficient free RAM to run this temporary script.`,
+        () => `Run command returned no pid (command likely failed to run).` +
+            `\n  Command: ${command}\n  Temp Script: ${fileName}` +
+            `\nEnsure you have sufficient free RAM to run this temporary script.`,
         maxRetries, retryDelayMs, undefined, verbose);
 }
 
