@@ -163,21 +163,21 @@ export async function main(ns) {
         }
         if (sales > 0) continue; // If we sold anything, loop immediately (no need to sleep) and refresh stats immediately before making purchasing decisions.
 
-        let cash = playerStats.money - (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
-        let liquidity = cash / corpus;
+        let unreservedCash = playerStats.money - (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
+        let liquidity = playerStats.money / corpus;
         // If we haven't gone above a certain liquidity threshold, don't attempt to buy more stock
         // Avoids death-by-a-thousand-commissions before we get super-rich, stocks are capped, and this is no longer an issue
         // BUT may mean we miss striking while the iron is hot while waiting to build up more funds.
         if (liquidity > fracB) {
             // If we haven't detected the market cycle (or haven't detected it reliably), assume it might be quite soon and restrict bets to those that can turn a profit in the very-near term.
-            const estTick = Math.max(detectedCycleTick, marketCycleLength - (!marketCycleDetected ? 5 : inversionAgreementThreshold <= 8 ? 15 : inversionAgreementThreshold <= 10 ? 30 : marketCycleLength));
+            const estTick = Math.max(detectedCycleTick, marketCycleLength - (!marketCycleDetected ? 10 : inversionAgreementThreshold <= 8 ? 20 : inversionAgreementThreshold <= 10 ? 30 : marketCycleLength));
             // Buy shares with cash remaining in hand if exceeding some buy threshold. Prioritize targets whose expected return will cover the ask/bit spread the soonest
             for (const stk of allStocks.sort(purchaseOrder)) {
                 // Do not purchase a stock if it is not forecasted to recover from the ask/bid spread before the next market cycle and potential probability inversion
                 if (stk.blackoutWindow() >= marketCycleLength - estTick) continue;
                 if (pre4s && (Math.max(pre4sMinHoldTime, pre4sMinBlackoutWindow) >= marketCycleLength - estTick)) continue;
                 // Compute the cash we have to spend (such that spending it all on stock would bring us down to a liquidity of fracH)
-                let budget = cash - (fracH * corpus);
+                let budget = Math.min(unreservedCash, (1 - fracH) * corpus);
                 if (budget <= 0) break; // Break if we are out of money (i.e. from prior purchases)
                 // Skip if we already own all possible shares in this stock, or if the expected return is below our threshold, or if shorts are disabled and stock is bearish
                 if (stk.ownedShares() == stk.maxShares || stk.absReturn() <= thresholdToBuy || (disableShorts && stk.bearish())) continue;
@@ -194,12 +194,16 @@ export async function main(ns) {
                 let ticksBeforeCycleEnd = marketCycleLength - estTick - stk.timeToCoverTheSpread();
                 if (ticksBeforeCycleEnd < 1) continue; // We're cutting it too close to the market cycle, position might reverse before we break-even on commission
                 let estEndOfCycleValue = numShares * purchasePrice * ((stk.absReturn() + 1) ** ticksBeforeCycleEnd - 1); // Expected difference in purchase price and value at next market cycle end
+                let owned = stk.ownedShares() > 0;
                 if (estEndOfCycleValue <= 2 * commission)
-                    log(ns, `Despite attractive ER of ${formatBP(stk.absReturn())}, ${stk.sym} was not bought. Budget: ${formatMoney(budget)} can only buy ${numShares} shares @ ${formatMoney(purchasePrice)}. ` +
-                        `Given an estimated ${marketCycleLength - estTick} ticks left in market cycle, less ${stk.timeToCoverTheSpread().toFixed(1)} ticks to cover the spread (${(stk.spread_pct * 100).toFixed(2)}%), ` +
+                    log(ns, (owned ? '' : `We currently have ${formatNumberShort(stk.ownedShares(), 3, 1)} shares in ${stk.sym} valued at ${formatMoney(stk.positionValue())} ` +
+                        `(${(100 * stk.positionValue() / ((1 - fracH) * corpus)).toFixed(1)}% of corpus, capped at ${(diversification * 100).toFixed(1)}% by --diversification).\n`)
+                        `Despite attractive ER of ${formatBP(stk.absReturn())}, ${owned ? 'more ' : ''}${stk.sym} was not bought. ` +
+                        `\nBudget: ${formatMoney(budget)} can only buy ${numShares.toLocaleString()} ${owned ? 'more ' : ''}shares @ ${formatMoney(purchasePrice)}. ` +
+                        `\nGiven an estimated ${marketCycleLength - estTick} ticks left in market cycle, less ${stk.timeToCoverTheSpread().toFixed(1)} ticks to cover the spread (${(stk.spread_pct * 100).toFixed(2)}%), ` +
                         `remaining ${ticksBeforeCycleEnd.toFixed(1)} ticks would only generate ${formatMoney(estEndOfCycleValue)}, which is less than 2x commission (${formatMoney(2 * commission, 3)})`);
                 else
-                    cash -= await doBuy(ns, stk, numShares);
+                    unreservedCash -= await doBuy(ns, stk, numShares);
             }
         }
         await ns.sleep(sleepInterval);
