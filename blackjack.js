@@ -17,7 +17,7 @@ export async function main(ns) {
 	const btnStartGame = find("//button[text() = 'Start']");
 	const btnSaveGame = find("//button[@aria-label = 'save game']");
 	// Step 3: Save the fact that this script is now running, so that future reloads start this script back up immediately.
-	if (ns.ps("home").some(p => p.filename.includes("/Temp/"))) // Do a little clean-up to speed up save/load.
+	if (ns.ls("home", "/Temp/").length > 0) // Do a little clean-up to speed up save/load.
 		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
 	await click(btnSaveGame);
 	await ns.sleep(10); // Give the game a little time to complete the save
