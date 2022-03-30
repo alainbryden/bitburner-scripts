@@ -234,7 +234,7 @@ export async function main(ns) {
     const openTailWindows = !options['no-tail-windows'];
     asynchronousHelpers = [
         { name: "stats.js", shouldRun: () => ns.getServerMaxRam("home") >= 64 /* Don't waste precious RAM */ }, // Adds stats not usually in the HUD
-        { name: "stockmaster.js", args: ["--show-market-summary"], tail: openTailWindows, shouldRun: () => playerStats.hasTixApiAccess }, // Start our stockmaster if we have the required stockmarket access
+        { name: "stockmaster.js", args: openTailWindows ? ["--show-market-summary"] : [], tail: openTailWindows, shouldRun: () => playerStats.hasTixApiAccess }, // Start our stockmaster if we have the required stockmarket access
         { name: "hacknet-upgrade-manager.js", args: ["-c", "--max-payoff-time", "1h"] }, // Kickstart hash income by buying everything with up to 1h payoff time immediately
         { name: "spend-hacknet-hashes.js", args: ["-v"], shouldRun: () => 9 in dictSourceFiles }, // Always have this running to make sure hashes aren't wasted
         { name: "sleeve.js", tail: openTailWindows, shouldRun: () => 10 in dictSourceFiles }, // Script to create manage our sleeves for us
