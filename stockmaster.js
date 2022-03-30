@@ -197,7 +197,7 @@ export async function main(ns) {
                 let owned = stk.ownedShares() > 0;
                 if (estEndOfCycleValue <= 2 * commission)
                     log(ns, (owned ? '' : `We currently have ${formatNumberShort(stk.ownedShares(), 3, 1)} shares in ${stk.sym} valued at ${formatMoney(stk.positionValue())} ` +
-                        `(${(100 * stk.positionValue() / ((1 - fracH) * corpus)).toFixed(1)}% of corpus, capped at ${(diversification * 100).toFixed(1)}% by --diversification).\n`)
+                        `(${(100 * stk.positionValue() / ((1 - fracH) * corpus)).toFixed(1)}% of corpus, capped at ${(diversification * 100).toFixed(1)}% by --diversification).\n`) +
                         `Despite attractive ER of ${formatBP(stk.absReturn())}, ${owned ? 'more ' : ''}${stk.sym} was not bought. ` +
                         `\nBudget: ${formatMoney(budget)} can only buy ${numShares.toLocaleString()} ${owned ? 'more ' : ''}shares @ ${formatMoney(purchasePrice)}. ` +
                         `\nGiven an estimated ${marketCycleLength - estTick} ticks left in market cycle, less ${stk.timeToCoverTheSpread().toFixed(1)} ticks to cover the spread (${(stk.spread_pct * 100).toFixed(2)}%), ` +
@@ -416,6 +416,10 @@ async function doBuy(ns, stk, sharesBought) {
     let long = stk.bullish();
     let expectedPrice = long ? stk.ask_price : stk.bid_price; // Depends on whether we will be buying a long or short position
     let price;
+    log(ns, `INFO: ${long ? 'Buying  ' : 'Shorting'} ${formatNumberShort(sharesBought, 3, 3).padStart(5)} (max ` +
+        `${stk.maxShares == sharesBought + stk.ownedShares() ? 'shares' : `${formatNumberShort(stk.maxShares, 3, 3).padStart(6)}`}) ` +
+        `${stk.sym.padEnd(5)} @ ${formatMoney(expectedPrice).padStart(9)} for ${formatMoney(sharesBought * expectedPrice).padStart(9)} (Spread:${(stk.spread_pct * 100).toFixed(2)}% ` +
+        `ER:${formatBP(stk.expectedReturn()).padStart(8)}) Ticks to Profit: ${stk.timeToCoverTheSpread().toFixed(2)}`, noisy, 'info');
     try {
         price = mock ? expectedPrice : Number(await transactStock(ns, stk.sym, sharesBought, long ? 'buy' : 'short'));
     } catch (err) {
@@ -424,17 +428,13 @@ async function doBuy(ns, stk, sharesBought) {
         log(ns, `WARN: Failed to short ${stk.sym} (Shorts not available?). Disabling shorts...`, true, 'warning');
         return 0;
     }
-
-    log(ns, `INFO: ${long ? 'Bought ' : 'Shorted'} ${formatNumberShort(sharesBought, 3, 3).padStart(5)}${stk.maxShares == sharesBought + stk.ownedShares() ? ' (max shares)' : ''} ` +
-        `${stk.sym.padEnd(5)} @ ${formatMoney(price).padStart(9)} for ${formatMoney(sharesBought * price).padStart(9)} (Spread:${(stk.spread_pct * 100).toFixed(2)}% ` +
-        `ER:${formatBP(stk.expectedReturn()).padStart(8)}) Ticks to Profit: ${stk.timeToCoverTheSpread().toFixed(2)}`, noisy, 'info');
     // The rest of this work is for troubleshooting / mock-mode purposes
     if (price == 0) {
         log(ns, `ERROR: Failed to ${long ? 'buy' : 'short'} ${stk.sym} @ ${formatMoney(expectedPrice)} - 0 was returned.`, true, 'error');
         return 0;
     } else if (price != expectedPrice) {
         log(ns, `WARNING: ${long ? 'Bought' : 'Shorted'} ${stk.sym} @ ${formatMoney(price)} but expected ${formatMoney(expectedPrice)} (spread: ${formatMoney(stk.spread)})`, false, 'warning');
-        price = expectedPrice; // Known Bitburner bug for now, short returns "price" instead of "bit_price". Correct this so running profit calcs are correct.
+        price = expectedPrice; // Known Bitburner bug for now, short returns "price" instead of "bid_price". Correct this so running profit calcs are correct.
     }
     if (mock && long) stk.boughtPrice = (stk.boughtPrice * stk.sharesLong + price * sharesBought) / (stk.sharesLong + sharesBought);
     if (mock && !long) stk.boughtPriceShort = (stk.boughtPriceShort * stk.sharesShort + price * sharesBought) / (stk.sharesShort + sharesBought);
