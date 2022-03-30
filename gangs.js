@@ -93,7 +93,7 @@ async function initialize(ns) {
         await ns.sleep(1000); // Wait for our human to join a gang
     }
     log(ns, "Collecting gang information...");
-    const myGangInfo = ns.gang.getGangInformation(); //await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
+    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
     myGangFaction = myGangInfo.faction;
     if (loggedWaiting) log(ns, `SUCCESS: Created gang ${myGangFaction}`, 'success', true);
     isHackGang = myGangInfo.isHacking;
@@ -163,7 +163,7 @@ async function initialize(ns) {
  * Executed every `interval` **/
 async function mainLoop(ns) {
     // Update gang information (specifically monitoring gang power to see when territory ticks)
-    const myGangInfo = ns.gang.getGangInformation(); //await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
+    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
     const thisLoopStart = Date.now();
     if (!territoryTickDetected) { // Detect the first territory tick by watching for other gang's territory power to update.
         const otherGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getOtherGangInformation()', '/Temp/gang-other-gang-info.txt'); // Returns dict of { [gangName]: { "power": Number, "territory": Number } }
@@ -443,7 +443,7 @@ async function waitForGameUpdate(ns, oldGangInfo) {
     const waitInterval = 100;
     const start = Date.now()
     while (Date.now() < start + maxWaitTime) {
-        var latestGangInfo = ns.gang.getGangInformation();
+        var latestGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
         if (JSON.stringify(latestGangInfo) != JSON.stringify(oldGangInfo))
             return latestGangInfo;
         await ns.sleep(Math.min(waitInterval, start + maxWaitTime - Date.now()));
