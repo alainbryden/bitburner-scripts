@@ -179,7 +179,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
  */
 export async function runCommand(ns, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
     checkNsInstance(ns, '"runCommand"');
-    if (!verbose) disableLogs(ns, ['run', 'asleep']);
+    if (!verbose) disableLogs(ns, ['run']);
     return await runCommand_Custom(ns, ns.run, command, fileName, verbose, maxRetries, retryDelayMs, ...args);
 }
 
@@ -191,6 +191,7 @@ export async function runCommand(ns, command, fileName, verbose = false, maxRetr
  **/
 export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
     checkNsInstance(ns, '"runCommand_Custom"');
+    if (!verbose) disableLogs(ns, ['asleep']);
     let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
         `export async function main(ns) { try { ` +
         (verbose ? `let output = ${command}; ns.tprint(output)` : command) +
@@ -198,6 +199,11 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = 
     fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
     // To improve performance and save on garbage collection, we can skip writing this exact same script was previously written (common for repeatedly-queried data)
     if (ns.read(fileName) != script) await ns.write(fileName, script, "w");
+    // Wait for the script to appear (game can be finicky on actually completing the write)
+    await autoRetry(ns, () => ns.read(fileName), contents => contents == script,
+        () => `Temporary script ${fileName} is not available, despite having written it. (Did a competing process delete or overwrite it?)`,
+        maxRetries, retryDelayMs, undefined, verbose);
+    // Run the script, now that we're sure it is in place
     return await autoRetry(ns, () => fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
         () => `Run command returned no pid (command likely failed to run).` +
             `\n  Command: ${command}\n  Temp Script: ${fileName}` +
