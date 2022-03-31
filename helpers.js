@@ -149,6 +149,8 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     const commandHash = hashCode(command);
     fName = fName || `/Temp/${commandHash}-data.txt`;
     const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
+    // Defend against stale data by pre-writing the file with invalid data TODO: Remove if this condition is never encountered
+    await ns.write(fName, "STALE", 'w');
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
@@ -161,8 +163,9 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
     if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails
-    const fileData = await autoRetry(ns, () => ns.read(fName), f => f !== undefined && f !== "",
-        () => `ns.read('${fName}') returned no result (command likely failed to run).` +
+    let lastRead;
+    const fileData = await autoRetry(ns, () => ns.read(fName), f => (lastRead = f) !== undefined && f !== "" && f !== "STALE",
+        () => `ns.read('${fName}') returned no result ("${lastRead}") (command likely failed to run).` +
             `\n  Command: ${command}\n  Script: ${fNameCommand}` +
             `\nEnsure you have sufficient free RAM to run this temporary script.`,
         maxRetries, retryDelayMs, undefined, verbose);
