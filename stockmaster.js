@@ -31,7 +31,7 @@ const catchUpTickTime = 4000;
 let lastTick = 0;
 let sleepInterval = 1000;
 
-
+let options;
 const argsSchema = [
     ['l', false], // Stop any other running stockmaster.js instances and sell all stocks
     ['liquidate', false],
@@ -69,7 +69,7 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     ns.disableLog("ALL");
     // Extract various options from the args (globals, purchasing decision factors, pre-4s factors)
-    const options = ns.flags(argsSchema);
+    options = ns.flags(argsSchema);
     mock = options.mock;
     noisy = options.noisy;
     const fracB = options.fracB;
@@ -137,7 +137,7 @@ export async function main(ns) {
         const holdings = await refresh(ns, playerStats.has4SDataTixApi, allStocks, myStocks); // Returns total stock value
         const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
         const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
-        if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus, allStockSymbols))
+        if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH), allStockSymbols))
             continue; // Start the loop over if we just bought 4S API access
         // Be more conservative with our decisions if we don't have 4S data
         const thresholdToBuy = pre4s ? options['pre-4s-buy-threshold-return'] : options['buy-threshold'];
@@ -515,13 +515,13 @@ async function liquidate(ns, allStockSymbols) {
 
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
-async function tryGet4SApi(ns, playerStats, bitnodeMults, corpus, allStockSymbols) {
+async function tryGet4SApi(ns, playerStats, bitnodeMults, budget, allStockSymbols) {
     if (playerStats.has4SDataTixApi) return false; // Only return true if we just bought it
     const cost4sData = bitnodeMults.FourSigmaMarketDataCost * 5000000000;
     const cost4sApi = bitnodeMults.FourSigmaMarketDataApiCost * 25000000000;
     const totalCost = (playerStats.has4SData ? 0 : cost4sData) + cost4sApi;
     // Liquidate shares if it would allow us to afford 4S API data
-    if (totalCost > corpus * (options['buy-4s-budget'] - fracH) /* Need to reserve some money to invest */)
+    if (totalCost > budget) /* Need to reserve some money to invest */
         return false;
     if (playerStats.money < totalCost)
         await liquidate(ns, allStockSymbols);
