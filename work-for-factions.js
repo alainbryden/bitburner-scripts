@@ -34,6 +34,7 @@ const jobs = [ // Job stat requirements for a company with a base stat modifier 
 const factions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
     "Volhaven", "Speakers for the Dead", "The Dark Army", "The Syndicate", "Silhouette", "Tetrads", "Slum Snakes", "Netburners", "Tian Di Hui", "CyberSec"]; //TODO: Add Bladeburner Automation at BN7.1
+const cannotWorkForFactions = ["Church of the Machine God", "Bladeburners"]
 // These factions should ideally be completed in this order (TODO: Check for augmentation dependencies)
 const preferredEarlyFactionOrder = [
     "Netburners", // Improve hash income, which is useful or critical for almost all BNs
@@ -136,28 +137,31 @@ export async function main(ns) {
                 log(ns, `WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
                     `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`, false, 'warning');
 
-            let bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
+            const bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
             repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
             crimeCount = 0;
 
-            // Get some augmentation information to decide what remains to be purchased
-            const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
+            const playerInfo = await getPlayerInfo(ns);
+            const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
+
+            // Get some augmentation information to decide what remains to be purchased            
+            const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(allKnownFactions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
             const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
             const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
             const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
-            dictFactionFavors = await getNsDataThroughFile(ns, dictCommand(factions, 'ns.getFactionFavor(o)'), '/Temp/faction-favor.txt');
+            dictFactionFavors = await getNsDataThroughFile(ns, dictCommand(allKnownFactions, 'ns.getFactionFavor(o)'), '/Temp/faction-favor.txt');
 
             const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
             const installedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
             hasFocusPenaly = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
             shouldFocusAtWork = !noFocus && hasFocusPenaly; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
 
-            mostExpensiveAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
+            mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
                 .filter(aug => !ownedAugmentations.includes(aug))
                 .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
             //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
             // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-            mostExpensiveDesiredAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
+            mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
                 .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || desiredAugStats.length == 0 ||
                     Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
                 .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
@@ -165,13 +169,13 @@ export async function main(ns) {
 
             completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1);
             softCompletedFactions = Object.keys(mostExpensiveDesiredAugByFaction).filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
-            skipFactions = skipFactionsConfig.concat(completedFactions).filter(fac => !firstFactions.includes(fac));
+            skipFactions = skipFactionsConfig.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
             if (completedFactions.length > 0)
                 ns.print(`${completedFactions.length} factions are completed (all augs purchased): ${completedFactions.join(", ")}`);
             if (softCompletedFactions.length > 0)
                 ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
 
-            numJoinedFactions = (await getPlayerInfo(ns)).factions.length;
+            numJoinedFactions = playerInfo.factions.length;
             var fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
 
             loadingComplete = true;
@@ -271,7 +275,8 @@ export async function main(ns) {
             if (scope <= 7 || breakToMainLoop()) continue;
 
             // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
-            let factionsWeCanWorkFor = joinedFactions.filter(f => !skipFactionsConfig.includes(f) && !(playerGang ? allGangFactions : []).includes(f));
+            let factionsWeCanWorkFor = joinedFactions.filter(f => !skipFactionsConfig.includes(f) &&
+                !(playerGang ? allGangFactions : []).includes(f) && !cannotWorkForFactions.includes(f));
             let foundWork = false;
             if (factionsWeCanWorkFor.length > 0 && !crimeFocus) {
                 // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
