@@ -96,7 +96,7 @@ export async function main(ns) {
                         lowestIndex = i, lowestLevel = ns.hacknet.getNodeStats(i).hashCapacity;
                 if (lowestIndex !== null && ns.hacknet.upgradeCache(lowestIndex, 1))
                     log(ns, `SUCCESS: Upgraded hacknet node ${lowestIndex} hash capacity in order to avoid wasting hashes.`, false, 'success');
-                else
+                else if (nodes > 0)
                     log(ns, `WARNING: Hashes are at capacity, but we cannot afford to buy any of the specified upgrades (${toBuy.join(", ")}), ` +
                         `and we failed to increase our hash capacity (cost: ${formatMoney(ns.hacknet.getCacheUpgradeCost(lowestIndex, 1))}).`, false, 'warning');
             }
