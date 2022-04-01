@@ -274,7 +274,7 @@ export async function main(ns) {
             interval: 32000, name: "host-manager.js", requiredServer: "home",
             // Funky heuristic warning: I find that new players with fewer SF levels under their belt are obsessed with hack income from servers,
             // but established players end up finding auto-purchased hosts annoying - so now the % of money we spend shrinks as SF levels grow.
-            args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).sum(v => v)), '--utilization-trigger', '0'],
+            args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--utilization-trigger', '0'],
             shouldRun: () => {
                 if (shouldReserveMoney() || !shouldImproveHacking()) return false; // Skip if we're saving up, or if hack income is not important in this BN or at this time               
                 let utilization = getTotalNetworkUtilization(); // Utilization-based heuristics for when we likely could use more RAM for hacking
