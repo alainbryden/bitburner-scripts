@@ -44,6 +44,9 @@ export async function main(ns) {
     if (playerData.isWorking && (playerData.workType.includes('university') || playerData.workType.includes('gym')))
         await getNsDataThroughFile(ns, 'ns.stopAction()', '/Temp/stop-player-action.txt');
 
+    // Clear any global reserve so that all money can be spent
+    await ns.write(getFilePath('reserve.txt'), '0', "w");
+
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
