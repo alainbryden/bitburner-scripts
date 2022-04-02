@@ -19,8 +19,9 @@ export async function main(ns) {
 	// Step 3: Save the fact that this script is now running, so that future reloads start this script back up immediately.
 	if (ns.ls("home", "/Temp/").length > 0) // Do a little clean-up to speed up save/load.
 		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+	await ns.sleep(5); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
 	await click(btnSaveGame);
-	await ns.sleep(10); // Give the game a little time to complete the save
+	await ns.sleep(5); // Assume the game didn't save instantly and give it some time
 	while (true) {
 		const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
 		await setText(inputWager, `${bet}`);
@@ -49,7 +50,7 @@ export async function main(ns) {
 			return await ns.sleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
 		}
 		await click(btnSaveGame); // Save if we won
-		await ns.sleep(10); // Give the game a little time to complete the save
+		await ns.sleep(10); // Assume the game didn't save instantly and give it some time
 	}
 }
 // Some DOM helpers (partial credit to ShamesBond)
