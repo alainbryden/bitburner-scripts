@@ -708,7 +708,7 @@ async function doTargetingLoop(ns) {
             var errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
             log(`WARNING: Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
             // Catch errors that appear to be caused by deleted servers, and remove the server from our lists.
-            const expectedDeletedHostPhrase = "Invalid IP/hostname: ";
+            const expectedDeletedHostPhrase = "Invalid hostname: ";
             let expectedErrorPhraseIndex = errorMessage.indexOf(expectedDeletedHostPhrase);
             if (expectedErrorPhraseIndex == -1) continue;
             let start = expectedErrorPhraseIndex + expectedDeletedHostPhrase.length;
