@@ -17,7 +17,7 @@ const argsSchema = [
     ['on-completion-script', null], // (Default above) Spawn this script when max-charges is reached
     ['on-completion-script-args', []], // (Default above) Optional args to pass to the script when launched
     ['no-tail', false], // By default, keeps a tail window open, because it's pretty important to know when this script is running (can't use home for anything else)
-    ['average-charge-sensitivity', 0.95], // Monitor available ram and do not charge fragments if current available RAM is less than this percentage of the current average charge.
+    //['average-charge-sensitivity', 0.95], // Monitor available ram and do not charge fragments if current available RAM is less than this percentage of the current average charge.
 ];
 
 export function autocomplete(data, args) {
@@ -62,7 +62,7 @@ export async function main(ns) {
         let minCharges = Number.MAX_SAFE_INTEGER;
         for (const fragment of fragments) {
             statusUpdate += `Fragment ${String(fragment.id).padStart(2)} at [${fragment.x},${fragment.y}] ` +
-                (fragment.id < 100 ? `charge: ${fragment.numCharge} avg: ${formatNumberShort(fragment.avgCharge)}` :
+                (fragment.id < 100 ? `Peak: ${formatNumberShort(fragment.highestCharge)} Charges: ${fragment.numCharge.toFixed(1)}` :
                     `(booster, no charge effect)`) + `\n`;
             if (fragment.numCharge == 0 && (knownCharges[fragment.id] || 0) > 0) {
                 if (knownCharges[fragment.id] == 1 && fragment.id < 100)
@@ -78,14 +78,15 @@ export async function main(ns) {
             let reservedRam = (idealReservedRam / availableRam < 0.05) ? options['reserved-ram-ideal'] : options['reserved-ram'];
             const threads = Math.floor((availableRam - reservedRam) / 2.0);
             // Only charge if we will not be bringing down the average (After some initial threshold of charges has been established)
-            if (threads < fragment.avgCharge * options['average-charge-sensitivity'] && fragment.numCharge > 5) {
-                log(ns, `WARNING: The current average charge of fragment ${fragment.id} is ${formatNumberShort(fragment.avgCharge)}, ` +
-                    `indicating that it has been charged while there was ${formatRam(2 * fragment.avgCharge)} or more free RAM on home, ` +
+            /* Kept for posterity, but this game mechanic has changed so that small charges can not do harm and still have value.
+            if (threads < fragment.highestCharge * options['average-charge-sensitivity'] && fragment.numCharge > 5) {
+                log(ns, `WARNING: The current average charge of fragment ${fragment.id} is ${formatNumberShort(fragment.highestCharge)}, ` +
+                    `indicating that it has been charged while there was ${formatRam(2 * fragment.highestCharge)} or more free RAM on home, ` +
                     `but currently there is only ${formatRam(availableRam)} available, which would reduce the average charge and lower your stats. ` +
                     `This update will be skipped, and you should free up RAM on home to resume charging.`, false, 'warning');
                 await ns.sleep(1000);
                 continue;
-            }
+            }*/
             const pid = ns.run(getFilePath('/stanek.js.charge.js'), threads, fragment.x, fragment.y);
             await waitForProcessToComplete(ns, pid);
             knownCharges[fragment.id] = 1 + (knownCharges[fragment.id] || 0);
