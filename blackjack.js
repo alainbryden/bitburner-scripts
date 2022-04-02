@@ -1,16 +1,28 @@
-import { getFilePath, waitForProcessToComplete } from './helpers.js'
+import { getFilePath, waitForProcessToComplete, getActiveSourceFiles, getNsDataThroughFile } from './helpers.js'
 
 let doc = eval("document");
 /** @param {NS} ns 
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
 	// Step 1: Route to the blackjack screen. (I opted to pay the 4 GB RAM to have this be instant and fool-proof as possible)
+	const ownedSourceFiles = await getActiveSourceFiles(ns);
 	if (ns.getPlayer().city != "Aevum") {
-		if (!ns.travelToCity("Aevum"))
+		if (!(4 in ownedSourceFiles))
+			return ns.tprint("ERROR: You must manually travel to to Aevum to use this script.");
+		if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.travelToCity("Aevum")', '/Temp/travel-to-city.txt')))
 			return ns.tprint("ERROR: Sorry, you need at least 200k to travel to the casino.");
 	}
-	ns.goToLocation("Iker Molina Casino");
+	if (!(4 in ownedSourceFiles) || !(await getNsDataThroughFile(ns, 'ns.goToLocation("Iker Molina Casino")', '/Temp/go-to-location.txt'))) {
+		let btnGoToCasino = find("//span[@aria-label = 'Iker Molina Casino']");
+		if (!btnGoToCasino) {// TODO: Need an automatic way to navigate to the CITY screen
+			ns.tprint("INFO: Quick! Click the City tab. You have 5 seconds...")
+			await ns.asleep(5000);
+			btnGoToCasino = find("//span[@aria-label = 'Iker Molina Casino']");
+		}
+		await click(btnGoToCasino);
+	}
 	const btnBlackjack = find("//button[contains(text(), 'blackjack')]");
+	if (!btnBlackjack) return tprint("ERROR: Attempt to automatically navigate to the Casino appears to have failed.");
 	await click(btnBlackjack);
 	// Step 2: Get some buttons we will need
 	const inputWager = find("//input[@value = 1000000]");
