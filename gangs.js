@@ -199,7 +199,7 @@ async function onTerritoryTick(ns, myGangInfo) {
         log(ns, `Territory power updated from ${formatNumberShort(lastTerritoryPower)} to ${formatNumberShort(myGangInfo.power)}.`)
     } else if (!warfareFinished) {
         log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, 'warning');
-        territoryTickWaitPadding = Math.max(2000, territoryTickWaitPadding + updateInterval); // Start waiting earlier to account for observed lag.
+        territoryTickWaitPadding = Math.min(2000, territoryTickWaitPadding + updateInterval); // Start waiting earlier to account for observed lag.
         territoryNextTick -= updateInterval; // Prep for the next tick a little earlier, in case we just lagged behind the tick by a bit.
         territoryTickDetected = false;
         lastOtherGangInfo = null;
