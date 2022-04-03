@@ -13,6 +13,7 @@ const territoryEngageThreshold = 0.60; // Minimum average win chance (of gangs w
 let territoryTickDetected = false;
 let territoryTickTime = 20000; // Est. milliseconds until territory *ticks*. Can vary if processing offline time
 let territoryTickWaitPadding = 200; // Start waiting this many milliseconds before we think territory will tick, in case it ticks early (increases automatically after misfires)
+let consecutiveTerritoryDetections = 0; // Used to reduce padding if things get back on track.
 let territoryNextTick = null; // The next time territory will tick
 let isReadyForNextTerritoryTick = false;
 let warfareFinished = false;
@@ -100,6 +101,7 @@ async function initialize(ns) {
     importantStats = isHackGang ? ["hack"] : ["str", "def", "dex", "agi"];
     territoryNextTick = lastTerritoryPower = lastOtherGangInfo = null;
     territoryTickDetected = isReadyForNextTerritoryTick = warfareFinished = false;
+    territoryTickWaitPadding = updateInterval;
 
     // If possible, determine how much rep we would need to get the most expensive unowned augmentation
     const sf4Level = ownedSourceFiles[4] || 0;
@@ -197,8 +199,12 @@ async function onTerritoryTick(ns, myGangInfo) {
     territoryNextTick = lastLoopTime + territoryTickTime; // Reset the time the next tick will occur
     if (lastTerritoryPower != myGangInfo.power || lastTerritoryPower == null) {
         log(ns, `Territory power updated from ${formatNumberShort(lastTerritoryPower)} to ${formatNumberShort(myGangInfo.power)}.`)
+        consecutiveTerritoryDetections++;
+        if (consecutiveTerritoryDetections > 5 && territoryTickWaitPadding > updateInterval)
+            territoryTickWaitPadding = Math.max(updateInterval, territoryTickWaitPadding - updateInterval);
     } else if (!warfareFinished) {
         log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, 'warning');
+        consecutiveTerritoryDetections = 0;
         territoryTickWaitPadding = Math.min(2000, territoryTickWaitPadding + updateInterval); // Start waiting earlier to account for observed lag.
         territoryNextTick -= updateInterval; // Prep for the next tick a little earlier, in case we just lagged behind the tick by a bit.
         territoryTickDetected = false;
