@@ -4,12 +4,13 @@ const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-f
     .map(s => getFilePath(s));
 
 const argsSchema = [
-    ['reset', false], // By default (for now) does not actually install augmentations unless you use this flag
-    // Note: --force option results in passing faction-manager.js the flag to ignore stanek's gift not being accepted
-    ['force', false], // There will be sanity checks - use this option to bypass them
-    ['scripts-to-kill', []], // Kill these money-spending scripts at launch
-    // Spawn this script after installing augmentations (Note: Args not supported)
-    ['on-reset-script', null], // By default, will run Stanek if you have stanek's gift, otherwise daemon.
+    ['install-augmentations', false], // By default, augs will only be purchased. Set this flag to install (a.k.a reset)
+    /* OR */['reset', false], // An alias for the above flag, does the same thing.
+    ['allow-soft-reset', false], // If set to true, allows ascend.js to invoke a **soft** reset (installs no augs) when no augs are affordable. This is useful e.g. when ascending rapidly to grind hacknet hash upgrades.
+    ['bypass-stanek-warning', false], // If set to true, and this will bypass the warning before purchasing augmentations if you haven't gotten stanek yet.
+    ['scripts-to-kill', []], // Kill these money-spending scripts at launch (if not specified, defaults to all scripts in defaultScriptsToKill above)
+    // Spawn this script after installing augmentations (Note: Args not supported by the game)
+    ['on-reset-script', null], // By default, will start with `stanek.js` if you have stanek's gift, otherwise `daemon.js`.
 ];
 
 export function autocomplete(data, args) {
@@ -30,10 +31,8 @@ export async function main(ns) {
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');
 
-    // TODO: Sanity checks: Make sure it's a good time to reset
+    // TODO: Additional sanity checks: Make sure it's a good time to reset
     // - We should be able to install ~10 augs or so after maxing home ram purchases?
-    // - We should have installed 
-    // - Have a force option to override (and pass-through to faction manager)
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
     // Kill any other scripts that may interfere with our spending
@@ -74,7 +73,10 @@ export async function main(ns) {
     // STEP 3: Buy as many augmentations as possible
     log(ns, 'Purchasing augmentations...', true, 'info');
     const facmanArgs = ['--purchase', '-v'];
-    if (options.force) facmanArgs.push('--ignore-stanek')
+    if (options['bypass-stanek-warning']) {
+        log(ns, 'INFO: --bypass-stanek-warning was set, sending the --ignore-stanek argument to faction-manager.js')
+        facmanArgs.push('--ignore-stanek');
+    }
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
@@ -82,10 +84,10 @@ export async function main(ns) {
     // Get owned + purchased augmentations, then installed augmentations. Ensure there's a difference
     let purchasedAugmentations = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt');
     let installedAugmentations = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(false)', '/Temp/player-augs-installed.txt');
-    if (purchasedAugmentations.length == installedAugmentations.length) {
-        log(ns, 'ERROR: Something must have gone wrong, there are no new purchased augs.', true, 'error');
-        if (!options.force) return;
-    }
+    let noAugsToInstall = purchasedAugmentations.length == installedAugmentations.length;
+    if (noAugsToInstall && !options['allow-soft-reset'])
+        return log(ns, `ERROR: See above faction-manager.js logs - there are no new purchased augs. ` +
+            `Specify --allow-soft-reset to proceed without any purchased augs.`, true, 'error');
 
     // STEP 4: Try to Buy 4S data / API if we haven't already and can afford it (although generally stockmaster.js would have bought these if it could)
     log(ns, 'Checking on Stock Market upgrades...', true, 'info');
@@ -131,12 +133,17 @@ export async function main(ns) {
     await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')), true);
 
     // FINALLY: If configured, soft reset
-    log(ns, '\nCatch you on the flippity-flip\n', true, 'success');
-    if (options.reset) {
+    if (options.reset || options['install-augmentations']) {
+        log(ns, '\nCatch you on the flippity-flip\n', true, 'success');
         await ns.sleep(1000); // Pause for effect?
         const resetScript = options['on-reset-script'] ??
             // Default script (if none is specified) is stanek.js if we have it (which in turn will spawn daemon.js when done)
             (purchasedAugmentations.includes(`Stanek's Gift - Genesis`) ? getFilePath('stanek.js') : getFilePath('daemon.js'));
-        await runCommand(ns, `ns.installAugmentations('${resetScript}')`, '/Temp/soft-reset.js');
-    }
+        if (noAugsToInstall)
+            await runCommand(ns, `ns.softReset('${resetScript}')`, '/Temp/soft-reset.js');
+        else
+            await runCommand(ns, `ns.installAugmentations('${resetScript}')`, '/Temp/install-augmentations.js');
+    } else
+        log(ns, `SUCCESS: Ready to ascend. In the future, you can run with --reset (or --install-augmentations) ` +
+            `to actually perform the reset automatically.`, true, 'success');
 }
