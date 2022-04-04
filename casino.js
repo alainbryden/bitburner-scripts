@@ -22,7 +22,7 @@ export async function main(ns) {
 		await click(btnGoToCasino);
 	}
 	const btnBlackjack = find("//button[contains(text(), 'blackjack')]");
-	if (!btnBlackjack) return tprint("ERROR: Attempt to automatically navigate to the Casino appears to have failed.");
+	if (!btnBlackjack) return ns.tprint("ERROR: Attempt to automatically navigate to the Casino appears to have failed.");
 	await click(btnBlackjack);
 	// Step 2: Get some buttons we will need
 	const inputWager = find("//input[@value = 1000000]");
