@@ -32,10 +32,20 @@ You may find it useful to set up one or more aliases with the default options yo
   - Quickly sell all your stocks and hacknet hashes for money so that you can spend it (useful before resetting)
 - `alias facman="run faction-manager.js"`
   - Quickly see what augmentations you can afford to purchase. Then use `facman --purchase` to pull the trigger.
+- alias buy-daemons="run host-manager.js --run-continuously --reserve-percent 0 --min-ram-exponent 19 --utilization-trigger 0 --tail"
+  - This is an example of how to use host-manager to buy servers for you. In this example, we are willing to spend all our current money  (--reserve-percent 0) if it means buying a server with 2^19 GB ram or more (--min-ram-exponent), even if our scripts aren't using any RAM on the network (--utilization-trigger 0), 
 - `alias spend-on-ram="run Tasks/ram-manager.js --reserve 0 --budget 1 --tail"`
 - `alias spend-on-gangs="run gangs.js --reserve 0 --augmentations-budget 1 --equipment-budget 1 --tail"`
 - `alias spend-on-sleeves="run sleeve.js --aug-budget 1 --min-aug-batch 1 --buy-cooldown 0 --reserve 0 --tail"`
   - Useful to run one or more of these (in your own priority order) after you've spent all you can on augmentations, before resetting.
+-  alias spend-on-hacknet="run hacknet-upgrade-manager.js --interval 10 --max-payoff-time 8888h --continuous --tail"
+  - Essentially spends a lot of money upgrading the hacknet. If it doesn't spend enough, increase the --max-payoff-time even more.
+- alias hashes-to-bladeburner="run spend-hacknet-hashes.js --spend-on Exchange_for_Bladeburner_Rank --spend-on Exchange_for_Bladeburner_SP --liquidate --tail"
+- alias hashes-to-corp-money="run spend-hacknet-hashes.js --spend-on Sell_for_Corporation_Funds --liquidate --tail"
+- alias hashes-to-corp-research="run spend-hacknet-hashes.js --spend-on Exchange_for_Corporation_Research --liquidate --tail"
+- alias hashes-to-corp="run spend-hacknet-hashes.js --spend-on Sell_for_Corporation_Funds --spend-on Exchange_for_Corporation_Research --liquidate --tail"
+- alias hashes-to-hack-server="run spend-hacknet-hashes.js --liquidate --spend-on Increase_Maximum_Money --spend-on Reduce_Minimum_Security --spend-on-server"
+ - Useful to set up hashes to automatically get spent on one or more things as you can afford them. Omit --liquidate if you want to save up hashes to spend yourself, and only want to spend them when you reach capacity to avoid wasting them.
 - `alias stock="run stockmaster.js --fracH 0.001 --fracB 0.1 --show-pre-4s-forecast --noisy --tail --reserve 100000000"`
   - Useful in e.g. BN8 to invest all cash in the stock market, and closely track progress. _(Also reserves 100m to play blackjack at the casino so you can build up cash quickly. Pro-tip: Save if you win, and just reload (or soft-reset if you hate save-scumming) when you lose it all to get your money back.)_
 - `alias crime="run crime.js --tail --fast-crimes-only"`
