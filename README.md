@@ -21,7 +21,7 @@ You may find it useful to set up one or more aliases with the default options yo
   - Makes auto-updating just a little easier.
 - `alias start="run daemon.js -v --stock-manipulation --tail"`
   - This way I can just enter `start` in the terminal after each reset, and the rest is handled automatically.
-- `alias stop="home; kill daemon.js -v --stock-manipulation; run cascade-kill.js"`
+- `alias stop="home; kill daemon.js -v --stock-manipulation; run kill-all-scripts.js"`
 - `alias sscan="home; run scan.js"`
   - Makes it a little quicker to run this custom-scan routine, which shows the entire network, stats about servers, and provides handy links for jumping to servers or backdooring them.
 - `alias do="run run-command.js"`
