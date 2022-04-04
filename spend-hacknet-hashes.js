@@ -90,7 +90,7 @@ export async function main(ns) {
                 `We currently have ${formatNumberShort(ns.hacknet.numHashes(), 6, 3)} hashes - which is ${capacity - ns.hacknet.numHashes()} away.`);
         else if (getMinCost(toBuy) > capacity - options['reserve-buffer'])
             log(ns, `INFO: Our hash capacity is ${formatNumberShort(capacity, 6, 3)}, but the cheapest upgrade we wish to purchase ` +
-                `costs ${formatNumberShort(minCost, 6, 3)} hashes. A capacity upgrade is needed before anything else is purchase.`);
+                `costs ${formatNumberShort(getMinCost(toBuy), 6, 3)} hashes. A capacity upgrade is needed before anything else is purchase.`);
         else // Current hash capacity suffices
             continue;
         if (options['no-capacity-upgrades']) // Not allowed to upgrade hacknet capacity
