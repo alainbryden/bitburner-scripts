@@ -100,7 +100,7 @@ export async function main(ns) {
     const sf4Level = ownedSourceFiles[4] || 0;
     const sf11Level = ownedSourceFiles[11] || 0;
     if (sf4Level == 0)
-        log(ns, `WARNING: This script makes heavy use of singularity functions. Without SF4, you're unlikely to get it working.`);
+        return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'ERROR');
     else if (sf4Level < 3)
         log(ns, `WARNING: This script makes heavy use of singularity functions, which are quite expensive before you have SF4.3. ` +
             `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
