@@ -1,39 +1,54 @@
-import { getFilePath, waitForProcessToComplete, getActiveSourceFiles, getNsDataThroughFile } from './helpers.js'
+import { getFilePath, waitForProcessToComplete, getNsDataThroughFile } from './helpers.js'
 
 let doc = eval("document");
+const argsSchema = [
+	['save-sleep-time', 5], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
+];
+export function autocomplete(data, _) {
+	data.flags(argsSchema);
+	return [];
+}
+
 /** @param {NS} ns 
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
-	// Step 1: Route to the blackjack screen. (I opted to pay the 4 GB RAM to have this be instant and fool-proof as possible)
-	const ownedSourceFiles = await getActiveSourceFiles(ns);
+	const options = ns.flags(argsSchema);
+	const saveSleepTime = options['save-sleep-time'];
+	ns.disableLog("asleep");
+	// Step 1: Go to Aevum if we aren't already there. (Must be done manually if you don't have SF4)
 	if (ns.getPlayer().city != "Aevum") {
-		if (!(4 in ownedSourceFiles))
-			return ns.tprint("ERROR: You must manually travel to to Aevum to use this script.");
-		if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.travelToCity("Aevum")', '/Temp/travel-to-city.txt')))
-			return ns.tprint("ERROR: Sorry, you need at least 200k to travel to the casino.");
-	}
-	if (!(4 in ownedSourceFiles) || !(await getNsDataThroughFile(ns, 'ns.goToLocation("Iker Molina Casino")', '/Temp/go-to-location.txt'))) {
-		let btnGoToCasino = find("//span[@aria-label = 'Iker Molina Casino']");
-		if (!btnGoToCasino) {// TODO: Need an automatic way to navigate to the CITY screen
-			ns.tprint("INFO: Quick! Click the City tab. You have 5 seconds...")
-			await ns.asleep(5000);
-			btnGoToCasino = find("//span[@aria-label = 'Iker Molina Casino']");
+		try {
+			if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.travelToCity("Aevum")', '/Temp/travel-to-city.txt')))
+				return ns.tprint("ERROR: Sorry, you need at least 200k to travel to the casino.");
+		} catch (err) {
+			return ns.tprint("ERROR: You must manually travel to to Aevum to use this script until you get SF4");
 		}
-		await click(btnGoToCasino);
 	}
-	const btnBlackjack = find("//button[contains(text(), 'blackjack')]");
-	if (!btnBlackjack) return ns.tprint("ERROR: Attempt to automatically navigate to the Casino appears to have failed.");
-	await click(btnBlackjack);
-	// Step 2: Get some buttons we will need
+	// Step 2: Navigate to the City Casino
+	try { // Try to do this without SF4, because it's faster and doesn't require a temp script to be cleaned up below
+		const btnStopAction = find("//button[contains(text(), 'Stop')]");
+		if (btnStopAction) // If we were performing an action unfocused, it will be focused on restart and we must stop that action to navigate.
+			await click(btnStopAction);
+		// Click our way to the city casino
+		await click(find("//div[(@role = 'button') and (contains(., 'City'))]"));
+		await click(find("//span[@aria-label = 'Iker Molina Casino']"));
+	} catch { // Use SF4 as a fallback, it's more reliable.
+		try { await getNsDataThroughFile(ns, 'ns.goToLocation("Iker Molina Casino")', '/Temp/go-to-location.txt'); }
+		catch { return ns.tprint("ERROR: Failed to travel to the casino both using UI navigation and using SF4 as a fall-back."); }
+	}
+	// Pick the game we wish to automate (Blackjack)
+	await click(find("//button[contains(text(), 'blackjack')]"));
+	// Step 3: Get some buttons we will need to play blackjack
 	const inputWager = find("//input[@value = 1000000]");
 	const btnStartGame = find("//button[text() = 'Start']");
 	const btnSaveGame = find("//button[@aria-label = 'save game']");
-	// Step 3: Save the fact that this script is now running, so that future reloads start this script back up immediately.
+	// Step 4: Save the fact that this script is now running, so that future reloads start this script back up immediately.
 	if (ns.ls("home", "/Temp/").length > 0) // Do a little clean-up to speed up save/load.
 		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
-	await ns.sleep(5); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
+	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
 	await click(btnSaveGame);
-	await ns.sleep(5); // Assume the game didn't save instantly and give it some time
+	if (saveSleepTime) await ns.asleep(saveSleepTime);
+	// Step 5: Play until we lose
 	while (true) {
 		const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
 		await setText(inputWager, `${bet}`);
@@ -41,7 +56,7 @@ export async function main(ns) {
 		const btnHit = find("//button[text() = 'Hit']");
 		const btnStay = find("//button[text() = 'Stay']");
 		let won;
-		do { // Step 3: Play the game
+		do { // Inner-loop to play a single hand
 			won = find("//p[contains(text(), 'lost')]") ? false : // Detect whether we lost or won. Annoyingly, when we win with blackjack, "Won" is Title-Case.
 				find("//p[contains(text(), 'won')]") || find("//p[contains(text(), 'Won')]") ? true : null;
 			if (won === null) {
@@ -58,11 +73,12 @@ export async function main(ns) {
 		if (won === null) continue; // Only possible if we tied and broke out early. Start a new hand.
 		if (!won) { // Reload if we lost
 			eval("window").onbeforeunload = null; // Disable the unsaved changes warning before reloading
+			await ns.sleep(1); // Yeild execution for an instant incase the game needs to finish a save or something
 			location.reload(); // Force refresh the page without saving           
-			return await ns.sleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
+			return await ns.asleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
 		}
 		await click(btnSaveGame); // Save if we won
-		await ns.sleep(10); // Assume the game didn't save instantly and give it some time
+		if (saveSleepTime) await ns.asleep(saveSleepTime);
 	}
 }
 // Some DOM helpers (partial credit to ShamesBond)
