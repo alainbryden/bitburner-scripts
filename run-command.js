@@ -17,5 +17,5 @@ export async function main(ns) {
     let escaped = firstArg.startsWith('"') && firstArg.endsWith('"') || firstArg.startsWith("'") && firstArg.endsWith("'") || firstArg.startsWith("`") && firstArg.endsWith("`");
     let command = args == escaped ? args[0] : args.join(" "); // If args weren't escaped, join them together
     //3.6 return await runCommand(ns.run, ns.write, command, `/Temp/terminal-command.js`, !silent);
-    return await runCommand(ns, command, `/Temp/terminal-command.js`, !silent, 1, undefined, undefined, ...args.slice(1));
+    return await runCommand(ns, command, `/Temp/terminal-command.js`, (escaped ? args.slice(1) : undefined), !silent);
 }

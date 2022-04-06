@@ -127,12 +127,13 @@ export function getFnIsAliveViaNsPs(ns) {
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
  * @param {string=} fName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
  **/
-export async function getNsDataThroughFile(ns, command, fName, verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile(ns, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
-    return await getNsDataThroughFile_Custom(ns, ns.run, ns.isRunning, command, fName, verbose, maxRetries, retryDelayMs);
+    return await getNsDataThroughFile_Custom(ns, ns.run, ns.isRunning, command, fName, args, verbose, maxRetries, retryDelayMs);
 }
 
 /**
@@ -142,8 +143,9 @@ export async function getNsDataThroughFile(ns, command, fName, verbose = false, 
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
  * @param {function} fnIsAlive - A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
+ * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  **/
-export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command, fName, verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     if (!verbose) disableLogs(ns, ['read']);
     const commandHash = hashCode(command);
@@ -158,7 +160,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
         ${command}
         );}catch{} const f="${fName}"; if(ns.read(f)!=result) await ns.write(f,result,'w')`;
     // Run the command with auto-retries if it fails
-    const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, false, maxRetries, retryDelayMs);
+    const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, false, maxRetries, retryDelayMs);
     // Wait for the process to complete
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
     if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
@@ -177,13 +179,13 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
  * @param {string=} fileName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, the evaluation result of the command is printed to the terminal
- * @param {...args} args - args to be passed in as arguments to command being run as a new script.
  */
-export async function runCommand(ns, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
+export async function runCommand(ns, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand"');
     if (!verbose) disableLogs(ns, ['run']);
-    return await runCommand_Custom(ns, ns.run, command, fileName, verbose, maxRetries, retryDelayMs, ...args);
+    return await runCommand_Custom(ns, ns.run, command, fileName, args, verbose, maxRetries, retryDelayMs);
 }
 
 /**
@@ -191,8 +193,11 @@ export async function runCommand(ns, command, fileName, verbose = false, maxRetr
  * Importing incurs 0 GB RAM (assuming fnRun, fnWrite are implemented using another ns function you already reference elsewhere like ns.exec)
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
+ * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
+ * @param {string=} fileName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  **/
-export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = false, maxRetries = 5, retryDelayMs = 50, ...args) {
+export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand_Custom"');
     if (!verbose) disableLogs(ns, ['asleep']);
     let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
@@ -207,7 +212,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, verbose = 
         () => `Temporary script ${fileName} is not available, despite having written it. (Did a competing process delete or overwrite it?)`,
         maxRetries, retryDelayMs, undefined, verbose);
     // Run the script, now that we're sure it is in place
-    return await autoRetry(ns, () => fnRun(fileName, ...args), temp_pid => temp_pid !== 0,
+    return await autoRetry(ns, () => fnRun(fileName, 1 /* Always 1 thread */, ...args), temp_pid => temp_pid !== 0,
         () => `Run command returned no pid (command likely failed to run).` +
             `\n  Command: ${command}\n  Temp Script: ${fileName}` +
             `\nEnsure you have sufficient free RAM to run this temporary script.`,
