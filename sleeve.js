@@ -3,14 +3,16 @@ import { getNsDataThroughFile, formatMoney, formatDuration, disableLogs, log } f
 const interval = 5000; // Uodate (tick) this often
 const minTaskWorkTime = 59000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
 const tempFile = '/Temp/sleeve-set-task.txt';
-const crimes = ['mug', 'homicide']
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
 const workByFaction = {}
+let homicideStats;
 
 let options;
 const argsSchema = [
-    ['shock-recovery', 0.25], // Set to a number between 0 and 1 to devote that much time to shock recovery
-    ['crime', ''],
+    ['min-shock-recovery', 0.97], // Minimum shock recovery before attempting to train or do crime    
+    ['shock-recovery', 0.05], // Set to a number between 0 and 1 to devote that ratio of time to periodic shock recovery (until shock is at 0)
+    ['crime', null], // If specified, sleeves will perform only this crime regardless of stats
+    ['homicide-chance-threshold', 0.5], // Sleeves will automatically start homicide once their chance of success succeeds this ratio
     ['aug-budget', 0.1], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
     ['buy-cooldown', 60 * 1000], // Must wait this may milliseconds before buying more augs for a sleeve
     ['min-aug-batch', 20], // Must be able to afford at least this many augs before we pull the trigger (or fewer if buying all remaining augs)
@@ -26,7 +28,6 @@ export function autocomplete(data, _) {
 export async function main(ns) {
     options = ns.flags(argsSchema);
     disableLogs(ns, ['getServerMoneyAvailable']);
-    if (!crimes.includes(options.crime)) crimes.push(options.crime);
     let task = [], lastUpdate = [], lastPurchase = [], availableAugs = [], lastReassign = [];
 
     // Collect info that won't change or that we can track ourselves going forward
@@ -38,6 +39,8 @@ export async function main(ns) {
     }
     for (let i = 0; i < numSleeves; i++)
         availableAugs[i] = null;
+    // Collect info about what makes homicide successful, used to calculate chance of sleeves succeeding at homicide
+    homicideStats = await getNsDataThroughFile(ns, 'ns.getCrimeStats("homicide")', '/Temp/homicide-stats.txt')
 
     while (true) {
         try {
@@ -79,7 +82,7 @@ export async function main(ns) {
                         log(ns, `INFO: Sleeve ${i} is syncing... ${sync.toFixed(2)}%`);
                         lastUpdate[i] = Date.now();
                     }
-                } else if (shock > 0 && options['shock-recovery'] > 0 && Math.random() < options['shock-recovery']) { // Recover from shock
+                } else if (shock > options['min-shock-recovery'] || shock > 0 && options['shock-recovery'] > 0 && Math.random() < options['shock-recovery']) { // Recover from shock
                     designatedTask = "recover from shock";
                     command = `ns.sleeve.setToShockRecovery(${i})`;
                     if (task[i] == designatedTask && Date.now() - (lastUpdate[i] ?? 0) > minTaskWorkTime) {
@@ -88,14 +91,15 @@ export async function main(ns) {
                     }
                 } else if (i == 0 && playerInfo.isWorking && playerInfo.workType == "Working for Faction") { // If player is currently working for faction rep, sleeves 0 shall help him out (only one sleeve can work for a faction)
                     // TODO: We should be able to borrow logic from work-for-factions.js to have more sleeves work for useful factions / companies
-                    let work = works[workByFaction[playerInfo.currentWorkFactionName] || 0];
+                    const work = works[workByFaction[playerInfo.currentWorkFactionName] || 0];
                     designatedTask = `work for faction '${playerInfo.currentWorkFactionName}' (${work})`;
                     command = `ns.sleeve.setToFactionWork(${i}, '${playerInfo.currentWorkFactionName}', '${work}')`; // TODO: Auto-determine the most productive faction work to do?
                 } else if (i == 0 && playerInfo.isWorking && playerInfo.workType == "Working for Company") { // If player is currently working for a company rep, sleeves 0 shall help him out (only one sleeve can work for a company)
                     designatedTask = `work for company '${playerInfo.companyName}'`;
                     command = `ns.sleeve.setToCompanyWork(${i}, '${playerInfo.companyName}')`;
-                } else { // Do something productive
-                    let crime = options.crime || (sleeveStats.strength < 100 ? 'mug' : 'homicide');
+                } else { // Do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
+                    const crime = options.crime || getHomicideChance(sleeveStats) > options['homicide-chance-threshold'] ? 'homicide' : 'mug';
+                    //log(ns, `INFO: Sleeve ${i} chance to succeed at homicide is ${(100 * getHomicideChance(sleeveStats)).toFixed(2)}%`);
                     designatedTask = `commit ${crime}`;
                     command = `ns.sleeve.setToCommitCrime(${i}, '${crime}')`;
                 }
@@ -121,4 +125,19 @@ export async function main(ns) {
         }
         await ns.asleep(interval);
     }
+}
+
+// Calculate the chance a sleeve has of committing homicide successfully
+function getHomicideChance(sleeveStats) {
+    const crime = homicideStats;
+    let chance =
+        crime.hacking_success_weight * sleeveStats['hacking'] +
+        crime.strength_success_weight * sleeveStats.strength +
+        crime.defense_success_weight * sleeveStats.defense +
+        crime.dexterity_success_weight * sleeveStats.dexterity +
+        crime.agility_success_weight * sleeveStats.agility +
+        crime.charisma_success_weight * sleeveStats.charisma;
+    chance /= 975;
+    chance /= crime.difficulty;
+    return Math.min(chance, 1);
 }
