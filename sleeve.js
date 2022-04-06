@@ -9,7 +9,7 @@ let homicideStats;
 
 let options;
 const argsSchema = [
-    ['min-shock-recovery', 0.97], // Minimum shock recovery before attempting to train or do crime    
+    ['min-shock-recovery', 97], // Minimum shock recovery before attempting to train or do crime (Set to 100 to disable, 0 to recover fully)
     ['shock-recovery', 0.05], // Set to a number between 0 and 1 to devote that ratio of time to periodic shock recovery (until shock is at 0)
     ['crime', null], // If specified, sleeves will perform only this crime regardless of stats
     ['homicide-chance-threshold', 0.5], // Sleeves will automatically start homicide once their chance of success succeeds this ratio
