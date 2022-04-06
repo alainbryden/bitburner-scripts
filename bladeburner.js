@@ -4,14 +4,18 @@ const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
 // Some bladeburner info gathered at startup and cached
 let skillNames, generalActionNames, contractNames, operationNames, remainingBlackOpsNames, blackOpsRanks;
-let lastBlackOpReady;
+let lastBlackOpReady, lowStaminaTriggered;
 
 let player;
 let options;
 const argsSchema = [
+    ['chaos-recovery-threshold', 10], // Prefer to do "Stealth Retirement" operations to reduce chaos when it reaches this number
     ['max-chaos', 500], // If chaos exceeds this amount in every city, we will reluctantly resort to diplomacy to reduce it.
-    ['no-upgrade-toasts', false], // Set to true to suppress the toast each time a skill is upgraded
-    ['no-operation-toasts', false], // Set to true to suppress the toast each time we switch operations
+    ['toast-upgrades', false], // Set to true to toast each time a skill is upgraded
+    ['toast-operations', false], // Set to true to toast each time we switch operations
+    ['toast-relocations', false], // Set to true to toast each time we change cities
+    ['low-stamina-pct', 0.5], // Switch to no-stamina actions when we drop below this stamina percent
+    ['high-stamina-pct', 0.6], // Switch back to stamina-consuming actions when we rise above this stamina percent
 ];
 export function autocomplete(data, _) {
     data.flags(argsSchema);
@@ -71,6 +75,7 @@ async function gatherBladeburnerInfo(ns) {
     log(ns, `INFO: There are ${remainingBlackOpsNames.length} remaining BlackOps operations to complete in order:\n` +
         remainingBlackOpsNames.map(n => `${n} (${blackOpsRanks[n]})`).join(", "));
     lastBlackOpReady = false; // Flag will track whether we've notified the user that the last black-op is ready
+    lowStaminaTriggered = false; // Flag will track whether we've previously switched to stamina recovery to reduce noise
 }
 
 /** @param {NS} ns 
@@ -91,7 +96,8 @@ async function mainLoop(ns) {
     if (currentCity != lowestChaosCity) {
         const success = await getBBInfo(ns, `switchCity(ns.args[0])`, lowestChaosCity);
         log(ns, (success ? 'INFO: Switched' : 'ERROR: Failed to switch') + ` to Bladeburner city "${lowestChaosCity}" ` +
-            `with lowest chaos (${chaosByCity[lowestChaosCity].toFixed(1)})`, !success, success ? 'info' : 'error');
+            `with lowest chaos (${chaosByCity[lowestChaosCity].toFixed(1)})`,
+            !success, success ? (options['toast-relocations'] ? 'info' : undefined) : 'error');
         if (success) currentCity = lowestChaosCity;
     }
 
@@ -122,17 +128,23 @@ async function mainLoop(ns) {
 
     // Pick the action we should be working on.
     let bestActionName, reason;
-    // If we are suffering a stamina penalty, perform an action that consumes no stamina
+
+    // Trigger stamina recovery if we drop below our --low-stamina-pct configuration, and remain trigered until we've recovered to --high-stamina-pct
     const stamina = await getBBInfo(ns, `getStamina()`); // Returns [current, max];
-    if (stamina[0] / stamina[1] < 0.5) {
+    const staminaPct = stamina[0] / stamina[1];
+    lowStaminaTriggered = staminaPct < options['low-stamina-pct'] || lowStaminaTriggered && staminaPct < options['high-stamina-pct'];
+    // If we are suffering a stamina penalty, perform an action that consumes no stamina
+    if (lowStaminaTriggered) {
         bestActionName = chaosByCity[currentCity] > options['max-chaos'] ? "Diplomacy" : "Field Analysis";
-        reason = `Stamina is low: ${(100 * stamina[0] / stamina[1]).toFixed(2)}%`
+        reason = `Stamina is low: ${(100 * staminaPct).toFixed(1)}% < ${(100 * options['low-stamina-pct']).toFixed(1)}%`
     } // If current city chaos is greater than 10, keep it low with "Stealth Retirement" if odds are good
-    else if (chaosByCity[currentCity] > 10 && getCount(antiChaosOperation) > 0 && minChance(antiChaosOperation) > 0.99) {
+    else if (chaosByCity[currentCity] > options['chaos-recovery-threshold'] && getCount(antiChaosOperation) > 0 && minChance(antiChaosOperation) > 0.99) {
         bestActionName = antiChaosOperation;
+        reason = `Chaos is high: ${chaosByCity[currentCity].toFixed(2)} > ${options['chaos-recovery-threshold']} (--chaos-recovery-threshold)`;
     } // If current city chaos is very high (should be rare), we should be very wary of the snowballing effects, and try to reduce it.
     else if (chaosByCity[currentCity] > options['max-chaos']) {
         bestActionName = getCount(antiChaosOperation) > 0 && minChance(antiChaosOperation) > 0.8 ? antiChaosOperation : "Diplomacy";
+        reason = `Chaos is very high: ${chaosByCity[currentCity].toFixed(2)} > ${options['max-chaos']} (--max-chaos)`;
     }
     else { // Otherwise, pick the "highest-tier" action we can confidently perform, which should lead to the fastest rep-gain.
         // Note: Actions will be maintained in order of highest-rep to lowest-rep earning
@@ -160,11 +172,14 @@ async function mainLoop(ns) {
         if (!bestActionName) // If there were none, pick the first candidate action with a maximum chance of ~100% and minimum of greater than 50%
             bestActionName = candidateActions.filter(a => maxChance(a) > 0.99 && minChance(a) > 0.5)[0];
         if (!bestActionName) { // If there were none, resort to a "general action" which always have 100% chance, but take longer
-            bestActionName = stamina[0] / stamina[1] > 0.8 ? "Training" : "Field Analysis"; // Train if we have lots of stamina
+            bestActionName = staminaPct > options['high-stamina-pct'] ? "Training" : "Field Analysis"; // Train if we have lots of stamina
         }
         // NOTE: We never "Incite Violence", it's not worth the trouble of generating a handful of contracts/operations. Just wait it out.
         // NOTE: We never "Recruit". Community consensus is that team mates die too readily, and have minimal impact on success.
         // NOTE: We don't use the "Hyperbolic Regeneration Chamber". We are cautious enough that we should never need healing.
+        reason = `Success Chance: ${(100 * minChance(bestActionName)).toFixed(1)}%` +
+            (maxChance(bestActionName) - minChance(bestActionName) < 0.1 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
+            `, Remaining: ${getCount(bestActionName)}`;
     }
 
     // Detect our current action (API returns an object like { "type":"Operation", "name":"Investigation" })
@@ -174,8 +189,8 @@ async function mainLoop(ns) {
         const bestActionType = nextBlackOp == bestActionName ? "Black Op" : contractNames.includes(bestActionName) ? "Contract" :
             operationNames.includes(bestActionName) ? "Operation" : "General Action";
         const success = await getBBInfo(ns, `startAction(ns.args[0], ns.args[1])`, bestActionType, bestActionName);
-        log(ns, (success ? 'INFO: Switched' : 'ERROR: Failed to switch') + ` to Bladeburner ${bestActionType} "${bestActionName}".`,
-            !success, success ? (options['no-operation-toasts'] ? undefined : 'info') : 'error');
+        log(ns, (success ? 'INFO: Switched' : 'ERROR: Failed to switch') + ` to Bladeburner ${bestActionType} "${bestActionName}" (${reason}).`,
+            !success, success ? (options['toast-operations'] ? 'info' : undefined) : 'error');
     }
 }
 
@@ -203,7 +218,7 @@ async function spendSkillPoints(ns) {
         if (minPercievedCost > unspent || skillCosts[skillToUpgrade] > unspent) return;
         // Otherwise, purchase the upgrade
         if (await getBBInfo(ns, `upgradeSkill(ns.args[0])`, skillToUpgrade))
-            log(ns, `SUCCESS: Upgraded Bladeburner skill ${skillToUpgrade}`, false, options['no-upgrade-toasts'] ? undefined : 'success');
+            log(ns, `SUCCESS: Upgraded Bladeburner skill ${skillToUpgrade}`, false, options['toast-upgrades'] ? 'success' : undefined);
         else
             log(ns, `WARNING: Something went wrong while trying to upgrade Bladeburner skill ${skillToUpgrade}. ` +
                 `Currently have ${unspent} SP, upgrade should cost ${skillCosts[skillToUpgrade]} SP.`, false, 'warning');
