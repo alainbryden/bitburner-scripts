@@ -4,7 +4,7 @@ const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
 // Some bladeburner info gathered at startup and cached
 let skillNames, generalActionNames, contractNames, operationNames, remainingBlackOpsNames, blackOpsRanks;
-let lastBlackOpReady, lowStaminaTriggered;
+let lastBlackOpReady, lowStaminaTriggered, timesTrained;
 
 let player;
 let options;
@@ -16,6 +16,8 @@ const argsSchema = [
     ['toast-relocations', false], // Set to true to toast each time we change cities
     ['low-stamina-pct', 0.5], // Switch to no-stamina actions when we drop below this stamina percent
     ['high-stamina-pct', 0.6], // Switch back to stamina-consuming actions when we rise above this stamina percent
+    ['training-limit', 100], // Don't bother training more than this many times, since Training earns no rank
+    ['update-interval', 5000], // How often to refresh bladeburner status
 ];
 export function autocomplete(data, _) {
     data.flags(argsSchema);
@@ -41,7 +43,7 @@ export async function main(ns) {
     while (true) {
         try { await mainLoop(ns); }
         catch (error) { log(ns, `WARNING: Caught an error in the main loop, but will keep going:\n${String(error)}`, true, 'error'); }
-        await ns.asleep(1000);
+        await ns.asleep(options['update-interval']);
     }
 }
 
@@ -76,6 +78,7 @@ async function gatherBladeburnerInfo(ns) {
         remainingBlackOpsNames.map(n => `${n} (${blackOpsRanks[n]})`).join(", "));
     lastBlackOpReady = false; // Flag will track whether we've notified the user that the last black-op is ready
     lowStaminaTriggered = false; // Flag will track whether we've previously switched to stamina recovery to reduce noise
+    timesTrained = 0; // Count of how many times we've trained (capped at --training-limit)
 }
 
 /** @param {NS} ns 
@@ -171,15 +174,23 @@ async function mainLoop(ns) {
         bestActionName = candidateActions.filter(a => minChance(a) > 0.99)[0];
         if (!bestActionName) // If there were none, pick the first candidate action with a maximum chance of ~100% and minimum of greater than 50%
             bestActionName = candidateActions.filter(a => maxChance(a) > 0.99 && minChance(a) > 0.5)[0];
-        if (!bestActionName) { // If there were none, resort to a "general action" which always have 100% chance, but take longer
-            bestActionName = staminaPct > options['high-stamina-pct'] ? "Training" : "Field Analysis"; // Train if we have lots of stamina
+        if (bestActionName)
+            reason = `Success Chance: ${(100 * minChance(bestActionName)).toFixed(1)}%` +
+                (maxChance(bestActionName) - minChance(bestActionName) < 0.1 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
+                `, Remaining: ${getCount(bestActionName)}`;
+
+        // If there were no operations/contracts, resort to a "general action" which always have 100% chance, but take longer and gives less reward
+        if (!bestActionName && staminaPct > options['high-stamina-pct'] && timesTrained < options['training-limit']) {
+            timesTrained += 30000 / options['update-interval']; // Take into account the training time (30 seconds) vs how often this code is called
+            bestActionName = "Training";
+            reason = `Nothing better to do, and times trained (${timesTrained.toFixed(0)}) < --training-limit (${options['training-limit']})`;
+        } else if (!bestActionName) {
+            bestActionName = "Field Analysis"; // Gives a little rank, and improves population estimate. Best we can do when there's nothing else.
+            reason = `Nothing better to do.`;
         }
         // NOTE: We never "Incite Violence", it's not worth the trouble of generating a handful of contracts/operations. Just wait it out.
         // NOTE: We never "Recruit". Community consensus is that team mates die too readily, and have minimal impact on success.
         // NOTE: We don't use the "Hyperbolic Regeneration Chamber". We are cautious enough that we should never need healing.
-        reason = `Success Chance: ${(100 * minChance(bestActionName)).toFixed(1)}%` +
-            (maxChance(bestActionName) - minChance(bestActionName) < 0.1 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
-            `, Remaining: ${getCount(bestActionName)}`;
     }
 
     // Detect our current action (API returns an object like { "type":"Operation", "name":"Investigation" })
