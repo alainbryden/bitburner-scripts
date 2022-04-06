@@ -181,7 +181,7 @@ async function mainLoop(ns) {
 
         // If there were no operations/contracts, resort to a "general action" which always have 100% chance, but take longer and gives less reward
         if (!bestActionName && staminaPct > options['high-stamina-pct'] && timesTrained < options['training-limit']) {
-            timesTrained += 30000 / options['update-interval']; // Take into account the training time (30 seconds) vs how often this code is called
+            timesTrained += options['update-interval'] / 30000; // Take into account the training time (30 seconds) vs how often this code is called
             bestActionName = "Training";
             reason = `Nothing better to do, and times trained (${timesTrained.toFixed(0)}) < --training-limit (${options['training-limit']})`;
         } else if (!bestActionName) {
