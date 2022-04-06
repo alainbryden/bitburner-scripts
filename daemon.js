@@ -139,6 +139,8 @@ const argsSchema = [
     ['xp-only', false], // Same as above
     ['n', false], // Can toggle on using hacknet nodes for extra hacking ram (at the expense of hash production)
     ['use-hacknet-nodes', false], // Same as above
+    ['spend-hashes-for-money-when-under', 10E6], // (Default 10m) Convert 4 hashes to money whenever we're below this amount
+    ['disable-spend-hashes', false], // An easy way to set the above to a very large negative number, thus never spending hashes for Money
     ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
     ['initial-max-targets', 2], // Initial number of servers to target / prep (TODO: Scale this as BN progression increases)
     ['max-steal-percentage', 0.75], // Don't steal more than this in case something goes wrong with timing or scheduling, it's hard to recover from
@@ -395,7 +397,9 @@ async function runPeriodicScripts(ns) {
         }
     }
     // Super-early aug, if we are poor, spend hashes as soon as we get them for a quick cash injection. (Only applies if we have hacknet servers)
-    if (9 in dictSourceFiles && ns.getServerMoneyAvailable("home") < 10000000 && (ns.getServerMaxRam("home") - ns.getServerUsedRam("home")) >= 5.6) {
+    if (9 in dictSourceFiles && !options['disable-spend-hashes'] // See if we have a hacknet, and spending hashes for money isn't disabled
+        && ns.getServerMoneyAvailable("home") < options['spend-hashes-for-money-when-under'] // Only if money is below the configured threshold
+        && (ns.getServerMaxRam("home") - ns.getServerUsedRam("home")) >= 5.6) { // Ensure we have spare RAM to run this temp script
         await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`, '/Temp/sell-hashes-for-money.js');
     }
 }
