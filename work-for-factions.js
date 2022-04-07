@@ -18,6 +18,7 @@ const argsSchema = [
     ['invites-only', false], // Just work to get invites, don't work for augmentations / faction rep
     ['prioritize-invites', false], // Prioritize working for as many invites as is practical before starting to grind for faction reputation
     ['karma-threshold-for-gang-invites', -40000], // Prioritize working for gang invites once we have this much negative Karma
+    ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
 ];
 
 const companySpecificConfigs = [
@@ -79,6 +80,7 @@ let crimeFocus = false; // Useful in crime-focused BNs when you want to focus on
 let fastCrimesOnly = false; // Can be set via command line argument
 let prioritizeInvites = false;
 let hasFocusPenaly = true;
+let hasSimulacrum = false;
 let shouldFocusAtWork = false; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 let repToDonate = 150; // Updated after looking at bitnode mults
 let lastActionRestart = 0;
@@ -155,6 +157,7 @@ export async function main(ns) {
             const installedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
             hasFocusPenaly = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
             shouldFocusAtWork = !noFocus && hasFocusPenaly; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
+            hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
 
             mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
                 .filter(aug => !ownedAugmentations.includes(aug))
@@ -212,6 +215,14 @@ export async function main(ns) {
                     }
                     // Whether we're in a gang or will be soon, there's no point in working for any factions that will become gangs, since we will lose all rep with them
                     skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
+                }
+            }
+            // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, whether we pause working.        
+            if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
+                if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working
+                    ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
+                    await ns.sleep(checkForNewPrioritiesInterval);
+                    continue;
                 }
             }
 
