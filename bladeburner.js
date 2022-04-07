@@ -1,4 +1,4 @@
-import { log, disableLogs, getNsDataThroughFile, getActiveSourceFiles } from './helpers.js'
+import { log, disableLogs, getNsDataThroughFile, getActiveSourceFiles, formatNumberShort } from './helpers.js'
 
 const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
@@ -90,6 +90,12 @@ async function gatherBladeburnerInfo(ns) {
     inFaction = player.factions.includes("Bladeburners"); // Whether we've joined the Bladeburner faction yet
 }
 
+// Helpers to determine the the dict keys with the lowest/highest value (returns an array [key, minValue] for destructuring)
+const getMinKeyValue = (dict, filteredKeys = null) => (filteredKeys || Object.keys(dict)).reduce(([k, min], key) =>
+    dict[key] < min ? [key, dict[key]] : [k, min], [null, Number.MAX_VALUE]);
+const getMaxKeyValue = (dict, filteredKeys = null) => (filteredKeys || Object.keys(dict)).reduce(([k, max], key) =>
+    dict[key] > max ? [key, dict[key]] : [k, max], [null, -Number.MAX_VALUE]);
+
 /** @param {NS} ns 
  * The main loop that decides what we should be doing in bladeburner. */
 async function mainLoop(ns) {
@@ -102,49 +108,64 @@ async function mainLoop(ns) {
     // See if we are able to do bladeburner work
     if (!(await canDoBladeburnerWork(ns))) return;
 
-    // Get the chaos in each city
-    const chaosByCity = await getBBDict(ns, 'getCityChaos(%)', cityNames);
-    let lowestChaosCity, lowestChaos = Number.MAX_VALUE;
-    for (const cityName of cityNames)
-        if (chaosByCity[cityName] < lowestChaos)
-            [lowestChaosCity, lowestChaos] = [cityName, chaosByCity[cityName]];
-
-    // Work in to the city with the least chaos to minimize additional chaos gain
-    let currentCity = await getBBInfo(ns, 'getCity()');
-    if (currentCity != lowestChaosCity) {
-        const success = await getBBInfo(ns, `switchCity(ns.args[0])`, lowestChaosCity);
-        log(ns, (success ? 'INFO: Switched' : 'ERROR: Failed to switch') + ` to Bladeburner city "${lowestChaosCity}" ` +
-            `with lowest chaos (${chaosByCity[lowestChaosCity].toFixed(1)})`,
-            !success, success ? (options['toast-relocations'] ? 'info' : undefined) : 'error');
-        if (success) currentCity = lowestChaosCity;
-    }
-
+    // NEXT STEP: Gather data needed to determine what and where to work
     // If any blackops have been completed, remove them from the list of remaining blackops
     const blackOpsToBeDone = await getBBDictByActionType(ns, 'getActionCountRemaining', "blackops", remainingBlackOpsNames);
     remainingBlackOpsNames = remainingBlackOpsNames.filter(n => blackOpsToBeDone[n] === 1);
 
-    // Gather information about all available actions
+    // Gather the count of available contracts / operations
     const nextBlackOp = remainingBlackOpsNames[0];
     const contractCounts = await getBBDictByActionType(ns, 'getActionCountRemaining', "contract", contractNames);
     const operationCounts = await getBBDictByActionType(ns, 'getActionCountRemaining', "operation", operationNames);
-    const contractChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "contract", contractNames);
-    const operationChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "operation", operationNames);
-    const blackOpsChance = (await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "blackops", [nextBlackOp]))[nextBlackOp];
-    // Special case: If Synthoid community count is 0 in current city, effect "Raid" count remaining is 0
-    const communities = await getBBInfo(ns, `getCityCommunities(ns.args[0])`, currentCity);
-    if (communities == 0) operationCounts["Raid"] = 0;
-
-    // Define some helpers that get info for the action based only on the name (type is auto-determined)
+    // Define a helper that gets the count for an action based only on the name (type is auto-determined)
     const getCount = actionName => contractNames.includes(actionName) ? contractCounts[actionName] :
         operationNames.includes(actionName) ? operationCounts[actionName] :
             generalActionNames.includes(actionName) ? Number.POSITIVE_INFINITY : remainingBlackOpsNames.includes(actionName) ? 1 : 0;
+
+    // Get the population, communities, and chaos in each city
+    const populationByCity = await getBBDict(ns, 'getCityEstimatedPopulation(%)', cityNames);
+    const communitiesByCity = await getBBDict(ns, 'getCityCommunities(%)', cityNames);
+    const chaosByCity = await getBBDict(ns, 'getCityChaos(%)', cityNames);
+
+    // NEXT STEP: Determine which city to work in.
+    let goToCity, population, travelReason;
+    // SPECIAL CASE: If the only operations left to us are "Raid" (reduces population by a %, which counter-intuitively
+    // is bad for us), move to the city with the lowest population, but still having some communities to raid.
+    // We will also exclude "Stealth Retirement Operation" since we try to save those for chaos reduction
+    if (!contractNames.concat(operationNames.filter(o => o != "Raid" && o != "Stealth Retirement Operation")).some(c => getCount(c) > 0)) {
+        // Move to the city with the smallest population which has more than 1 community so that we can use our Raid operations.
+        [goToCity, population] = getMinKeyValue(populationByCity, cityNames.filter(c => communitiesByCity[c] > 0));
+        travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up Raid operations`;
+    } else { // Otherwise, cities with higher populations are better
+        // Try to narrow down the cities we wish to work in to the ones with no chaos penalties
+        let acceptableCities = cityNames.filter(city => chaosByCity[city] <= options['chaos-recovery-threshold']);
+        // Pick the city (within chaos thresholds) with the highest population to maximize success chance.
+        // If no city is within thresholds, the largest population city will be picked regardless of chaos
+        [goToCity, population] = getMaxKeyValue(populationByCity, acceptableCities.length > 0 ? acceptableCities : cityNames);
+        travelReason = `Highest population (${formatNumberShort(population)}) city, with chaos ${chaosByCity[goToCity].toFixed(1)}` +
+            (acceptableCities.length == 0 ? ` (all cities above chaos threshold of ${options['chaos-recovery-threshold']})` : '');
+    }
+
+    let currentCity = await getBBInfo(ns, 'getCity()');
+    if (currentCity != goToCity) {
+        const success = await getBBInfo(ns, `switchCity(ns.args[0])`, goToCity);
+        log(ns, (success ? 'INFO: Switched' : 'ERROR: Failed to switch') + ` to Bladeburner city "${goToCity}" (${travelReason})`,
+            !success, success ? (options['toast-relocations'] ? 'info' : undefined) : 'error');
+        if (success) currentCity = goToCity;
+    }
+
+    // Gather the success chance of contracts (based on our current city)
+    const contractChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "contract", contractNames);
+    const operationChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "operation", operationNames);
+    const blackOpsChance = (await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "blackops", [nextBlackOp]))[nextBlackOp];
+    // Define some helpers for determining min/max chance for each action
     const getChance = actionName => contractNames.includes(actionName) ? contractChances[actionName] :
         operationNames.includes(actionName) ? operationChances[actionName] :
             generalActionNames.includes(actionName) ? [1, 1] : nextBlackOp == actionName ? blackOpsChance : [0, 0];
     const minChance = actionName => getChance(actionName)[0];
     const maxChance = actionName => getChance(actionName)[1];
 
-    // Pick the action we should be working on.
+    // NEXT STEP: Pick the action we should be working on.
     let bestActionName, reason;
 
     // Trigger stamina recovery if we drop below our --low-stamina-pct configuration, and remain trigered until we've recovered to --high-stamina-pct
@@ -163,29 +184,26 @@ async function mainLoop(ns) {
     else if (chaosByCity[currentCity] > options['max-chaos']) {
         bestActionName = getCount(antiChaosOperation) > 0 && minChance(antiChaosOperation) > 0.8 ? antiChaosOperation : "Diplomacy";
         reason = `Chaos is very high: ${chaosByCity[currentCity].toFixed(2)} > ${options['max-chaos']} (--max-chaos)`;
-    }
-    else { // Otherwise, pick the "highest-tier" action we can confidently perform, which should lead to the fastest rep-gain.
-        // Note: Actions will be maintained in order of highest-rep to lowest-rep earning
+    } else { // Otherwise, pick the "highest-tier" action we can confidently perform, which should lead to the fastest rep-gain.
+        // Note: Candidate actions will be maintained in order of highest-rep to lowest-rep earning, so we can pick the first after filtering.
         let candidateActions = [nextBlackOp].concat(operationNames).concat(contractNames); // Note: General actions excluded for now
         // We should deal with population uncertainty if its causing some mission to be on the verge of our success threshold
         let populationUncertain = candidateActions.some(a => maxChance(a) > options['success-threshold'] && minChance(a) < options['success-threshold']);
         // If current population uncertainty is such that some actions have a maxChance of ~100%, but not a minChance of ~100%,
         //   focus on actions that improve the population estimate.
-        if (populationUncertain) {
-            candidateActions = ["Undercover Operation", "Investigation", "Tracking"];
-        } else {
-            // SPECIAL CASE: Leave out "Stealth Retirement" from normal rep-grinding - save it for reducing chaos (which it is very good for)
-            candidateActions = candidateActions.filter(a => !a.startsWith("Stealth Retirement"));
-            // SPECIAL CASE: If we can complete the last bladeburner operation, leave it to the user (they may not be ready to leave the BN).
-            if (remainingBlackOpsNames.length == 1 && minChance(nextBlackOp) > options['success-threshold']) {
-                if (!lastBlackOpReady) log(ns, "SUCCESS: Bladeburner is ready to undertake the last BlackOp when you are!", true, 'success')
-                lastBlackOpReady = true;
-                candidateActions = candidateActions.filter(a => a != nextBlackOp);
-            }
-        }
-
+        if (populationUncertain) candidateActions = ["Undercover Operation", "Investigation", "Tracking"];
+        // Special case: If Synthoid community count is 0 in a city, set effective remaining "Raid" operations
+        if (communitiesByCity[currentCity] == 0) operationCounts["Raid"] = 0;
         // Filter out candidates with no contract counts remaining
         candidateActions = candidateActions.filter(a => getCount(a) > 0);
+        // SPECIAL CASE: If we can complete the last bladeburner operation, leave it to the user (they may not be ready to leave the BN).
+        if (remainingBlackOpsNames.length == 1 && minChance(nextBlackOp) > options['success-threshold']) {
+            if (!lastBlackOpReady) log(ns, "SUCCESS: Bladeburner is ready to undertake the last BlackOp when you are!", true, 'success')
+            lastBlackOpReady = true;
+            candidateActions = candidateActions.filter(a => a != nextBlackOp);
+        }
+        // SPECIAL CASE: Leave out "Stealth Retirement" from normal rep-grinding - save it for reducing chaos unless there's nothing else to do
+        if (candidateActions.length > 1) candidateActions = candidateActions.filter(a => a != "Stealth Retirement Operation");
         // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
         bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
         if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
