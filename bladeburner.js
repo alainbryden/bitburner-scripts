@@ -3,10 +3,24 @@ import { log, disableLogs, getNsDataThroughFile, getActiveSourceFiles, formatNum
 const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
 const simulacrumAugName = "The Blade's Simulacrum"; // This augmentation lets you do bladeburner actions while busy
+
+// In general, we will buy the skill upgrade with the next highest cost, but to tweak the priority of various skills,
+// we use the following configuration to change their relative cost. Higher number means lower priority
+// Note: Ideally we could emphasize Tracer "early-game" and Digital Observer "late-game", but this is too much of a pain to solve for
+const costAdjustments = {
+    "Reaper": 1.2, // Combat boost. Early effect is paltry (because stats are so low), will get plenty of points late game
+    "Evasive Systems": 1.2, // Dex/Agi boost. Mildly deprioritized for same reasoning as above.
+    "Cloak": 1.5, // Cheap, and stealth ends up with plenty of boost, so we don't need to invest in Cloak as much.
+    "Overclock": 2, // While useful when playing manually, in practice, constant automation makes us not notice/care about completion times
+    "Hyperdrive": 2, // Improves stats gained, but not Rank gained. Less useful if training outside of BB
+    "Tracer": 2, // Only boosts Contract success chance, which are relatively easy to begin with. 
+    "Cyber's Edge": 5, // Boosts stamina, but contract counts are much more limiting than stamina, so isn't really needed
+    "Hands of Midas": 10 // Improves money gain. It is assumed that Bladeburner will *not* be a main source of income
+};
+
 // Some bladeburner info gathered at startup and cached
 let skillNames, generalActionNames, contractNames, operationNames, remainingBlackOpsNames, blackOpsRanks;
 let inFaction, haveSimulacrum, lastBlackOpReady, lowStaminaTriggered, timesTrained;
-
 let player, ownedSourceFiles;
 let options;
 const argsSchema = [
@@ -99,12 +113,12 @@ const getMaxKeyValue = (dict, filteredKeys = null) => (filteredKeys || Object.ke
 /** @param {NS} ns 
  * The main loop that decides what we should be doing in bladeburner. */
 async function mainLoop(ns) {
+    // Get player's updated rank
+    const rank = await getBBInfo(ns, 'getRank()');
     // Ensure we're in the bladeburner faction ASAP
-    if (!inFaction) await tryJoinFaction(ns);
-
+    if (!inFaction) await tryJoinFaction(ns, rank);
     // Spend any un-spent skill points
     await spendSkillPoints(ns);
-
     // See if we are able to do bladeburner work
     if (!(await canDoBladeburnerWork(ns))) return;
 
@@ -157,7 +171,9 @@ async function mainLoop(ns) {
     // Gather the success chance of contracts (based on our current city)
     const contractChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "contract", contractNames);
     const operationChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "operation", operationNames);
-    const blackOpsChance = (await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "blackops", [nextBlackOp]))[nextBlackOp];
+    // If our rank is insufficient to perform the next blackops, ignore the stated chance and treat it as zero
+    const blackOpsChance = rank < blackOpsRanks[nextBlackOp] ? [0, 0] :
+        (await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "blackops", [nextBlackOp]))[nextBlackOp];
     // Define some helpers for determining min/max chance for each action
     const getChance = actionName => contractNames.includes(actionName) ? contractChances[actionName] :
         operationNames.includes(actionName) ? operationChances[actionName] :
@@ -247,9 +263,6 @@ async function spendSkillPoints(ns) {
         if (unspent == 0) return;
         const skillLevels = await getBBDict(ns, 'getSkillLevel(%)', skillNames);
         const skillCosts = await getBBDict(ns, 'getSkillUpgradeCost(%)', skillNames);
-        // In general, we will buy the skill upgrade with the next highest cost, but to tweak the priority of various skills,
-        // we use the following configuration to change their relative cost. Higher number means lower priority
-        const costAdjustments = { "Overclock": 0.5, "Hyperdrive": 2, "Tracer": 3, "Cyber's Edge": 5, "Hands of Midas": 10 };
         // Find the next lowest skill cost
         let skillToUpgrade, minPercievedCost = Number.MAX_SAFE_INTEGER;
         for (const skillName of skillNames) {
@@ -273,9 +286,8 @@ async function spendSkillPoints(ns) {
 
 /** @param {NS} ns 
  * Helper to try and join the Bladeburner faction ASAP. */
-async function tryJoinFaction(ns) {
+async function tryJoinFaction(ns, rank) {
     if (inFaction) return;
-    const rank = await getBBInfo(ns, 'getRank()');
     if (rank >= 25 && await getBBInfo(ns, 'joinBladeburnerFaction()')) {
         log(ns, 'SUCCESS: Joined the Bladeburner Faction!', false, 'success');
         inFaction = true;
