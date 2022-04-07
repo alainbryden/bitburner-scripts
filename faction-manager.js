@@ -436,7 +436,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
     // Remove the most expensive augmentation until we can afford all that remain
     const dropped = [];
     while (totalAugCost + totalRepCost > playerData.money + stockValue) {
-        const mostExpensiveAug = purchaseableAugs.slice().filter(a => !priorityAugs.includes(a)).sort((a, b) => b.price - a.price)[0];
+        const mostExpensiveAug = purchaseableAugs.filter(a => !priorityAugs.includes(a.name)).slice().sort((a, b) => b.price - a.price)[0];
         let costBefore = `${formatMoney(totalRepCost + totalAugCost)} (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)})`;
         purchaseableAugs = sortAugs(ns, purchaseableAugs.filter(aug => aug !== mostExpensiveAug));
         purchaseFactionDonations = computeAugsRepReqDonationByFaction(ns, purchaseableAugs);
