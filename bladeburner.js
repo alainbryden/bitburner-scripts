@@ -1,14 +1,16 @@
-import { log, disableLogs, getNsDataThroughFile, getActiveSourceFiles, runCommand, formatMoney, formatNumberShort, formatDuration } from './helpers.js'
+import { log, disableLogs, getNsDataThroughFile, getActiveSourceFiles } from './helpers.js'
 
 const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
+const simulacrumAugName = "The Blade's Simulacrum"; // This augmentation lets you do bladeburner actions while busy
 // Some bladeburner info gathered at startup and cached
 let skillNames, generalActionNames, contractNames, operationNames, remainingBlackOpsNames, blackOpsRanks;
-let lastBlackOpReady, lowStaminaTriggered, timesTrained;
+let inFaction, haveSimulacrum, lastBlackOpReady, lowStaminaTriggered, timesTrained;
 
-let player;
+let player, ownedSourceFiles;
 let options;
 const argsSchema = [
+    ['success-threshold', 0.98], // Attempt the best action whose minimum chance of success exceeds this threshold
     ['chaos-recovery-threshold', 10], // Prefer to do "Stealth Retirement" operations to reduce chaos when it reaches this number
     ['max-chaos', 500], // If chaos exceeds this amount in every city, we will reluctantly resort to diplomacy to reduce it.
     ['toast-upgrades', false], // Set to true to toast each time a skill is upgraded
@@ -18,6 +20,7 @@ const argsSchema = [
     ['high-stamina-pct', 0.6], // Switch back to stamina-consuming actions when we rise above this stamina percent
     ['training-limit', 100], // Don't bother training more than this many times, since Training earns no rank
     ['update-interval', 5000], // How often to refresh bladeburner status
+    ['ignore-busy-status', false], // If set to true, we will attempt to do bladeburner tasks even if we are currently busy and don't have The Blade's Simulacrum
 ];
 export function autocomplete(data, _) {
     data.flags(argsSchema);
@@ -30,9 +33,9 @@ export async function main(ns) {
     options = ns.flags(argsSchema);
     player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     // Ensure we have access to bladeburner
-    const ownedSourceFiles = await getActiveSourceFiles(ns);
-    if (!(6 in ownedSourceFiles) && player.bitNodeN != 7)
-        return log(ns, "ERROR: You have no yet unlocked bladeburner outside of BNs 6 & 7 (need SF6)", true, 'error');
+    ownedSourceFiles = await getActiveSourceFiles(ns);
+    //if (!(6 in ownedSourceFiles) && player.bitNodeN != 7) // NOTE: Despite the SF6 description, it seems you don't need SF6
+    //    return log(ns, "ERROR: You have no yet unlocked bladeburner outside of BNs 6 & 7 (need SF6)", true, 'error');
     if (!(7 in ownedSourceFiles))
         return log(ns, "ERROR: You have no yet unlocked the bladeburner API (need SF7)", true, 'error');
     // Ensure we've joined bladeburners before proceeding further
@@ -76,16 +79,26 @@ async function gatherBladeburnerInfo(ns) {
         .sort((b1, b2) => blackOpsRanks[b1] - blackOpsRanks[b2]);
     log(ns, `INFO: There are ${remainingBlackOpsNames.length} remaining BlackOps operations to complete in order:\n` +
         remainingBlackOpsNames.map(n => `${n} (${blackOpsRanks[n]})`).join(", "));
+    // Check if we have the aug that lets us do bladeburner while otherwise busy
+    haveSimulacrum = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations().includes("${simulacrumAugName}")`, '/Temp/bladeburner-hasSimulacrum.txt');
+    // Initialize some flags that may change over time
     lastBlackOpReady = false; // Flag will track whether we've notified the user that the last black-op is ready
     lowStaminaTriggered = false; // Flag will track whether we've previously switched to stamina recovery to reduce noise
     timesTrained = 0; // Count of how many times we've trained (capped at --training-limit)
+    inFaction = player.factions.includes("Bladeburners"); // Whether we've joined the Bladeburner faction yet
 }
 
 /** @param {NS} ns 
  * The main loop that decides what we should be doing in bladeburner. */
 async function mainLoop(ns) {
+    // Ensure we're in the bladeburner faction ASAP
+    if (!inFaction) await tryJoinFaction(ns);
+
     // Spend any un-spent skill points
     await spendSkillPoints(ns);
+
+    // See if we are able to do bladeburner work
+    if (!(await canDoBladeburnerWork(ns))) return;
 
     // Get the chaos in each city
     const chaosByCity = await getBBDict(ns, 'getCityChaos(%)', cityNames);
@@ -152,16 +165,17 @@ async function mainLoop(ns) {
     else { // Otherwise, pick the "highest-tier" action we can confidently perform, which should lead to the fastest rep-gain.
         // Note: Actions will be maintained in order of highest-rep to lowest-rep earning
         let candidateActions = [nextBlackOp].concat(operationNames).concat(contractNames); // Note: General actions excluded for now
-
+        // We should deal with population uncertainty if its causing some mission to be on the verge of our success threshold
+        let populationUncertain = candidateActions.some(a => maxChance(a) > options['success-threshold'] && minChance(a) < options['success-threshold']);
         // If current population uncertainty is such that some actions have a maxChance of ~100%, but not a minChance of ~100%,
         //   focus on actions that improve the population estimate.
-        if (candidateActions.some(a => maxChance(a) > 0.99 && minChance(a) < 0.99))
-            candidateActions = ["Undercover Operation", "Investigation", "Tracking", "Field Analysis"];
-        else {
+        if (populationUncertain) {
+            candidateActions = ["Undercover Operation", "Investigation", "Tracking"];
+        } else {
             // SPECIAL CASE: Leave out "Stealth Retirement" from normal rep-grinding - save it for reducing chaos (which it is very good for)
             candidateActions = candidateActions.filter(a => !a.startsWith("Stealth Retirement"));
             // SPECIAL CASE: If we can complete the last bladeburner operation, leave it to the user (they may not be ready to leave the BN).
-            if (remainingBlackOpsNames.length == 1 && minChance(nextBlackOp) > 0.99) {
+            if (remainingBlackOpsNames.length == 1 && minChance(nextBlackOp) > options['success-threshold']) {
                 if (!lastBlackOpReady) log(ns, "SUCCESS: Bladeburner is ready to undertake the last BlackOp when you are!", true, 'success')
                 lastBlackOpReady = true;
                 candidateActions = candidateActions.filter(a => a != nextBlackOp);
@@ -170,23 +184,23 @@ async function mainLoop(ns) {
 
         // Filter out candidates with no contract counts remaining
         candidateActions = candidateActions.filter(a => getCount(a) > 0);
-        // Pick the first candidate action with a minimum chance of success of ~100%
-        bestActionName = candidateActions.filter(a => minChance(a) > 0.99)[0];
-        if (!bestActionName) // If there were none, pick the first candidate action with a maximum chance of ~100% and minimum of greater than 50%
-            bestActionName = candidateActions.filter(a => maxChance(a) > 0.99 && minChance(a) > 0.5)[0];
-        if (bestActionName)
+        // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
+        bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
+        if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
+            bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'])[0];
+        if (bestActionName) // If we found something to do, log details about its success chance range
             reason = `Success Chance: ${(100 * minChance(bestActionName)).toFixed(1)}%` +
                 (maxChance(bestActionName) - minChance(bestActionName) < 0.1 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
                 `, Remaining: ${getCount(bestActionName)}`;
 
         // If there were no operations/contracts, resort to a "general action" which always have 100% chance, but take longer and gives less reward
-        if (!bestActionName && staminaPct > options['high-stamina-pct'] && timesTrained < options['training-limit']) {
+        if (!bestActionName && !populationUncertain && staminaPct > options['high-stamina-pct'] && timesTrained < options['training-limit']) {
             timesTrained += options['update-interval'] / 30000; // Take into account the training time (30 seconds) vs how often this code is called
             bestActionName = "Training";
             reason = `Nothing better to do, and times trained (${timesTrained.toFixed(0)}) < --training-limit (${options['training-limit']})`;
         } else if (!bestActionName) {
             bestActionName = "Field Analysis"; // Gives a little rank, and improves population estimate. Best we can do when there's nothing else.
-            reason = `Nothing better to do.`;
+            reason = populationUncertain ? `High population uncertainty in ${currentCity}` : `Nothing better to do.`;
         }
         // NOTE: We never "Incite Violence", it's not worth the trouble of generating a handful of contracts/operations. Just wait it out.
         // NOTE: We never "Recruit". Community consensus is that team mates die too readily, and have minimal impact on success.
@@ -238,24 +252,50 @@ async function spendSkillPoints(ns) {
 }
 
 /** @param {NS} ns 
- * Ensure we're in the bladeburner division and faction */
+ * Helper to try and join the Bladeburner faction ASAP. */
+async function tryJoinFaction(ns) {
+    if (inFaction) return;
+    const rank = await getBBInfo(ns, 'getRank()');
+    if (rank >= 25 && await getBBInfo(ns, 'joinBladeburnerFaction()')) {
+        log(ns, 'SUCCESS: Joined the Bladeburner Faction!', false, 'success');
+        inFaction = true;
+    } else if (rank >= 25)
+        log(ns, `WARNING: Failed to join the Bladeburner faction despite rank of ${rank.toFixed(1)}`, false, 'warning');
+}
+
+/** @param {NS} ns 
+ * Helper to see if we are able to do bladeburner work */
+async function canDoBladeburnerWork(ns) {
+    if (options['ignore-busy-status'] || haveSimulacrum) return true;
+    // Check if the player is busy doing something else
+    const busy = await getNsDataThroughFile(ns, 'ns.isBusy()', '/Temp/isBusy.txt');
+    if (!busy) return true;
+    log(ns, `WARNING: Cannot perform Bladeburner actions because the player is busy ` +
+        `and hasn't installed the augmentation "${simulacrumAugName}"...`, false, 'warning');
+    return false;
+}
+
+/** @param {NS} ns 
+ * Ensure we're in the Bladeburner division */
 async function beingInBladeburner(ns) {
-    // Ensure we're in the bladeburner division. If not, wait until we've joined it.
+    // Ensure we're in the Bladeburner division. If not, wait until we've joined it.
     while (!player.inBladeburner) {
         try {
             if (player.strength < 100 || player.defense < 100 || player.dexterity < 100 || player.agility < 100)
-                log(`Waiting for physical stats >100 to join bladeburner ` +
+                log(ns, `Waiting for physical stats >100 to join bladeburner ` +
                     `(Currently Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility})`);
             else if (await getNsDataThroughFile(ns, 'ns.bladeburner.joinBladeburnerDivision()', '/Temp/bladeburner-join.txt')) {
-                log('SUCCESS: Joined Bladeburner!', false, 'success');
+                let message = 'SUCCESS: Joined Bladeburner!';
+                if (9 in ownedSourceFiles) message += ' Consider running the following command to give it a boost:\n' +
+                    'run spend-hacknet-hashes.js --spend-on Exchange_for_Bladeburner_Rank --spend-on Exchange_for_Bladeburner_SP --liquidate';
+                log(ns, message, true, 'success');
                 break;
             } else
-                log('WARNING: Failed to joined Bladeburner despite physical stats. Will try again...', false, 'warning');
+                log(ns, 'WARNING: Failed to joined Bladeburner despite physical stats. Will try again...', false, 'warning');
             player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
         }
         catch (error) { log(ns, `WARNING: Caught an error while waiting to join bladeburner, but will keep going:\n${String(error)}`, true, 'error'); }
         await ns.asleep(5000);
     }
-    // Ensure we're also in the bladeburner faction
-    await getNsDataThroughFile(ns, 'ns.bladeburner.joinBladeburnerFaction()', '/Temp/bladeburner-join-faction.txt');
+    log(ns, "INFO: We are in Bladeburner. Starting main loop...")
 }
