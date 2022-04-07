@@ -11,8 +11,8 @@ let player, ownedSourceFiles;
 let options;
 const argsSchema = [
     ['success-threshold', 0.98], // Attempt the best action whose minimum chance of success exceeds this threshold
-    ['chaos-recovery-threshold', 10], // Prefer to do "Stealth Retirement" operations to reduce chaos when it reaches this number
-    ['max-chaos', 500], // If chaos exceeds this amount in every city, we will reluctantly resort to diplomacy to reduce it.
+    ['chaos-recovery-threshold', 50], // Prefer to do "Stealth Retirement" operations to reduce chaos when it reaches this number
+    ['max-chaos', 200], // If chaos exceeds this amount in every city, we will reluctantly resort to diplomacy to reduce it.
     ['toast-upgrades', false], // Set to true to toast each time a skill is upgraded
     ['toast-operations', false], // Set to true to toast each time we switch operations
     ['toast-relocations', false], // Set to true to toast each time we change cities
