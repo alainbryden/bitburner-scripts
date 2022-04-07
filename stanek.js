@@ -32,6 +32,7 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     disableLogs(ns, ['sleep', 'run', 'getServerMaxRam', 'getServerUsedRam'])
     options = ns.flags(argsSchema);
+    let currentServer = ns.getHostname();
     const maxCharges = options['max-charges']; // Don't bother adding charges beyond this amount
     const idealReservedRam = 32; // Reserve this much RAM, if it wouldnt make a big difference anyway. Leaves room for other temp-scripts to spawn.
     let startupScript = options['on-startup-script'];
@@ -74,7 +75,7 @@ export async function main(ns) {
         if (minCharges >= maxCharges) break;
         // Charge each fragment one at a time
         for (const fragment of fragments.filter(f => f.numCharge < maxCharges && /* Don't charge boosters */ f.id < 100)) {
-            let availableRam = ns.getServerMaxRam('home') - ns.getServerUsedRam('home');
+            let availableRam = ns.getServerMaxRam(currentServer) - ns.getServerUsedRam(currentServer);
             let reservedRam = (idealReservedRam / availableRam < 0.05) ? options['reserved-ram-ideal'] : options['reserved-ram'];
             const threads = Math.floor((availableRam - reservedRam) / 2.0);
             // Only charge if we will not be bringing down the average (After some initial threshold of charges has been established)
