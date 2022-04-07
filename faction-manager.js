@@ -47,10 +47,10 @@ const argsSchema = [
     ['u', false], // When displaying total aug stats for a faction, only include augs not given by a faction further up the list
     ['unique', false], // Same as above
     ['sort', null], // What stat is the table of total faction stats sorted by
-    ['hide-stat', ['bladeburner', 'hacknet']], // Stats to exclude from the final table (partial matching works)
+    ['hide-stat', []], // Stats to exclude from the final table (partial matching works)
     // Augmentation purchasing-related options. Controls what augmentations are included in cost calculations, and optionally purchased
     ['aug-desired', []], // These augs will be marked as "desired" whether or not they match desired-stats
-    ['priority-aug', ["The Blade's Simulacrum", "The Red Pill"]], // If accessible, every effort is made not to drop these from the sort purchase order
+    ['priority-aug', []], // If accessible, every effort is made not to drop these from the sort purchase order
     ['omit-aug', []], // Augmentations to exclude from the augmentation summary because we do not wish to purchase this round
     ['stat-desired', []], // Augs that give these will be starred (marked as desired and staged for purchase)
     ['disable-donations', false], // When displaying "obtainable" augs and prices, don't include augs that require a donation to meet their rep requirements
@@ -59,6 +59,8 @@ const argsSchema = [
 ];
 
 const default_desired_stats = ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // If the user does not have own many augmentations, and has not specified stats to prioritize, use these defaults
+const default_priority_augs = ["The Blade's Simulacrum", "The Red Pill", "Neuroreceptor Management Implant"]; // By default, take these augs when they are accessible
+const default_hidden_stats = ['bladeburner', 'hacknet']; // Hide from the summary table by default because they clearly all come from one gang.
 
 // For auto-complete convenience
 const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "company_rep", "crime_money", "crime_success", "defense_exp", "defense", "dexterity_exp", "dexterity",
@@ -94,7 +96,8 @@ export async function main(ns) {
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
     const omitFactions = options['ignore-faction'].map(f => f.replaceAll("_", " "));
     const omitAugs = options['omit-aug'].map(f => f.replaceAll("_", " "));
-    priorityAugs = options['priority-aug'].map(f => f.replaceAll("_", " "));
+    priorityAugs = options['priority-aug']?.map(f => f.replaceAll("_", " "));
+    if (priorityAugs.length == 0) priorityAugs = default_priority_augs;
     const desiredAugs = priorityAugs.concat(options['aug-desired'].map(f => f.replaceAll("_", " ")));
     const ignorePlayerData = options.i || options['ignore-player-data'];
     log(ns, options.sort || options['stat-desired'][0] || default_desired_stats[0]);
@@ -144,7 +147,9 @@ export async function main(ns) {
         displayJoinedFactionSummary(ns);
     }
     await manageUnownedAugmentations(ns, omitAugs);
-    displayFactionSummary(ns, sort, options.u || options.unique, afterFactions, options['hide-stat']);
+    let hideSummaryStats = options['hide-stat'];
+    if (hideSummaryStats.length == 0) hideSummaryStats = default_hidden_stats;
+    displayFactionSummary(ns, sort, options.u || options.unique, afterFactions, hideSummaryStats);
     if (options.purchase && ownedAugmentations.length <= 1 && 13 in ownedSourceFiles && !ownedAugmentations.includes(`Stanek's Gift - Genesis`) && !options['ignore-stanek'])
         log(ns, `WARNING: You have not yet accepted Stanek's Gift from the church in Chongqing. Purchasing augs will ` +
             `prevent you from doing so for the rest of this BN. (Run with '--ignore-stanek' to bypass this warning.)`, true);
@@ -233,7 +238,7 @@ async function updateAugmentationData(ns, desiredAugs) {
     const dictAugPrereqs = await getNsDataThroughFile(ns, augsDictCommand('ns.getAugmentationPrereq(aug)'), '/Temp/aug-prereqs.txt');
     if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
         desiredStatsFilters = ownedAugmentations.length > 40 ? ['_'] : // Once we have more than 40 augs, switch to buying up anything and everything
-            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
+            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || factionData["Bladeburners"].joined ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
                 gangFaction ? ['hacking'] : // If in a gang (provider of all augs), we can focus on hacking augs only - we won't be grinding rep with corps/factions to unlock augs
                     default_desired_stats; // While few augs are installed, use the default priority stats (hacking + rep boosting, etc. for unlocking augs)
     augmentationData = Object.fromEntries(augmentationNames.map(aug => [aug, {
