@@ -141,16 +141,24 @@ async function mainLoop(ns) {
     const communitiesByCity = await getBBDict(ns, 'getCityCommunities(%)', cityNames);
     const chaosByCity = await getBBDict(ns, 'getCityChaos(%)', cityNames);
 
-    // NEXT STEP: Determine which city to work in.
-    let goToCity, population, travelReason;
+    // NEXT STEP: Determine which city to work in
+    let goToCity, population, travelReason, goingRaiding = false;
+    let [highestPopCity, _] = getMaxKeyValue(populationByCity, cityNames);
     // SPECIAL CASE: If the only operations left to us are "Raid" (reduces population by a %, which counter-intuitively
     // is bad for us), move to the city with the lowest population, but still having some communities to raid.
     // We will also exclude "Stealth Retirement Operation" since we try to save those for chaos reduction
-    if (!contractNames.concat(operationNames.filter(o => o != "Raid" && o != "Stealth Retirement Operation")).some(c => getCount(c) > 0)) {
+    if (getCount("Raid") > 0 && !operationNames.filter(o => o != "Raid" && o != "Stealth Retirement Operation").some(c => getCount(c) > 0)) {
+        // Collect a list of cities with at least one community
+        const raidableCities = cityNames.filter(c => communitiesByCity[c] > 0);
+        // Only allow raid if we would not be raiding our highest-population city (need to maintain at least one)
+        goingRaiding = raidableCities.length > 1 || raidableCities[0] != highestPopCity;
         // Move to the city with the smallest population which has more than 1 community so that we can use our Raid operations.
-        [goToCity, population] = getMinKeyValue(populationByCity, cityNames.filter(c => communitiesByCity[c] > 0));
-        travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up Raid operations`;
-    } else { // Otherwise, cities with higher populations are better
+        if (goingRaiding) {
+            [goToCity, population] = getMinKeyValue(populationByCity, raidableCities);
+            travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up Raid operations`;
+        }
+    }
+    if (!goToCity) { // Otherwise, cities with higher populations give better operation chances
         // Try to narrow down the cities we wish to work in to the ones with no chaos penalties
         let acceptableCities = cityNames.filter(city => chaosByCity[city] <= options['chaos-recovery-threshold']);
         // Pick the city (within chaos thresholds) with the highest population to maximize success chance.
@@ -220,6 +228,8 @@ async function mainLoop(ns) {
         }
         // SPECIAL CASE: Leave out "Stealth Retirement" from normal rep-grinding - save it for reducing chaos unless there's nothing else to do
         if (candidateActions.length > 1) candidateActions = candidateActions.filter(a => a != "Stealth Retirement Operation");
+        // SPECIAL CASE: Leave out "Raid" unless we've specifically moved to the lowest population city for Raiding
+        if (!goingRaiding) candidateActions = candidateActions.filter(a => a != "Raid");
         // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
         bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
         if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
