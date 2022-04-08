@@ -1,4 +1,4 @@
-import { log, disableLogs, getNsDataThroughFile, getActiveSourceFiles, formatNumberShort, formatDuration } from './helpers.js'
+import { log, disableLogs, getNsDataThroughFile, runCommand, getActiveSourceFiles, formatNumberShort, formatDuration } from './helpers.js'
 
 const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
@@ -123,7 +123,6 @@ async function mainLoop(ns) {
     await spendSkillPoints(ns);
     // See if we are able to do bladeburner work
     if (!(await canDoBladeburnerWork(ns))) return;
-    if (Date.now() < currentTaskEndTime) return;
 
     // NEXT STEP: Gather data needed to determine what and where to work
     // If any blackops have been completed, remove them from the list of remaining blackops
@@ -142,7 +141,6 @@ async function mainLoop(ns) {
     const limitedActions = [nextBlackOp].concat(operationNames).concat(contractNames);
     const reservedOperations = ["Raid", "Stealth Retirement Operation", nextBlackOp];
     const unreservedOperations = limitedActions.filter(o => !reservedOperations.includes(o));
-
 
     // NEXT STEP: Determine which city to work in
     // Get the population, communities, and chaos in each city
@@ -252,7 +250,7 @@ async function mainLoop(ns) {
             bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'])[0];
         if (bestActionName) // If we found something to do, log details about its success chance range
             reason = `Success Chance: ${(100 * minChance(bestActionName)).toFixed(1)}%` +
-                (maxChance(bestActionName) - minChance(bestActionName) < 0.1 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
+                (maxChance(bestActionName) - minChance(bestActionName) < 0.001 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
                 `, Remaining: ${getCount(bestActionName)}`;
 
         // If there were no operations/contracts, resort to a "general action" which always have 100% chance, but take longer and gives less reward
@@ -285,18 +283,25 @@ async function mainLoop(ns) {
 
     // Detect our current action (API returns an object like { "type":"Operation", "name":"Investigation" })
     const currentAction = await getBBInfo(ns, `getCurrentAction()`);
+
+    // Normally, we don't switch tasks if our previously assigned task hasn't had time to complete once.
+    // EXCEPTION: Early after a reset, this time is LONG, and in a few seconds it may be faster to just stop and restart it.
+    const currentDuration = await getBBInfo(ns, `getActionTime(ns.args[0], ns.args[1])`, currentAction.type, currentAction.name);
+    if (currentDuration < currentTaskEndTime - Date.now()) {
+        log(ns, `INFO: ${bestActionName == currentAction.name ? 'Restarting' : 'Cancelling'} action ${currentAction.name} because its new duration ` +
+            `is less than the time remaining (${formatDuration(currentDuration)} < ${formatDuration(currentTaskEndTime - Date.now())})`);
+    } else if (Date.now() < currentTaskEndTime || bestActionName == currentAction.name) return;
+
     // Change actions if we're not currently doing the desired action
-    if (bestActionName != currentAction.name) {
-        const bestActionType = nextBlackOp == bestActionName ? "Black Op" : contractNames.includes(bestActionName) ? "Contract" :
-            operationNames.includes(bestActionName) ? "Operation" : "General Action";
-        const success = await getBBInfo(ns, `startAction(ns.args[0], ns.args[1])`, bestActionType, bestActionName);
-        const sleepTimeMs = success ? await getBBInfo(ns, `getActionTime(ns.args[0], ns.args[1])`, bestActionType, bestActionName) : 0;
-        log(ns, (!success ? `ERROR: Failed to switch to Bladeburner ${bestActionType} "${bestActionName}"` :
-            `INFO: Switched to Bladeburner ${bestActionType} "${bestActionName}" (${reason}). ETA: ${formatDuration(sleepTimeMs)}`),
-            !success, success ? (options['toast-operations'] ? 'info' : undefined) : 'error');
-        // Ensure we perform this new action at least once before interrupting it
-        currentTaskEndTime = Date.now() + sleepTimeMs + 200; // Pad this a little to ensure we don't interrupt it.
-    }
+    const bestActionType = nextBlackOp == bestActionName ? "Black Op" : contractNames.includes(bestActionName) ? "Contract" :
+        operationNames.includes(bestActionName) ? "Operation" : "General Action";
+    const success = await getBBInfo(ns, `startAction(ns.args[0], ns.args[1])`, bestActionType, bestActionName);
+    const expectedDuration = await getBBInfo(ns, `getActionTime(ns.args[0], ns.args[1])`, bestActionType, bestActionName);
+    log(ns, (!success ? `ERROR: Failed to switch to Bladeburner ${bestActionType} "${bestActionName}"` :
+        `INFO: Switched to Bladeburner ${bestActionType} "${bestActionName}" (${reason}). ETA: ${formatDuration(expectedDuration)}`),
+        !success, success ? (options['toast-operations'] ? 'info' : undefined) : 'error');
+    // Ensure we perform this new action at least once before interrupting it
+    currentTaskEndTime = !success ? 0 : Date.now() + expectedDuration + 200; // Pad this a little to ensure we don't interrupt it.
 }
 
 /** @param {NS} ns 
