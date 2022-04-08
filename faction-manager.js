@@ -589,7 +589,7 @@ async function purchaseDesiredAugs(ns) {
     if (stockValue > 0)
         return log(ns, `ERROR: For your own protection, --purchase will not run while you are holding stocks (current stock value: ${formatMoney(stockValue)}). ` +
             `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
-    if (totalAugCost + totalRepCost > playerData.money * 0.9) // If we're way off affording this, something is probably wrong
+    if (totalAugCost + totalRepCost > playerData.money / 0.9) // If we're way off affording this, something is probably wrong
         return log(ns, `ERROR: Purchase order total cost (${formatMoney(totalRepCost + totalAugCost)}` + (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)}))`) +
             ` is far more than current player money (${formatMoney(playerData.money)}). There may be a bug in purchasing logic.`, printToTerminal, 'error')
     if (totalAugCost + totalRepCost > playerData.money) // If we're just a little off affording this, it could be because a bit of money was just spent? Just warn and buy what we can
