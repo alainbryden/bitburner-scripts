@@ -315,49 +315,55 @@ export async function main(ns) {
 /** @param {NS} ns 
  * Gain a hack XP early after a new Augmentation by studying a bit, then doing a bit of XP grinding */
 async function kickstartHackXp(ns) {
-    if (4 in dictSourceFiles && options['initial-study-time'] > 0) {
-        // The safe/cheap thing to do is to study for free at the local university in our current town
-        // The most effective thing is to study Algorithms at ZB university in Aevum.
-        // Depending on our money, try to do the latter.
-        try {
-            const studyTime = options['initial-study-time'];
-            log(`INFO: Studying for ${studyTime} seconds to kickstart hack XP and speed up initial cycle times. (set --initial-study-time 0 to disable this step.)`);
-            const money = ns.getServerMoneyAvailable("home")
-            if (money >= 200000) // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
-                await getNsDataThroughFile(ns, `ns.travelToCity("Volhaven")`, '/Temp/travel-to-city.txt');
-            await updatePlayerStats(); // Update player stats to be certain of our new location.
-            const university = playerStats.city == "Sector-12" ? "Rothman University" : playerStats.city == "Aevum" ? "Summit University" : playerStats.city == "Volhaven" ? "ZB Institute of Technology" : null;
-            if (!university)
-                log(`INFO: Cannot study, because you are in city ${playerStats.city} which has no known university, and you cannot afford to travel to another city.`);
-            else {
-                const course = playerStats.city == "Sector-12" ? "Study Computer Science" : "Algorithms"; // Assume if we are still in Sector-12 we are poor and should only take the free course
-                await getNsDataThroughFile(ns, `ns.universityCourse('${university}', '${course}')`, '/Temp/study-for-hack-xp.txt');
-                await ns.asleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
-            }
-        } catch { log('WARNING: Failed to study to kickstart hack XP', false, 'warning'); }
-    }
-    // Run periodic scripts for the first time to e.g. buy tor and any hack tools available to us (we will continue studying briefly while this happens)
-    await runPeriodicScripts(ns);
-    // Immediately attempt to root initially-accessible targets before attempting any XP cycles
-    for (const server of serverListByTargetOrder.filter(s => !s.hasRoot() && s.canCrack()))
-        await doRoot(ns, server);
-    // Before starting normal hacking, fire a couple hack XP-focused cycle using a chunk of free RAM to further boost RAM
-    if (!xpOnly) {
-        let maxXpCycles = 10;
-        const maxXpTime = options['initial-hack-xp-time'];
-        const start = Date.now();
-        const minCycleTime = getXPFarmTarget().timeToWeaken();
-        if (minCycleTime > maxXpTime * 1000)
-            return log(`INFO: Skipping XP cycle because the best target (${getXPFarmTarget()}) time to weaken (${formatDuration(minCycleTime)})` +
-                ` is greater than the configured --initial-hack-xp-time of ${maxXpTime} seconds.`);
-        log(`INFO: Running Hack XP-focused cycles for ${maxXpTime} seconds to further boost hack XP and speed up main hack cycle times. (set --initial-hack-xp-time 0 to disable this step.)`);
-        while (maxXpCycles-- > 0 && Date.now() - start < maxXpTime * 1000) {
-            let cycleTime = await farmHackXp(ns, 1, verbose, 1);
-            if (cycleTime)
-                await ns.asleep(cycleTime);
-            else
-                return log('WARNING: Failed to schedule an XP cycle', false, 'warning');
+    let startedStudying = false;
+    try {
+        if (4 in dictSourceFiles && options['initial-study-time'] > 0) {
+            // The safe/cheap thing to do is to study for free at the local university in our current town
+            // The most effective thing is to study Algorithms at ZB university in Aevum.
+            // Depending on our money, try to do the latter.
+            try {
+                const studyTime = options['initial-study-time'];
+                log(`INFO: Studying for ${studyTime} seconds to kickstart hack XP and speed up initial cycle times. (set --initial-study-time 0 to disable this step.)`);
+                const money = ns.getServerMoneyAvailable("home")
+                if (money >= 200000) // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
+                    await getNsDataThroughFile(ns, `ns.travelToCity("Volhaven")`, '/Temp/travel-to-city.txt');
+                await updatePlayerStats(); // Update player stats to be certain of our new location.
+                const university = playerStats.city == "Sector-12" ? "Rothman University" : playerStats.city == "Aevum" ? "Summit University" : playerStats.city == "Volhaven" ? "ZB Institute of Technology" : null;
+                if (!university)
+                    log(`INFO: Cannot study, because you are in city ${playerStats.city} which has no known university, and you cannot afford to travel to another city.`);
+                else {
+                    const course = playerStats.city == "Sector-12" ? "Study Computer Science" : "Algorithms"; // Assume if we are still in Sector-12 we are poor and should only take the free course
+                    await getNsDataThroughFile(ns, `ns.universityCourse('${university}', '${course}')`, '/Temp/study-for-hack-xp.txt');
+                    startedStudying = true;
+                    await ns.asleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
+                }
+            } catch { log('WARNING: Failed to study to kickstart hack XP', false, 'warning'); }
         }
+        // Run periodic scripts for the first time to e.g. buy tor and any hack tools available to us (we will continue studying briefly while this happens)
+        await runPeriodicScripts(ns);
+        // Immediately attempt to root initially-accessible targets before attempting any XP cycles
+        for (const server of serverListByTargetOrder.filter(s => !s.hasRoot() && s.canCrack()))
+            await doRoot(ns, server);
+        // Before starting normal hacking, fire a couple hack XP-focused cycle using a chunk of free RAM to further boost RAM
+        if (!xpOnly) {
+            let maxXpCycles = 10;
+            const maxXpTime = options['initial-hack-xp-time'];
+            const start = Date.now();
+            const minCycleTime = getXPFarmTarget().timeToWeaken();
+            if (minCycleTime > maxXpTime * 1000)
+                return log(`INFO: Skipping XP cycle because the best target (${getXPFarmTarget()}) time to weaken (${formatDuration(minCycleTime)})` +
+                    ` is greater than the configured --initial-hack-xp-time of ${maxXpTime} seconds.`);
+            log(`INFO: Running Hack XP-focused cycles for ${maxXpTime} seconds to further boost hack XP and speed up main hack cycle times. (set --initial-hack-xp-time 0 to disable this step.)`);
+            while (maxXpCycles-- > 0 && Date.now() - start < maxXpTime * 1000) {
+                let cycleTime = await farmHackXp(ns, 1, verbose, 1);
+                if (cycleTime)
+                    await ns.asleep(cycleTime);
+                else
+                    return log('WARNING: Failed to schedule an XP cycle', false, 'warning');
+            }
+        }
+    } finally {
+        if (startedStudying) getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
     }
 }
 
