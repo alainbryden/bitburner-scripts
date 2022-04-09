@@ -171,9 +171,12 @@ export async function main(ns) {
                 .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
             //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
 
-            if (options['get-invited-to-every-faction'])
-                skipFactions = softCompletedFactions = completedFactions = [];
-            else {
+            if (options['get-invited-to-every-faction']) {
+                softCompletedFactions = completedFactions = [];
+                // Prioritize joining these 3 city factions, since it is the largest non-precluding group of city factions
+                firstFactions = firstFactions.concat(["Chongqing", "New Tokyo", "Ishima"]);
+                skipFactions = ["Aevum", "Sector-12", "Volhaven"];
+            } else {
                 completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1);
                 softCompletedFactions = Object.keys(mostExpensiveDesiredAugByFaction).filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
                 skipFactions = skipFactionsConfig.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
@@ -401,11 +404,11 @@ async function earnFactionInvite(ns, factionName) {
 
     // If travelling can help us join a faction - we can do that too
     player = await getPlayerInfo(ns);
-    if (['Tian Di Hui', 'Tetrads', 'The Dark Army'].includes(factionName) && !player.city == 'Chongqing')
+    if (['Tian Di Hui', 'Tetrads', 'The Dark Army'].includes(factionName) && player.city != 'Chongqing')
         workedForInvite = await goToCity(ns, 'Chongqing');
-    else if (['The Syndicate'].includes(factionName) && !player.city == 'Sector-12')
+    else if (['The Syndicate'].includes(factionName) && player.city != 'Sector-12')
         workedForInvite = await goToCity(ns, 'Sector-12');
-    else if (["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"].includes(factionName) && !player.city == factionName)
+    else if (["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"].includes(factionName) && player.city != factionName)
         workedForInvite = await goToCity(ns, factionName);
     // Special case, earn a CEO position to gain an invite to Silhouette
     if ("Silhouette" == factionName) {
