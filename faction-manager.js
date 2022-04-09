@@ -18,7 +18,7 @@ let augCountMult = 1.9; // The multiplier for the cost increase of augmentations
 let favorToDonate; // Based on the current BitNode Multipliers, the favour required to donate to factions for reputation.
 // Various globals because this script does not do modularity well
 let playerData = null, gangFaction = null;
-let stockValue = 0; // If the player holds stocks, their liquidation value will be determined
+let startingPlayerMoney, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
 let ownedAugmentations = [], simulatedOwnedAugmentations = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
 let factionData = {}, augmentationData = {};
@@ -104,6 +104,7 @@ export async function main(ns) {
             `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
     augCountMult = [1.9, 1.824, 1.786, 1.767][sf11Level];
     playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    startingPlayerMoney = playerData.money;
     if (options['ignore-stocks'] || !playerData.hasTixApiAccess) {
         stockValue = 0
     } else { // Break this into two requests since there's lot's of RAM involved.
@@ -464,6 +465,8 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
  * Prepares a "purchase order" of augs that we can afford.
  * Note: Stores this info in global properties `purchaseableAugs` and `purchaseFactionDonations` so that a final action in the main method will do the purchase. */
 async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
+    // Refresh player data to get an accurate read of current money
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     const budget = playerData.money + stockValue;
     let totalRepCost, totalAugCost, dropped, restart;
     // We will make every effort to keep "priority" augs in the purchase order, but start dropping them if we find we cannot afford them all
@@ -599,15 +602,19 @@ function computeAugsRepReqDonationByFaction(augmentations) {
 async function purchaseDesiredAugs(ns) {
     let totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(purchaseableAugs);
+    // Refresh player data to get an accurate read of current money
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     if (stockValue > 0)
         return log(ns, `ERROR: For your own protection, --purchase will not run while you are holding stocks (current stock value: ${formatMoney(stockValue)}). ` +
             `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
     if (totalAugCost + totalRepCost > playerData.money && totalAugCost + totalRepCost > playerData.money * 1.1) // If we're way off affording this, something is probably wrong
-        return log(ns, `ERROR: Purchase order total cost (${formatMoney(totalRepCost + totalAugCost)}` + (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)}))`) +
-            ` is far more than current player money (${formatMoney(playerData.money)}). Your money may have recently changed, or there may be a bug in purchasing logic.`, printToTerminal, 'error')
+        return log(ns, `ERROR: Purchase order total cost (${getCostString(totalAugCost, totalRepCost)})` +
+            ` is far more than current player money (${formatMoney(playerData.money)}). Your money may have recently changed (It was ${formatMoney(startingPlayerMoney)} at startup), ` +
+            `or there may be a bug in purchasing logic.`, printToTerminal, 'error');
     if (totalAugCost + totalRepCost > playerData.money) // If we're just a little off affording this, it could be because a bit of money was just spent? Just warn and buy what we can
-        log(ns, `WARNING: Purchase order total cost (${formatMoney(totalRepCost + totalAugCost)}` + (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)}))`) +
-            ` is a bit more than current player money (${formatMoney(playerData.money)}). Did something else spend some money? Will proceed with buying most of the purchase order.`, printToTerminal, 'warning')
+        log(ns, `WARNING: Purchase order total cost (${getCostString(totalAugCost, totalRepCost)})` +
+            ` is a bit more than current player money (${formatMoney(playerData.money)}). Did something else spend some money? ` +
+            `(We had ${formatMoney(startingPlayerMoney)} at startup). Will proceed with buying most of the purchase order.`, printToTerminal, 'warning');
     // Donate to factions if necessary (using a ram-dodging script of course)
     if (Object.keys(purchaseFactionDonations).length > 0 && Object.values(purchaseFactionDonations).some(v => v > 0)) {
         if (await getNsDataThroughFile(ns, JSON.stringify(Object.keys(purchaseFactionDonations).map(f => ({ faction: f, repDonation: purchaseFactionDonations[f] }))) +
