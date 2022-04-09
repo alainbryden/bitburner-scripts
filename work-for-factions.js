@@ -218,7 +218,7 @@ export async function main(ns) {
                 }
             }
             // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, whether we pause working.        
-            if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
+            if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check'] && player.inBladeburner) {
                 if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working
                     ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
                     await ns.sleep(checkForNewPrioritiesInterval);
