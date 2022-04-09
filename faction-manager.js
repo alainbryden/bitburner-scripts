@@ -604,7 +604,7 @@ async function purchaseDesiredAugs(ns) {
             `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
     if (totalAugCost + totalRepCost > playerData.money && totalAugCost + totalRepCost > playerData.money * 1.1) // If we're way off affording this, something is probably wrong
         return log(ns, `ERROR: Purchase order total cost (${formatMoney(totalRepCost + totalAugCost)}` + (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)}))`) +
-            ` is far more than current player money (${formatMoney(playerData.money)}). There may be a bug in purchasing logic.`, printToTerminal, 'error')
+            ` is far more than current player money (${formatMoney(playerData.money)}). Your money may have recently changed, or there may be a bug in purchasing logic.`, printToTerminal, 'error')
     if (totalAugCost + totalRepCost > playerData.money) // If we're just a little off affording this, it could be because a bit of money was just spent? Just warn and buy what we can
         log(ns, `WARNING: Purchase order total cost (${formatMoney(totalRepCost + totalAugCost)}` + (totalRepCost == 0 ? '' : ` (Augs: ${formatMoney(totalAugCost)} + Rep: ${formatMoney(totalRepCost)}))`) +
             ` is a bit more than current player money (${formatMoney(playerData.money)}). Did something else spend some money? Will proceed with buying most of the purchase order.`, printToTerminal, 'warning')
