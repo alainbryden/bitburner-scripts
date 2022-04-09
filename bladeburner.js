@@ -35,6 +35,7 @@ const argsSchema = [
     ['training-limit', 50], // Don't bother training more than this many times, since Training is slow and earns no rank
     ['update-interval', 2000], // How often to refresh bladeburner status
     ['ignore-busy-status', false], // If set to true, we will attempt to do bladeburner tasks even if we are currently busy and don't have The Blade's Simulacrum
+    ['allow-raiding-highest-pop-city', false], // Set to true, we will allow Raid to be used even in our highest-population city (disabled by default)
 ];
 export function autocomplete(data, _) {
     data.flags(argsSchema);
@@ -156,7 +157,7 @@ async function mainLoop(ns) {
         const raidableCities = cityNames.filter(c => communitiesByCity[c] > 0); // Cities with at least one community
         // Only allow Raid if we would not be raiding our highest-population city (need to maintain at least one)
         const [highestPopCity, _] = getMaxKeyValue(populationByCity, cityNames);
-        goingRaiding = raidableCities.length > 1 || raidableCities[0] != highestPopCity;
+        goingRaiding = raidableCities.length > 0 && (raidableCities[0] != highestPopCity || options['allow-raiding-highest-pop-city']);
         if (goingRaiding) { // Select the raid-able city with the smallest population
             [goToCity, population] = getMinKeyValue(populationByCity, raidableCities);
             travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up ${getCount("Raid")} Raid operations`;
