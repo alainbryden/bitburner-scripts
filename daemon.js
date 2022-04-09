@@ -363,7 +363,7 @@ async function kickstartHackXp(ns) {
             }
         }
     } finally {
-        if (startedStudying) getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
+        if (startedStudying) await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
     }
 }
 
