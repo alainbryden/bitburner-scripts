@@ -52,7 +52,7 @@ export async function main(ns) {
                 let sleeveStats = allSleeveStats[i];
                 let shock = sleeveStats.shock;
                 let sync = sleeveStats.sync;
-                // Manage Augmentations
+                // MANAGE SLEEVE AUGMENTATIONS
                 if (shock == 0 && availableAugs[i] == null) // No augs are available augs until shock is 0
                     availableAugs[i] = (await getNsDataThroughFile(ns, `ns.sleeve.getSleevePurchasableAugs(${i})`, '/Temp/sleeve-augs.txt')).sort((a, b) => a.cost - b.cost); // list of { name, cost }
                 if (shock == 0 && availableAugs[i].length > 0) {
@@ -73,7 +73,14 @@ export async function main(ns) {
                         lastPurchaseTime[i] = Date.now();
                     }
                 }
-                // Pick what we think the sleeve should be doing right now
+
+                // ASSIGN SLEEVE TASK
+                // If shock/sync just completed, and they were on that task, allow this sleeve to immediately be reassigned
+                if (shock == 0 && task[i] == "recover from shock" || sync == 100 && task[i] == "synchronize") lastReassignTime[i] = 0;
+                // Don't change tasks if we've changed tasks recently (avoids e.g. disrupting long crimes too frequently)
+                if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
+
+                // Decide what we think the sleeve should be doing for the next little while
                 let command, designatedTask;
                 if (sync < 100) { // Synchronize
                     designatedTask = "synchronize";
@@ -98,19 +105,16 @@ export async function main(ns) {
                     command = `ns.sleeve.setToCommitCrime(${i}, '${crime}')`;
                 }
 
-                // If shock/sync just completed, and they were on that task, allow this sleeve to immediately be reassigned
-                if (shock == 0 && task[i] == "recover from shock" || sync == 100 && task[i] == "synchronize") lastReassignTime[i] = 0;
-                // Don't change tasks if we've changed tasks recently (avoids e.g. disrupting long crimes too frequently)
-                if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
-
+                // Start the clock, this sleeve should stick to this task for minTaskWorkTime
+                lastReassignTime[i] = Date.now();
                 // Set the sleeve's new task if it's not the same as what they're already doing.
                 if (task[i] != designatedTask) {
                     let strAction = `Set sleeve ${i} to ${designatedTask}`;
                     if (await getNsDataThroughFile(ns, command, tempFile)) {
                         task[i] = designatedTask;
-                        lastReassignTime[i] = Date.now();
                         log(ns, `SUCCESS: ${strAction}`);
                     } else { // Assigning the task failed
+                        lastReassignTime[i] = 0;
                         // If working for a faction, it's possible he current work isn't supported, so try the next one.
                         if (designatedTask.startsWith('work for faction')) {
                             log(ns, `WARN: Failed to ${strAction} - work type may not be supported.`, false, 'warning');
