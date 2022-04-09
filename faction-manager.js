@@ -524,8 +524,17 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         else if ((!getFrom || factionData[getFrom].favor < factionWithMostFavor.favor) && factionWithMostFavor.invited) {
             outputRows.push(`Attempting to join faction ${factionWithMostFavor.name} to make it easier to get rep for ${strNF} since it has the most favor (${factionWithMostFavor.favor}).`);
             await joinFactions(ns, [factionWithMostFavor.name]);
+            if (!joinedFactions.includes(factionWithMostFavor.name)) {
+                invitedFactionsWithDonation = Object.values(factionData).filter(f => f.invited && f.donationsUnlocked).map(f => f.name);
+                if (invitedFactionsWithDonation.length > 0) {
+                    outputRows.push(`Failed to join ${factionWithMostFavor.name}. Attempting to join any factions with whom we have enough favour to donate: ${invitedFactionsWithDonation.join(", ")}.`);
+                    await joinFactions(ns, invitedFactionsWithDonation);
+                } else
+                    outputRows.push(`Failed to join ${factionWithMostFavor.name}. NeuroFlux will not be accessible.`);
+            }
         }
     }
+    if (!augNf.getFromJoined()) return log("Cannot buy any NF due to no joined or joinable factions offering it.");
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
     const augNfFaction = factionData[augNf.getFromJoined()];
     log(ns, `nfPurchased: ${nfPurchased}, augNfFaction: ${augNfFaction.name} (rep: ${augNfFaction.reputation}), augNf.price: ${augNf.price}, augNf.reputation: ${augNf.reputation}`);
