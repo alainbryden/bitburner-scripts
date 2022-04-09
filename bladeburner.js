@@ -159,7 +159,7 @@ async function mainLoop(ns) {
         goingRaiding = raidableCities.length > 1 || raidableCities[0] != highestPopCity;
         if (goingRaiding) { // Select the raid-able city with the smallest population
             [goToCity, population] = getMinKeyValue(populationByCity, raidableCities);
-            travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up Raid operations`;
+            travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up ${getCount("Raid")} Raid operations`;
         }
     }
     // SPECIAL CASE: GO TO HIGHEST-CHAOS CITY
@@ -187,7 +187,8 @@ async function mainLoop(ns) {
     }
 
     let currentCity = await getBBInfo(ns, 'getCity()');
-    if (currentCity != goToCity && (await switchToCity(ns, goToCity, travelReason)))
+    // Change cities if we aren't blocked on our last task, and found a better city to work in
+    if (currentCity != goToCity && Date.now() > currentTaskEndTime && (await switchToCity(ns, goToCity, travelReason)))
         currentCity = goToCity;
 
     // Gather the success chance of contracts (based on our current city)
@@ -205,6 +206,8 @@ async function mainLoop(ns) {
 
     // NEXT STEP: Pick the action we should be working on.
     let bestActionName, reason;
+    const actionSummaryString = (action) => `Success Chance: ${(100 * minChance(action)).toFixed(1)}%` +
+        (maxChance(action) - minChance(action) < 0.001 ? '' : ` to ${(100 * maxChance(action)).toFixed(1)}%`) + `, Remaining: ${getCount(action)}`
 
     // Trigger stamina recovery if we drop below our --low-stamina-pct configuration, and remain trigered until we've recovered to --high-stamina-pct
     const stamina = await getBBInfo(ns, `getStamina()`); // Returns [current, max];
@@ -214,14 +217,18 @@ async function mainLoop(ns) {
     if (lowStaminaTriggered) {
         bestActionName = chaosByCity[currentCity] > options['max-chaos'] ? "Diplomacy" : "Field Analysis";
         reason = `Stamina is low: ${(100 * staminaPct).toFixed(1)}% < ${(100 * options['low-stamina-pct']).toFixed(1)}%`
-    } // If current city chaos is greater than 10, keep it low with "Stealth Retirement" if odds are good
+    } // If current city chaos is greater than our threshold, keep it low with "Stealth Retirement" if odds are good
     else if (chaosByCity[currentCity] > options['chaos-recovery-threshold'] && getCount(antiChaosOperation) > 0 && minChance(antiChaosOperation) > 0.99) {
         bestActionName = antiChaosOperation;
-        reason = `Chaos is high: ${chaosByCity[currentCity].toFixed(2)} > ${options['chaos-recovery-threshold']} (--chaos-recovery-threshold)`;
-    } // If current city chaos is very high (should be rare), we should be very wary of the snowballing effects, and try to reduce it.
+        reason = `Chaos is high: ${chaosByCity[currentCity].toFixed(2)} > ${options['chaos-recovery-threshold']} (--chaos-recovery-threshold) ${actionSummaryString(bestActionName)}`;
+    } // If current city chaos is very high, we should be very wary of the snowballing effects, and try to reduce it.
     else if (chaosByCity[currentCity] > options['max-chaos']) {
         bestActionName = getCount(antiChaosOperation) > 0 && minChance(antiChaosOperation) > 0.8 ? antiChaosOperation : "Diplomacy";
         reason = `Out of ${antiChaosOperation}s, and chaos ${chaosByCity[currentCity].toFixed(2)} is higher than --max-chaos ${options['max-chaos']}`;
+    } // If we've previously detemined we will be raiding the lowest-population city
+    else if (goingRaiding && maxChance("Raid") > options['success-threshold']) { // Special-case: Ignore min-chance. Population estimate turns bad as we decimate it, but doesn't seem to affect success.
+        bestActionName = "Raid";
+        reason = `Only remaining Operations. ${actionSummaryString(bestActionName)}`;
     } else { // Otherwise, pick the "highest-tier" action we can confidently perform, which should lead to the fastest rep-gain.
         // Note: Candidate actions will be maintained in order of highest-rep to lowest-rep earning, so we can pick the first after filtering.
         let candidateActions = limitedActions;
@@ -249,9 +256,7 @@ async function mainLoop(ns) {
         if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
             bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'])[0];
         if (bestActionName) // If we found something to do, log details about its success chance range
-            reason = `Success Chance: ${(100 * minChance(bestActionName)).toFixed(1)}%` +
-                (maxChance(bestActionName) - minChance(bestActionName) < 0.001 ? '' : ` to ${(100 * maxChance(bestActionName)).toFixed(1)}%`) +
-                `, Remaining: ${getCount(bestActionName)}`;
+            reason = actionSummaryString(bestActionName);
 
         // If there were no operations/contracts, resort to a "general action" which always have 100% chance, but take longer and gives less reward
         if (!bestActionName) {
