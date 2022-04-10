@@ -33,6 +33,10 @@
     "dev": "rollup -c -w",
     "commit": "cz"
   },
+  "resolutions": {
+    "minimist": "1.2.6",
+    "glob-parent": "5.1.2"
+  },
   "release": {
     "branches": [
       "+([0-9])?(.{+([0-9]),x}).x",
