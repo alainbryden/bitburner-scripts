@@ -1,8 +1,9 @@
 import { getNsDataThroughFile, runCommand, formatMoney, formatDuration, disableLogs, log } from './helpers.js'
 
 const interval = 5000; // Uodate (tick) this often
-const minTaskWorkTime = 59000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
+const minTaskWorkTime = 29000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
 const tempFile = '/Temp/sleeve-set-task.txt';
+const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
 const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
 let cachedCrimeStats; // Cache of crime statistics
@@ -99,7 +100,7 @@ export async function main(ns) {
                 // Decide what we think the sleeve should be doing for the next little while
                 let command, designatedTask;
                 let untrainedStats = trainStats.filter(stat => sleeveStats[stat] < options[`train-to-${stat}`]);
-                if (untrainedStats.length > 0) await promptForTrainingBudget(ns);
+                if (untrainedStats.length > 0 && playerInfo.money < 1E6) await promptForTrainingBudget(ns);
                 if (sync < 100) { // Synchronize
                     designatedTask = "synchronize";
                     command = `ns.sleeve.setToSynchronize(${i})`;
@@ -109,8 +110,9 @@ export async function main(ns) {
                     command = `ns.sleeve.setToShockRecovery(${i})`;
                 } // Train if our physical stats aren't up to par
                 else if (canTrain && untrainedStats.length > 0) {
-                    designatedTask = `train ${untrainedStats[0]}`;
-                    command = `ns.sleeve.setToGymWorkout(${i}, "Powerhouse Gym", "${untrainedStats[0]}")`;
+                    const minStat = untrainedStats.reduce((min, s) => sleeveStats[s] < sleeveStats[min] ? s : min, untrainedStats[0]);
+                    designatedTask = `train ${minStat}`;
+                    command = `ns.sleeve.setToGymWorkout(${i}, "Powerhouse Gym", "${minStat}")`;
                 } // If player is currently working for faction or company rep, sleeves 0 can help him out (Note: Only one sleeve can work for a faction)
                 else if (i == 0 && !options['disable-follow-player'] && playerInfo.isWorking && playerInfo.workType == "Working for Faction") {
                     // TODO: We should be able to borrow logic from work-for-factions.js to have more sleeves work for useful factions / companies
@@ -175,7 +177,6 @@ let promptedForTrainingBudget = false;
 async function promptForTrainingBudget(ns) {
     if (promptedForTrainingBudget) return;
     promptedForTrainingBudget = true;
-    const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
     await ns.write(trainingReserveFile, '', "w");
     if (options['training-reserve'] === null && !options['disable-training'])
         await runCommand(ns, `let ans = await ns.prompt("Do you want to let sleeves put you in debt while they train?");\n` +
