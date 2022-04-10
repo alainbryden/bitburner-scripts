@@ -31,8 +31,8 @@ jobs:
           cmd: build # will run `yarn build` command
 
       - uses: montudor/action-zip@v1
-          with:
-            args: zip -r dist/dist.zip dist
+        with:
+          args: zip -r dist/dist.zip dist
       
       - name: Semantic Release
         run: npx semantic-release
