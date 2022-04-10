@@ -61,13 +61,19 @@ export function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 
     return num == 0.0 ? num : num.toFixed(Math.max(minDecimalPlaces, Math.max(0, minSignificantFigures - Math.ceil(Math.log10(num)))));
 }
 
-/** Formats some RAM amount as a round number of GB with thousands separators e.g. `1,028 GB` */
+/** Formats some RAM amount as a round number of GB with thousands separators 
+ * e.g. `1,028 GB` 
+ *
+ * 'Borrowed' from BitBurner sources.
+ * 
+ * @param {number} num The number to be formatted 
+ */
 export function formatRam(num) { 
     // numeraljs doesnt properly format numbers that are too big or too small
     if (Math.abs(num) < 1e-6) {
         num = 0;
     }
-    const answer = numeral(num*1e9).format("0.00b");
+    const answer = numeral(num*1e9).format("0.00 b");
     if (answer === "NaN") {
       return `${num}`;
     }

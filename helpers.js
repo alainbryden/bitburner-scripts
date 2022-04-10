@@ -1,4 +1,4 @@
-/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY (Version 1.0.1-0) */
+/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY (Version 1.0.2-0) */
 var numeral$1 = {exports: {}};
 
 /*! @preserve
@@ -1574,13 +1574,19 @@ function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 1) {
     return num == 0.0 ? num : num.toFixed(Math.max(minDecimalPlaces, Math.max(0, minSignificantFigures - Math.ceil(Math.log10(num)))));
 }
 
-/** Formats some RAM amount as a round number of GB with thousands separators e.g. `1,028 GB` */
+/** Formats some RAM amount as a round number of GB with thousands separators 
+ * e.g. `1,028 GB` 
+ *
+ * 'Borrowed' from BitBurner sources.
+ * 
+ * @param {number} num The number to be formatted 
+ */
 function formatRam(num) { 
     // numeraljs doesnt properly format numbers that are too big or too small
     if (Math.abs(num) < 1e-6) {
         num = 0;
     }
-    const answer = numeral(num*1e9).format("0.00b");
+    const answer = numeral(num*1e9).format("0.00 b");
     if (answer === "NaN") {
       return `${num}`;
     }
