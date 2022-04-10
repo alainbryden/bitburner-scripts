@@ -1,9 +1,12 @@
 import { getNsDataThroughFile, disableLogs, formatNumberShort, formatRam, getFilePath, waitForProcessToComplete, log } from './helpers.js'
 
+// Default sripts called at startup and shutdown of stanek
 const defaultStartupScript = getFilePath('daemon.js');
 const defaultStartupArgs = ['--reserved-ram', Number.MAX_SAFE_INTEGER];
 const defaultCompletionScript = getFilePath('daemon.js');
 const defaultCompletionArgs = ['-v', '--stock-manipulation'];
+// Name of the external script that will be created and called to generate charges
+const chargeScript = "/Temp/stanek.js.charge.js";
 
 let options;
 const argsSchema = [
@@ -46,8 +49,15 @@ export async function main(ns) {
         log(ns, `INFO: Stanek.js is launching accompanying 'on-startup-script': ${startupScript}...`, false, 'info');
         await ns.sleep(1000); // Give time for the accompanying script to start up and consume its required RAM footprint.
     } else
-        log(ns, `ERROR: Stanek.js has started successfully, but failed to launch accompanying 'on-startup-script': ${startupScript}...`, true, 'error');
+        log(ns, `WARNING: Stanek.js has started successfully, but failed to launch accompanying 'on-startup-script': ${startupScript}...`, false, 'warning');
     const knownCharges = {}; // We independently keep track of how many times we've charged each segment, to work around a placement bug where fragments can overlap, and then don't register charge
+
+    // Check if our charge script exists. If not, we can create it (facilitates copying stanek.js to a new server to run)
+    if (!ns.read(chargeScript)) {
+        await ns.write(chargeScript, "export async function main(ns) { await ns.stanek.chargeFragment(ns.args[0], ns.args[1]); }", "w");
+        await ns.sleep(100); // To be safe, there have been bugs with ns.write not waiting long enough
+    }
+
     // Start the main stanek loop
     while (true) {
         try {
@@ -89,7 +99,7 @@ export async function main(ns) {
                     await ns.sleep(1000);
                     continue;
                 }*/
-                const pid = ns.run(getFilePath('/stanek.js.charge.js'), threads, fragment.x, fragment.y);
+                const pid = ns.run(chargeScript, threads, fragment.x, fragment.y);
                 await waitForProcessToComplete(ns, pid);
                 knownCharges[fragment.id] = 1 + (knownCharges[fragment.id] || 0);
             }
@@ -110,5 +120,5 @@ export async function main(ns) {
     if (ns.run(completionScript, 1, ...completionArgs))
         log(ns, `INFO: Stanek.js shutting down and launching ${completionScript}...`, false, 'info');
     else
-        log(ns, `ERROR: Stanek.js shutting down, but failed to launch ${completionScript}...`, true, 'error');
+        log(ns, `WARNING: Stanek.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
 }
