@@ -4,6 +4,7 @@ const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-f
     .map(s => getFilePath(s));
 
 const argsSchema = [
+    ['prioritize-augmentations', false], // If set to true, will spend as much money as possible on augmentations before upgrading home RAM
     ['install-augmentations', false], // By default, augs will only be purchased. Set this flag to install (a.k.a reset)
     /* OR */['reset', false], // An alias for the above flag, does the same thing.
     ['allow-soft-reset', false], // If set to true, allows ascend.js to invoke a **soft** reset (installs no augs) when no augs are affordable. This is useful e.g. when ascending rapidly to grind hacknet hash upgrades.
@@ -63,9 +64,12 @@ export async function main(ns) {
     }
 
     // STEP 2: Buy Home RAM Upgrades (more important than squeezing in a few extra augs)
-    log(ns, 'Try Upgrade Home RAM...', true, 'info');
-    pid = ns.run(getFilePath('Tasks/ram-manager.js'), 1, '--reserve', '0', '--budget', '0.8');
-    await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
+    const spendOnHomeRam = async () => {
+        log(ns, 'Try Upgrade Home RAM...', true, 'info');
+        pid = ns.run(getFilePath('Tasks/ram-manager.js'), 1, '--reserve', '0', '--budget', '0.8');
+        await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
+    };
+    if (!options['prioritize-augmentations']) await spendOnHomeRam();
 
     // TODO: (SF13) If Stanek is unlocked, and we have not yet accepted Stanek's gift, now's our last chance to do it (before purchasing augs)
 
@@ -78,6 +82,9 @@ export async function main(ns) {
     }
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
+
+    // Upgrade home RAM after purchasing augmentations if this option was set.
+    if (options['prioritize-augmentations']) await spendOnHomeRam();
 
     // Sanity check, if we are not slated to install any augmentations, ABORT
     // Get owned + purchased augmentations, then installed augmentations. Ensure there's a difference
@@ -113,6 +120,13 @@ export async function main(ns) {
     log(ns, 'Try Upgrade Home Cores...', true, 'info');
     pid = await runCommand(ns, `while(ns.upgradeHomeCores()); { await ns.sleep(10); }`, '/Temp/upgrade-home-ram.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
+
+    // STEP 8: Join every faction we've been invited to (gives a little INT XP)
+    let invites = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/faction-invitations.txt');
+    if (invites.length > 0) {
+        pid = await runCommand(ns, 'ns.args.forEach(f => ns.joinFaction(f))', '/Temp/join-factions.js', invites);
+        await waitForProcessToComplete(ns, pid, true);
+    }
 
     // TODO: If in corporation, and buyback shares is available, buy as many as we can afford
     // TODO: Anything to do for Bladeburner?
