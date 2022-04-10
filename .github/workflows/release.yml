@@ -30,6 +30,10 @@ jobs:
         with:
           cmd: build # will run `yarn build` command
 
+      - name: ZIP distribution
+        uses: montudor/action-zip@v1
+          args: zip -r dist/dist.zip dist
+      
       - name: Semantic Release
         run: npx semantic-release
         id: semantic
