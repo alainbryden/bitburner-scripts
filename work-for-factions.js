@@ -573,8 +573,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     if (playerGang && allGangFactions.includes(factionName))
         return ns.print(`"${factionName}" is an active gang faction. Cannot work for gang factions...`);
     if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
-        ns.print(`The last "${factionName}" aug is only ${mostExpensiveAugByFaction[factionName].toLocaleString()} rep, ` +
-            `not worth grinding ${favorRepRequired.toLocaleString()} rep to unlock donations.`);
+        ns.print(`The last "${factionName}" aug is only ${formatNumberShort(mostExpensiveAugByFaction[factionName])} rep, ` +
+            `not worth grinding ${formatNumberShort(favorRepRequired)} rep to unlock donations.`);
         forceUnlockDonations = false;
         factionRepRequired = highestRepAug = mostExpensiveAugByFaction[factionName];
     }
@@ -589,11 +589,11 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     }
 
     if (currentReputation >= factionRepRequired)
-        return ns.print(`Faction "${factionName}" required rep of ${Math.round(factionRepRequired).toLocaleString()} has already been attained ` +
-            `(Current rep: ${Math.round(currentReputation).toLocaleString()}). Skipping working for faction...`)
+        return ns.print(`Faction "${factionName}" required rep of ${formatNumberShort(Math.round(factionRepRequired))} has already been attained ` +
+            `(Current rep: ${formatNumberShort(Math.round(currentReputation))}). Skipping working for faction...`)
 
-    ns.print(`Faction "${factionName}" Highest Aug Req: ${highestRepAug?.toLocaleString()}, Current Favor (` +
-        `${startingFavor?.toFixed(2)}/${repToDonate?.toFixed(2)}) Req: ${Math.round(favorRepRequired).toLocaleString()}`);
+    ns.print(`Faction "${factionName}" Highest Aug Req: ${formatNumberShort(highestRepAug)}, Current Favor (` +
+        `${startingFavor?.toFixed(2)}/${repToDonate?.toFixed(2)}) Req: ${formatNumberShort(Math.round(favorRepRequired))}`);
     if (options['invites-only'])
         return ns.print(`--invites-only Skipping working for faction...`);
     if (prioritizeInvites && !forceUnlockDonations && !forceBestAug && !forceRep)
@@ -615,7 +615,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             announce(ns, `Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
             break;
         }
-        let status = `Doing '${factionWork}' work for "${factionName}" until ${Math.round(factionRepRequired).toLocaleString()} rep.`;
+        let status = `Doing '${factionWork}' work for "${factionName}" until ${formatNumberShort(Math.round(factionRepRequired))} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             // Actually measure how much reputation we've earned since our last update, to give a more accurate ETA including external sources of rep
             let measuredRepGainRatePerMs = ((await getFactionReputation(ns, factionName)) - lastRepMeasurement) / (Date.now() - lastStatusUpdateTime);
@@ -625,7 +625,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
                 repGainRatePerMs = measuredRepGainRatePerMs; // If we measure a significantly different rep gain rate, this could be due to external sources of rep (e.g. sleeves) - account for it in the ETA
             lastStatusUpdateTime = Date.now(); lastRepMeasurement = currentReputation;
             const eta_milliseconds = (factionRepRequired - currentReputation) / repGainRatePerMs;
-            ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString()}, earning ${formatNumberShort(repGainRatePerMs * 1000)} rep/sec. ` +
+            ns.print((lastFactionWorkStatus = status) + ` Currently at ${formatNumberShort(Math.round(currentReputation))}, earning ${formatNumberShort(repGainRatePerMs * 1000)} rep/sec. ` +
                 (hasFocusPenaly && !shouldFocusAtWork ? 'after 20% non-focus Penalty ' : '') + `(ETA: ${formatDuration(eta_milliseconds)})`);
         }
         await tryBuyReputation(ns);
@@ -645,7 +645,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt'); // We're close - stop working so our current rep is accurate when we check the while loop condition
     }
     if (currentReputation >= factionRepRequired)
-        ns.print(`Attained ${Math.round(currentReputation).toLocaleString()} rep with "${factionName}" (needed ${factionRepRequired.toLocaleString()}).`);
+        ns.print(`Attained ${formatNumberShort(Math.round(currentReputation))} rep with "${factionName}" (needed ${formatNumberShort(factionRepRequired)}).`);
     return currentReputation >= factionRepRequired;
 }
 
@@ -754,8 +754,8 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         const requiredHack = nextJob.reqHack[nextJobTier] === 0 ? 0 : nextJob.reqHack[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         const requiredCha = nextJob.reqCha[nextJobTier] === 0 ? 0 : nextJob.reqCha[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         const requiredRep = nextJob.reqRep[nextJobTier]; // No modifier on rep requirements
-        let status = `Next promotion ('${nextJobName}' #${nextJobTier}) at Hack:${requiredHack} Cha:${requiredCha} Rep:${requiredRep?.toLocaleString()}` +
-            (repRequiredForFaction > nextJob.reqRep[nextJobTier] ? '' : `, but we won't need it, because we'll sooner hit ${repRequiredForFaction.toLocaleString()} reputation to unlock company faction "${factionName}"!`);
+        let status = `Next promotion ('${nextJobName}' #${nextJobTier}) at Hack:${requiredHack} Cha:${requiredCha} Rep:${formatNumberShort(requiredRep)}` +
+            (repRequiredForFaction > nextJob.reqRep[nextJobTier] ? '' : `, but we won't need it, because we'll sooner hit ${formatNumberShort(repRequiredForFaction)} reputation to unlock company faction "${factionName}"!`);
         // We should only study at university if every other requirement is met but Charisma
         if (currentReputation >= requiredRep && player.hacking >= requiredHack && player.charisma < requiredCha && !noStudying) {
             status = `Studying at ZB university until Cha reaches ${requiredCha}...\n` + status;
@@ -817,19 +817,19 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 `(after ${(100 * (1 - cancellationMult))?.toFixed(0)}% early-quit penalty` + (hasFocusPenaly && !shouldFocusAtWork ? ' and 20% non-focus Penalty' : '') + `)\n` +
                 `${status}\nCurrent player stats are Hack:${player.hacking} ${player.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.charisma} ${player.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
-                `Rep:${Math.round(currentReputation).toLocaleString()} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
+                `Rep:${formatNumberShort(Math.round(currentReputation))} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
             lastStatus = status;
         }
         await ns.sleep(loopSleepInterval); // Sleep now and wake up periodically and stop working to check our stats / reputation progress
     }
     // Return true if we succeeded, false otherwise.
     if (currentReputation >= repRequiredForFaction) {
-        ns.print(`Attained ${repRequiredForFaction.toLocaleString()} rep with "${companyName}".`);
+        ns.print(`Attained ${formatNumberShort(repRequiredForFaction)} rep with "${companyName}".`);
         if (!player.factions.includes(factionName) && waitForInvite)
             return await waitForFactionInvite(ns, factionName);
         return true;
     }
-    ns.print(`Stopped working for "${companyName}" repRequiredForFaction: ${repRequiredForFaction.toLocaleString()} ` +
-        `currentReputation: ${Math.round(currentReputation).toLocaleString()} inFaction: ${player.factions.includes(factionName)}`);
+    ns.print(`Stopped working for "${companyName}" repRequiredForFaction: ${formatNumberShort(repRequiredForFaction)} ` +
+        `currentReputation: ${formatNumberShort(Math.round(currentReputation))} inFaction: ${player.factions.includes(factionName)}`);
     return false;
 }

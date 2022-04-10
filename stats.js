@@ -121,5 +121,5 @@ export async function main(ns) {
 
 function formatSixSigFigs(value, minDecimalPlaces = 0, maxDecimalPlaces = 0) {
     return value >= 1E7 ? formatNumberShort(value, 6, 3) :
-        value.toLocaleString(undefined, { minimumFractionDigits: minDecimalPlaces, maximumFractionDigits: maxDecimalPlaces });
+        value.toLocaleString("en", { minimumFractionDigits: minDecimalPlaces, maximumFractionDigits: maxDecimalPlaces });
 }

@@ -115,7 +115,7 @@ async function tryToBuyBestServerPossible(ns) {
 
     // analyze the utilization rates
     let utilizationRate = utilizationTotal / totalMaxRam;
-    setStatus(ns, `Using ${Math.round(utilizationTotal).toLocaleString()}/${formatRam(totalMaxRam)} (` +
+    setStatus(ns, `Using ${formatRam(Math.round(utilizationTotal).toLocaleString("en"))}/${formatRam(totalMaxRam)} (` +
         `${(utilizationRate * 100).toFixed(1)}%) across ${rootedServers.length} servers ` +
         `(Triggers at ${options['utilization-trigger'] * 100}%, ${purchasedServers.length} bought so far)`);
 
@@ -129,7 +129,7 @@ async function tryToBuyBestServerPossible(ns) {
     let spendableMoney = ns.getServerMoneyAvailable("home");
     // Automatically reserve at least enough money to buy the final hack tool, if we do not already have it.
     if (!ns.fileExists("SQLInject.exe", "home")) {
-        prefix += '(reserving an extra 250M for SQLInject) ';
+        prefix += '(reserving an extra $250M for SQLInject) ';
         spendableMoney = Math.max(0, spendableMoney - 250000000);
     }
     // Additional reservations

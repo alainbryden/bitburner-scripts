@@ -1,4 +1,4 @@
-import { getNsDataThroughFile, runCommand } from './helpers.js'
+import { getNsDataThroughFile, runCommand, formatRam } from './helpers.js'
 
 /** @param {NS} ns 
  *  Remove the worst server we own (RAM) **/
@@ -25,7 +25,7 @@ export async function main(ns) {
     await runCommand(ns, `await ns.scp("/Flags/deleting.txt", "${worstServerName}")`, '/Temp/flag-server-for-deletion.js');
     var success = await getNsDataThroughFile(ns, `ns.deleteServer("${worstServerName}")`, '/Temp/try-delete-server-result.txt');
     if (success)
-        ns.tprint("Deleted " + worstServerName + " which had only " + worstServerRam + " GB of RAM. " + (purchasedServers.length - 1) + " servers remain.");
+        ns.tprint("Deleted " + worstServerName + " which had only " + formatRam(worstServerRam) + " of RAM. " + (purchasedServers.length - 1) + " servers remain.");
     else
-        ns.tprint("Tried to delete " + worstServerName + " with " + worstServerRam + " GB RAM, but it failed (scripts still running)");
+        ns.tprint("Tried to delete " + worstServerName + " with " + formatRam(worstServerRam) + " RAM, but it failed (scripts still running)");
 }
