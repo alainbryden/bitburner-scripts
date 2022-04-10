@@ -27,28 +27,8 @@ jobs:
           cmd: install # will run `yarn install` command
 
       - name: Semantic Release
-        uses: ./
+        run: npx semantic-release
         id: semantic
-        with:
-          branches: |
-            [
-              '+([0-9])?(.{+([0-9]),x}).x',
-              'master',
-              'main',
-              'next',
-              'next-major',
-              {
-                name: 'beta',
-                prerelease: true
-              },
-              {
-                name: 'alpha',
-                prerelease: true
-              }
-            ]
-          extra_plugins: |
-            @semantic-release/git
-            @semantic-release/changelog
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

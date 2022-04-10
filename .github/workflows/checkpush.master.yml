@@ -13,14 +13,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Semantic Release
-        uses: ./
+      - uses: borales/actions-yarn@v2.3.0
         with:
-          branch: main
-          extra_plugins: |
-            @semantic-release/git
-            @semantic-release/changelog
-          dry_run: true
+          cmd: install # will run `yarn install` command
+
+      - name: Semantic Release
+        run: npx semantic-release --dry-run
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
