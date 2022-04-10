@@ -1,0 +1,51 @@
+{
+  "name": "bitburner-scripts",
+  "version": "1.0.2-0",
+  "description": "If you manually `nano git-pull.js` from the terminal and copy the [contents of that script](https://raw.githubusercontent.com/alainbryden/bitburner-scripts/main/git-pull.js), you should be able to run it once and download the rest of the files I use. Early-game, many will be useless because they are only enabled by late-game features, but they shouldn't give you too many problems just being there.",
+  "main": "daemon.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alainbryden/bitburner-scripts.git"
+  },
+  "author": "Alain Bryden",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alainbryden/bitburner-scripts/issues"
+  },
+  "homepage": "https://github.com/alainbryden/bitburner-scripts#readme",
+  "dependencies": {
+    "numeral": "^2.0.6"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^21.0.3",
+    "@rollup/plugin-node-resolve": "^13.1.3",
+    "@semantic-release/git": "^10.0.1",
+    "rollup": "^2.70.1",
+    "semantic-release": "^19.0.2"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w"
+  },
+  "release": {
+    "branches": [
+      "+([0-9])?(.{+([0-9]),x}).x",
+      "master",
+      "main",
+      "next",
+      "next-major",
+      {
+        "name": "beta",
+        "prerelease": true
+      },
+      {
+        "name": "fix-.*",
+        "prerelease": true
+      }
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator"
+    ]
+  }
+}
