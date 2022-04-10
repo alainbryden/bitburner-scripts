@@ -29,6 +29,14 @@ gulp.task('build', async function () {
         sourcemap: false
     });
 
+    await bundle.write({
+        file: 'helpers.js',
+        banner: '/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY (Version ' + pkg.version + ') */',
+        format: 'module',
+        name: 'helpers',
+        sourcemap: false
+    });
+
     // copy source files
     gulp.src(["*.js", "!helpers.src.js", "!helpers.js", "!gulpfile.js", "!rollup.config.js"])
         .pipe(gulp.dest("dist/"));
