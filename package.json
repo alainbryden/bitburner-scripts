@@ -5,14 +5,14 @@
   "main": "daemon.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alainbryden/bitburner-scripts.git"
+    "url": "git+https://github.com/steven-r/bitburner-scripts.git"
   },
   "author": "Alain Bryden",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/alainbryden/bitburner-scripts/issues"
+    "url": "https://github.com/steven-r/bitburner-scripts/issues"
   },
-  "homepage": "https://github.com/alainbryden/bitburner-scripts#readme",
+  "homepage": "https://github.com/steven-r/bitburner-scripts#readme",
   "dependencies": {
     "numeral": "^2.0.6"
   },
