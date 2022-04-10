@@ -26,19 +26,12 @@ jobs:
         with:
           cmd: install # will run `yarn install` command
 
-      - name: Semantic Release
-        run: npx semantic-release
-        id: semantic
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
       - uses: borales/actions-yarn@v2.3.0
         with:
           cmd: build # will run `yarn build` command
 
-      - name: Push updates to branch for major version
-        if: steps.semantic.outputs.new_release_published == 'true'
-        run: "git push https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git HEAD:refs/heads/v${{steps.semantic.outputs.new_release_major_version}}"
+      - name: Semantic Release
+        run: npx semantic-release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
