@@ -1,8 +1,11 @@
 import { getFilePath, waitForProcessToComplete, getNsDataThroughFile } from './helpers.js'
 
 let doc = eval("document");
+let options;
 const argsSchema = [
 	['save-sleep-time', 5], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
+	['use-basic-strategy', false], // Set to true to use the basic strategy (Stay on 17+)
+	['enable-logging', false], // Set to true to pop up a tail window and generate logs.
 ];
 export function autocomplete(data, _) {
 	data.flags(argsSchema);
@@ -12,9 +15,12 @@ export function autocomplete(data, _) {
 /** @param {NS} ns 
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
-	const options = ns.flags(argsSchema);
+	options = ns.flags(argsSchema);
 	const saveSleepTime = options['save-sleep-time'];
-	ns.disableLog("asleep");
+	if (options['enable-logging'])
+		ns.tail()
+	else
+		ns.disableLog("ALL");
 	// Step 1: Go to Aevum if we aren't already there. (Must be done manually if you don't have SF4)
 	if (ns.getPlayer().city != "Aevum") {
 		try {
@@ -62,11 +68,13 @@ export async function main(ns) {
 			if (won === null) {
 				if (find("//p[contains(text(), 'Tie')]")) break; // If we tied, break and start a new hand.
 				const txtCount = find("//p[contains(text(), 'Count:')]");
-				if (!txtCount) return ns.tprint("SUCCESS: We've been kicked out of the casino."); // I'm incapable of producing a bug, so clearly the only reason for this.              
+				if (!txtCount) // I'm incapable of producing a bug, so clearly the only reason for this failing is we've won.
+					return ns.tprint("SUCCESS: We've been kicked out of the casino.");
 				const allCounts = txtCount.querySelectorAll('span');
 				const highCount = Number(allCounts[allCounts.length - 1].innerText);
-				ns.print(`INFO: Count is ${highCount}, we will ${highCount < 17 ? 'Hit' : 'Stay'}`);
-				await click(highCount < 17 ? btnHit : btnStay);
+				const shouldHit = options['use-basic-strategy'] ? highCount < 17 : shouldHitAdvanced(ns, txtCount);
+				if (options['enable-logging']) ns.print(`INFO: Count is ${highCount}, we will ${shouldHit ? 'Hit' : 'Stay'}`);
+				await click(shouldHit ? btnHit : btnStay);
 				await ns.sleep(1); // Yeild for an instant so the UI can update and process events
 			}
 		} while (won === null);
@@ -81,7 +89,30 @@ export async function main(ns) {
 		if (saveSleepTime) await ns.asleep(saveSleepTime);
 	}
 }
-// Some DOM helpers (partial credit to ShamesBond)
+// Some DOM helpers (partial credit to @ShamesBond)
 async function click(elem) { await elem[Object.keys(elem)[1]].onClick({ isTrusted: true }); }
 async function setText(input, text) { await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } }); }
 function find(xpath) { return doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; }
+
+// Better logic for when to HIT / STAY (Partial credit @drider)
+function shouldHitAdvanced(ns, playerCountElem) {
+	const txtPlayerCount = playerCountElem.textContent.substring(7);
+	const player = parseInt(txtPlayerCount.match(/\d+/).shift());
+	const dealer = getDealerCount();
+	if (options['enable-logging']) ns.print(`Player Count Text: ${txtPlayerCount}, Player: ${player}, Dealer: ${dealer}`);
+	// Strategy to minimize house-edge. See https://wizardofodds.com/blackjack/images/bj_4d_s17.gif
+	if (txtPlayerCount.includes("or")) { // Player has an Ace
+		if (player >= 9) return false; // Stay on Soft 19 or higher
+		if (player == 8 && dealer <= 8) return false; // Soft 18 - Stay if dealer has 8 or less
+		return true; // Otherwise, hit on Soft 17 or less
+	}
+	if (player >= 17) return false; // Stay on Hard 17 or higher
+	if (player >= 13 && dealer <= 6) return false; // Stay if player has 13-16 and dealer shows 6 or less.
+	if (player == 12 && 4 <= dealer && dealer <= 6) return false; // Stay if player has 12 and dealer has 4 to 6	
+	return true;// Otherwise Hit
+}
+function getDealerCount() {
+	const text = find("//p[contains(text(), 'Dealer')]/..").innerText.substring(8, 9);
+	let cardValue = parseInt(text);
+	return isNaN(cardValue) ? (text == 'A' ? 11 : 10) : cardValue;
+}
