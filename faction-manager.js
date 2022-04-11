@@ -554,7 +554,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         }
         // If after the above potential attempt to join a faction offering NF we still can't afford it, we're done here
         if (!augNf.getFromJoined() || !augNf.canAfford() && !augNf.canAffordWithDonation())
-            return log("Cannot buy any NF due to no joined or joinable factions offering it.");
+            return log(ns, "Cannot buy any NF due to no joined or joinable factions offering it.");
     }
     // Start adding as many neuroflux levels as we can afford
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
