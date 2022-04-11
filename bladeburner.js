@@ -143,9 +143,10 @@ async function mainLoop(ns) {
     // Create some quick-reference collections of action names that are limited in count and/or reserved for special purpose
     const limitedActions = [nextBlackOp].concat(operationNames).concat(contractNames);
     const populationActions = ["Undercover Operation", "Investigation", "Tracking"];
-    const reservedActions = ["Raid", "Stealth Retirement Operation", nextBlackOp].concat(populationActions
+    const reservedActions = ["Raid", "Stealth Retirement Operation"].concat(populationActions
         // Only reserve these actions if their count is below the configured reserve amount, scaled for how close we are to our final rank
         .filter(a => getCount(a) <= (options['reserved-action-count'] * (1 - rank / maxRankNeeded))));
+    if (rank < blackOpsRanks[nextBlackOp]) reservedActions.push(nextBlackOp); // Remove blackop from "available actions" if we have insufficient rank.
     const unreservedActions = limitedActions.filter(o => !reservedActions.includes(o));
     //log(ns, 'Unreserved Action Counts: ' + unreservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
     //log(ns, 'Reserved Action Counts: ' + reservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
@@ -203,8 +204,7 @@ async function mainLoop(ns) {
     // Gather the success chance of contracts (based on our current city)
     const contractChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "contract", contractNames);
     const operationChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "operation", operationNames);
-    // If our rank is insufficient to perform the next blackops, ignore the stated chance and treat it as zero
-    const blackOpsChance = rank < blackOpsRanks[nextBlackOp] ? [0, 0] :
+    const blackOpsChance = rank < blackOpsRanks[nextBlackOp] ? [0, 0] : // Insufficient rank for blackops means chance is zero
         (await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "blackops", [nextBlackOp]))[nextBlackOp];
     // Define some helpers for determining min/max chance for each action
     const getChance = actionName => contractNames.includes(actionName) ? contractChances[actionName] :
