@@ -231,8 +231,9 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
         joined: joinedFactions.includes(faction),
         reputation: dictFactionReps[faction] || 0,
         favor: dictFactionFavors[faction],
-        donationsUnlocked: dictFactionFavors[faction] >= favorToDonate && faction !== gangFaction // Can't donate to gang factions for rep
-            && faction !== "Church of the Machine God", // Can't donate to this faction either
+        donationsUnlocked: dictFactionFavors[faction] >= favorToDonate &&
+            // As a rule, cannot donate to gang factions or any of the below factions - need to use other mechanics to gain rep.
+            ![gangFaction, "Bladeburners", "Church of the Machine God"].includes(faction),
         augmentations: dictFactionAugs[faction],
         unownedAugmentations: function (includeNf = false) { return this.augmentations.filter(aug => !simulatedOwnedAugmentations.includes(aug) && (aug != strNF || includeNf)) },
         mostExpensiveAugCost: function () { return this.augmentations.map(augName => augmentationData[augName]).reduce((max, aug) => Math.max(max, aug.price), 0) },
