@@ -145,8 +145,10 @@ async function mainLoop(ns) {
     const populationActions = ["Undercover Operation", "Investigation", "Tracking"];
     const reservedActions = ["Raid", "Stealth Retirement Operation", nextBlackOp].concat(populationActions
         // Only reserve these actions if their count is below the configured reserve amount, scaled for how close we are to our final rank
-        .filter(a => getCount(a) <= (options['reserved-action-count'] * rank / maxRankNeeded)));
+        .filter(a => getCount(a) <= (options['reserved-action-count'] * (1 - rank / maxRankNeeded))));
     const unreservedActions = limitedActions.filter(o => !reservedActions.includes(o));
+    //log(ns, 'Unreserved Action Counts: ' + unreservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
+    //log(ns, 'Reserved Action Counts: ' + reservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
 
     // NEXT STEP: Determine which city to work in
     // Get the population, communities, and chaos in each city
@@ -166,7 +168,8 @@ async function mainLoop(ns) {
         if (goingRaiding) { // Select the raid-able city with the smallest population
             [goToCity, population] = getMinKeyValue(populationByCity, raidableCities);
             travelReason = `Lowest population (${formatNumberShort(population)}) city with communities (${communitiesByCity[goToCity]}) to use up ${getCount("Raid")} Raid operations`;
-        }
+        }// else log(ns, `INFO: Cannot use up raid operations because there are ${raidableCities.length} cities with communities. ` +
+        //    `(--allow-raiding-highest-pop-city is set to ${options['allow-raiding-highest-pop-city']})`);
     }
     // SPECIAL CASE: GO TO HIGHEST-CHAOS CITY
     if (!goToCity && unreservedActions.every(c => getCount(c) == 0)) {
@@ -273,7 +276,7 @@ async function mainLoop(ns) {
                 let [maxChaosCity, maxChaos] = getMaxKeyValue(chaosByCity, cityNames);
                 reason = `No work available, and max city chaos is ${maxChaos.toFixed(1)} in ${maxChaosCity}, ` +
                     `which is less than --max-chaos threshold ${options['max-chaos']}`;
-            }// Otherwise, consider training
+            } // Otherwise, consider training
             else if (unreservedActions.some(a => maxChance(a) < options['success-threshold']) && // Only if we aren't at 100% chance for everything
                 staminaPct > options['high-stamina-pct'] && timesTrained < options['training-limit']) { // Only if we have plenty of stamina and have barely trained
                 timesTrained += options['update-interval'] / 30000; // Take into account the training time (30 seconds) vs how often this code is called
