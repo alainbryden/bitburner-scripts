@@ -83,6 +83,13 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     _ns = ns;
     options = ns.flags(argsSchema);
+
+    // Ensure all globals are reset before we proceed with the script, in case we've done things out of order
+    augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;
+    factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
+    ownedAugmentations = [], simulatedOwnedAugmentations = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
+    factionData = {}, augmentationData = {};
+
     printToTerminal = (options.v || options.verbose === true || options.verbose === null) && !options['join-only'];
     const allFactions = options.a || options.all;
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
