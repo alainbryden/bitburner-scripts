@@ -21,7 +21,7 @@ export async function main(ns) {
                 notice = `ERROR: Wrong answer for ${contractInfo.contract} on ${contractInfo.hostname}: ${JSON.stringify(answer)}`;
             }
         } else {
-            notice = `WARNING: No solver available for contract type ${contractInfo.type} (Full info: ${JSON.stringify(contractInfo)})`;
+            notice = `WARNING: No solver available for contract type "${contractInfo.type}"\nFull info: ${JSON.stringify(contractInfo)})`;
         }
         if (notice) {
             if (!notified.includes(contractInfo.contract)) {
