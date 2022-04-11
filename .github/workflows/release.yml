@@ -37,6 +37,7 @@ jobs:
         with:
           commit_message: "**CI** Apply built files"
           file_pattern: dist/**
+          add_options: '-u'
 
       - name: create dist.zip
         uses: montudor/action-zip@v1
