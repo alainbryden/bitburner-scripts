@@ -41,7 +41,7 @@ export async function main(ns) {
     options = ns.flags(argsSchema);
     disableLogs(ns, ['getServerMoneyAvailable']);
     // Ensure the global state is reset (e.g. after entering a new bitnode)
-    task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [], lastReassignTime = [];
+    task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [], cacheExpiry = [], lastReassignTime = [];
     workByFaction = {}, cachedCrimeStats = {};
 
     // Collect info that won't change or that we can track ourselves going forward
