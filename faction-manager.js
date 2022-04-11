@@ -569,8 +569,6 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             Math.max(0, purchaseFactionDonations[augNfFaction.name] || 0 - getReqDonationForRep(nextNfRep, augNfFaction));
         let nfMsg = `Cost of NF ${nfPurchased + 1} is ${formatMoney(nextNfCost)} and will require ${formatNumberShort(nextNfRep)} reputation`
         if (totalAugCost + totalRepCost + nextNfCost + nextNfRepCost > budget) break;
-        purchaseableAugs.push(augNf);
-        totalAugCost += nextNfCost;
         if (nextNfRep > augNfFaction.reputation) {
             if (augNfFaction.donationsUnlocked) {
                 purchaseFactionDonations[augNfFaction.name] = Math.max(purchaseFactionDonations[augNfFaction.name] || 0, getReqDonationForRep(nextNfRep, augNfFaction));
@@ -582,6 +580,8 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             }
         } else
             nfMsg += ` (✓ have ${formatNumberShort(augNfFaction.reputation)} rep with faction ${augNfFaction.name})`
+        purchaseableAugs.push(augNf);
+        totalAugCost += nextNfCost;
         log(ns, nfMsg);
         nfPurchased++;
     }
