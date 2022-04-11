@@ -362,6 +362,8 @@ async function kickstartHackXp(ns) {
                     return log('WARNING: Failed to schedule an XP cycle', false, 'warning');
             }
         }
+    } catch {
+        log('WARNING: Encountered an error while trying to kickstart hack XP (low RAM issues perhaps?)', false, 'warning');
     } finally {
         if (startedStudying) await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
     }
