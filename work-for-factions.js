@@ -308,7 +308,7 @@ export async function main(ns) {
             if (!foundWork && !noCrime) { // Otherwise, kill some time by doing crimes for a little while
                 ns.print(`INFO: Nothing to do. Doing a little crime...`);
                 await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
-            } else { // If our hands our tied, twiddle our thumbs a bit
+            } else if (!foundWork) { // If our hands our tied, twiddle our thumbs a bit
                 ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
                 await ns.sleep(30000);
             }
