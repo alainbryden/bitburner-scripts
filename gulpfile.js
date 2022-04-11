@@ -1,18 +1,16 @@
 const gulp = require('gulp');
 const rollup = require('rollup');
-const clean = require('gulp-clean');
+const del = require('del');
 
 const resolve = require('@rollup/plugin-node-resolve');
 const commonjs = require('@rollup/plugin-commonjs');
-var pkg = require('./package.json');
 
 
-gulp.task('clean', () => {
-    return gulp.src('dist/**/*')
-        .pipe(clean());
+gulp.task('clean', function () {
+    return del('dist/**', {force:true});
 });
 
-gulp.task('build', async function () {
+gulp.task('do-build', async function () {
     const bundle = await rollup.rollup({
         input: 'helpers.src.js',
         plugins: [
@@ -23,7 +21,7 @@ gulp.task('build', async function () {
 
     await bundle.write({
         file: 'dist/helpers.js',
-        banner: '/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY (Version ' + pkg.version + ') */',
+        banner: '/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY */',
         format: 'module',
         name: 'helpers',
         sourcemap: false
@@ -31,7 +29,7 @@ gulp.task('build', async function () {
 
     await bundle.write({
         file: 'helpers.js',
-        banner: '/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY (Version ' + pkg.version + ') */',
+        banner: '/* THIS FILE IS GENERATED, PLEASE DO NOT EDIT DIRECTLY */',
         format: 'module',
         name: 'helpers',
         sourcemap: false
@@ -44,3 +42,5 @@ gulp.task('build', async function () {
     gulp.src(["Tasks/**/*", "Remote/**/*", "Flags/**/*"], { "base" : "." })
         .pipe(gulp.dest("dist/"));
 });
+
+gulp.task('build', gulp.series('clean', 'do-build'));

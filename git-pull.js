@@ -1,10 +1,11 @@
 let options;
 const argsSchema = [
-    ['github', 'alainbryden'],
+    ['github', 'steven-r'],
     ['repository', 'bitburner-scripts'],
     ['branch', 'main'],
     ['download', []], // By default, all supported files in the repository will be downloaded. Override with just a subset of files here
     ['new-file', []], // If a repository listing fails, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
+    ['source-folder', 'dist/'], // Can be set to download FROM a sub-folder 
     ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
     ['extension', ['.js', '.ns', '.txt', '.script']], // Files to download by extension
     ['omit-folder', ['/Temp/']], // Folders to omit
@@ -28,7 +29,7 @@ export async function main(ns) {
     options = ns.flags(argsSchema);
     if (options.subfolder && !options.subfolder.startsWith('/'))
         options.subfolder = '/' + options.subfolder; // Game requires folders to have a leading slash. Add one if it's missing.
-    const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
+    const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/${options["source-folder"]}`;
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
         let fullLocalFilePath = pathJoin(options.subfolder, localFilePath);
@@ -66,7 +67,7 @@ export async function rewriteFileForSubfolder(ns, path) {
  * Gets a list of files to download, either from the github repository (if supported), or using a local directory listing **/
 async function repositoryListing(ns, folder = '') {
     // Note: Limit of 60 free API requests per day, don't over-do it
-    const listUrl = `https://api.github.com/repos/${options.github}/${options.repository}/contents/${folder}?ref=${options.branch}`
+    const listUrl = `https://api.github.com/repos/${options.github}/${options.repository}/contents/${options["source-folder"]}${folder}?ref=${options.branch}`
     let response = null;
     try {
         response = await fetch(listUrl); // Raw response
