@@ -1,4 +1,4 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-[ -t 1 ] && git cz --hook || true
+npx commitlint --edit $1
