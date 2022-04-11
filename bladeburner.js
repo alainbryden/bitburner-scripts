@@ -140,8 +140,9 @@ async function mainLoop(ns) {
             generalActionNames.includes(actionName) ? Number.POSITIVE_INFINITY : remainingBlackOpsNames.includes(actionName) ? 1 : 0;
     // Create some quick-reference collections of action names that are limited in count and/or reserved for special purpose
     const limitedActions = [nextBlackOp].concat(operationNames).concat(contractNames);
-    const reservedOperations = ["Raid", "Stealth Retirement Operation", nextBlackOp];
-    const unreservedOperations = limitedActions.filter(o => !reservedOperations.includes(o));
+    const populationActions = ["Undercover Operation", "Investigation", "Tracking"];
+    const reservedActions = ["Raid", "Stealth Retirement Operation", nextBlackOp, ...populationActions];
+    const unreservedActions = limitedActions.filter(o => !reservedActions.includes(o));
 
     // NEXT STEP: Determine which city to work in
     // Get the population, communities, and chaos in each city
@@ -153,7 +154,7 @@ async function mainLoop(ns) {
     // SPECIAL CASE: GO TO LOWEST-POPULATION CITY
     // If the only operations left to us are "Raid" (reduces population by a %, which, counter-intuitively, is bad for us),
     // thrash the city with the lowest population (but still having some communities to enable Raid).
-    if (getCount("Raid") > 0 && !operationNames.filter(o => !reservedOperations.includes(o)).some(c => getCount(c) > 0)) {
+    if (getCount("Raid") > 0 && !operationNames.filter(o => !reservedActions.includes(o)).some(c => getCount(c) > 0)) {
         const raidableCities = cityNames.filter(c => communitiesByCity[c] > 0); // Cities with at least one community
         // Only allow Raid if we would not be raiding our highest-population city (need to maintain at least one)
         const [highestPopCity, _] = getMaxKeyValue(populationByCity, cityNames);
@@ -164,7 +165,7 @@ async function mainLoop(ns) {
         }
     }
     // SPECIAL CASE: GO TO HIGHEST-CHAOS CITY
-    if (!goToCity && !unreservedOperations.some(c => getCount(c) > 0)) {
+    if (!goToCity && !unreservedActions.some(c => getCount(c) > 0)) {
         let [maxChaosCity, maxChaos] = getMaxKeyValue(chaosByCity, cityNames);
         // If all we have left is "Stealth Retirement Operation", switch to the city with the most chaos (if it's a decent amount), and use them up.
         if (getCount("Stealth Retirement Operation") && maxChaos > options['chaos-recovery-threshold']) {
@@ -236,8 +237,9 @@ async function mainLoop(ns) {
         // We should deal with population uncertainty if its causing some mission to be on the verge of our success threshold
         let populationUncertain = candidateActions.some(a => maxChance(a) > options['success-threshold'] && minChance(a) < options['success-threshold']);
         // If current population uncertainty is such that some actions have a maxChance of ~100%, but not a minChance of ~100%,
-        //   focus on actions that improve the population estimate.
-        if (populationUncertain) candidateActions = ["Undercover Operation", "Investigation", "Tracking"];
+        //   focus on actions that improve the population estimate, otherwise, reserve these actions for later
+        candidateActions = populationUncertain ? populationActions : candidateActions.filter(a => !populationActions.includes(a));
+
         // Special case: If Synthoid community count is 0 in a city, set effective remaining "Raid" operations
         if (communitiesByCity[currentCity] == 0) operationCounts["Raid"] = 0;
         // Filter out candidates with no contract counts remaining
@@ -265,18 +267,18 @@ async function mainLoop(ns) {
                 bestActionName = "Field Analysis";
                 reason = `High population uncertainty in ${currentCity}`;
             } // If all (non-reserved) operation counts are 0, and chaos isn't too high, Incite Violence to get more work (logic above should subsequently reduce chaos)
-            else if (unreservedOperations.every(a => getCount(a) == 0) && cityNames.every(c => chaosByCity[c] < options['max-chaos'])) {
+            else if (unreservedActions.every(a => getCount(a) == 0) && cityNames.every(c => chaosByCity[c] < options['max-chaos'])) {
                 bestActionName = "Incite Violence";
                 let [maxChaosCity, maxChaos] = getMaxKeyValue(chaosByCity, cityNames);
                 reason = `No work available, and max city chaos is ${maxChaos.toFixed(1)} in ${maxChaosCity}, ` +
                     `which is less than --max-chaos threshold ${options['max-chaos']}`;
             }// Otherwise, consider training
-            else if (unreservedOperations.some(a => maxChance(a) < options['success-threshold']) && // Only if we aren't at 100% chance for everything
+            else if (unreservedActions.some(a => maxChance(a) < options['success-threshold']) && // Only if we aren't at 100% chance for everything
                 staminaPct > options['high-stamina-pct'] && timesTrained < options['training-limit']) { // Only if we have plenty of stamina and have barely trained
                 timesTrained += options['update-interval'] / 30000; // Take into account the training time (30 seconds) vs how often this code is called
                 bestActionName = "Training";
                 reason = `Nothing better to do, times trained (${timesTrained.toFixed(0)}) < --training-limit (${options['training-limit']}), and ` +
-                    `some actions are below success threshold: ` + unreservedOperations.filter(a => maxChance(a) < options['success-threshold'])
+                    `some actions are below success threshold: ` + unreservedActions.filter(a => maxChance(a) < options['success-threshold'])
                         .map(a => `${a} (${(100 * maxChance(a)).toFixed(1)})`).join(", ");
             } else { // Otherwise, Field Analysis
                 bestActionName = "Field Analysis"; // Gives a little rank, and improves population estimate. Best we can do when there's nothing else.
