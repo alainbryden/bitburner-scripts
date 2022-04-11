@@ -7,7 +7,7 @@ const commonjs = require('@rollup/plugin-commonjs');
 
 
 gulp.task('clean', function () {
-    return del('dist/**', {force:true});
+    return del(['dist/**', 'dist'], {force:true});
 });
 
 gulp.task('do-build', async function () {

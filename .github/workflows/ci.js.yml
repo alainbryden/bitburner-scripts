@@ -28,4 +28,3 @@ jobs:
         with:
           commit_message: "**CI** Apply built files"
           file_pattern: dist/**
-          add_options: '-u'

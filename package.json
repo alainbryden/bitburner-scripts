@@ -24,15 +24,18 @@
     "cz-conventional-changelog": "3.3.0",
     "del": "6.0.0",
     "gulp": "4.0.2",
-    "husky": "7.0.4",
+    "husky": "^7.0.0",
+    "is-ci": "^3.0.1",
     "rollup": "2.70.1",
     "semantic-release": "19.0.2"
   },
   "scripts": {
     "clean": "gulp clean",
     "build": "gulp build",
+    "dist": "gulp dist",
     "dev": "rollup -c -w",
-    "commit": "cz"
+    "commit": "cz",
+    "prepare": "is-ci || husky install"
   },
   "resolutions": {
     "minimist": "1.2.6",
@@ -83,11 +86,6 @@
   "config": {
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
-    }
-  },
-  "husky": {
-    "hooks": {
-      "prepare-commit-msg": "exec < /dev/tty && npx cz --hook || true"
     }
   }
 }
