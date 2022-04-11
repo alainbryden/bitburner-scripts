@@ -16,23 +16,35 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 16
 
-      - uses: borales/actions-yarn@v2.3.0
+      - name: Install Dependencies
+        uses: borales/actions-yarn@v2.3.0
         with:
           cmd: install # will run `yarn install` command
 
-      - uses: borales/actions-yarn@v2.3.0
+      - name: Build
+        uses: borales/actions-yarn@v2.3.0
         with:
           cmd: build # will run `yarn build` command
 
-      - uses: montudor/action-zip@v1
+      - name: store generated files
+        uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          args: zip -r dist/dist.zip dist
+          commit_message: "**CI** Apply built files"
+          file_pattern: dist/**
+          skip_dirty_check: true
+
+      - name: create dist.zip
+        uses: montudor/action-zip@v1
+        with:
+          args: zip -r dist.zip dist
       
       - name: Semantic Release
         run: npx semantic-release

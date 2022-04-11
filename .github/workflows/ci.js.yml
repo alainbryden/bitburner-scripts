@@ -1,14 +1,30 @@
 name: CI
-on: [push]
+on:
+  push:
+    branches-ignore:
+      - master
+      - next
+      - next-major
+      - alpha
+      - beta
+
 jobs:
   build:
     name: CI Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: borales/actions-yarn@v2.3.0
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: install deps
+        uses: borales/actions-yarn@v2.3.0
         with:
           cmd: install # will run `yarn install` command
-      - uses: borales/actions-yarn@v2.3.0
+      - name: Build
+        uses: borales/actions-yarn@v2.3.0
         with:
           cmd: build # will run `yarn build` command
+      - name: Commit distributed files
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "**CI** Apply built files"
+          file_pattern: dist/**

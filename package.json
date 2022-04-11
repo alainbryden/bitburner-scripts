@@ -14,24 +14,32 @@
   },
   "homepage": "https://github.com/steven-r/bitburner-scripts#readme",
   "dependencies": {
-    "numeral": "^2.0.6"
+    "numeral": "^2.0.6",
+    "yauzl": "^2.10.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^16.2.3",
+    "@commitlint/config-conventional": "^16.2.1",
     "@rollup/plugin-commonjs": "21.0.3",
     "@rollup/plugin-node-resolve": "13.1.3",
     "@semantic-release/changelog": "6.0.1",
     "cz-conventional-changelog": "3.3.0",
+    "del": "6.0.0",
     "gulp": "4.0.2",
-    "gulp-clean": "0.4.0",
-    "husky": "7.0.4",
+    "husky": "^7.0.0",
+    "is-ci": "^3.0.1",
+    "lint-staged": "^12.3.7",
+    "prettier": "^2.6.2",
     "rollup": "2.70.1",
     "semantic-release": "19.0.2"
   },
   "scripts": {
     "clean": "gulp clean",
     "build": "gulp build",
+    "dist": "gulp dist",
     "dev": "rollup -c -w",
-    "commit": "cz"
+    "commit": "cz",
+    "prepare": "is-ci || husky install"
   },
   "resolutions": {
     "minimist": "1.2.6",
@@ -67,7 +75,7 @@
         {
           "assets": [
             {
-              "path": "dist/dist.zip",
+              "path": "dist.zip",
               "label": "Distribution"
             },
             {
@@ -84,9 +92,10 @@
       "path": "./node_modules/cz-conventional-changelog"
     }
   },
-  "husky": {
-    "hooks": {
-      "prepare-commit-msg": "exec < /dev/tty && npx cz --hook || true"
-    }
+  "lint-staged": {
+    "*.{css,less,scss,html,json,jsx,js}": [
+      "prettier --write ."
+    ],
+    "*.js": "eslint --fix"
   }
 }

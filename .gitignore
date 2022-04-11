@@ -89,7 +89,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist
+# dist
 
 # Gatsby files
 .cache/
@@ -131,3 +131,4 @@ dist
 
 # local additions
 helpers.js
+!dist/helpers.js
