@@ -153,7 +153,7 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
             var trainStat = untrainedStats.reduce((min, s) => sleeve[s] < sleeve[min] ? s : min, untrainedStats[0]);
             return [`train ${trainStat}`, `ns.sleeve.setToGymWorkout(${i}, 'Powerhouse Gym', '${trainStat}')`,
-            /*   */ `training ${trainStat}... ${sleeve[trainStat]}/${options['train-to-${trainStat}']}`];
+            /*   */ `training ${trainStat}... ${sleeve[trainStat]}/${(options[`train-to-${trainStat}`])}`];
         }
     }
     // If player is currently working for faction or company rep, sleeves 0 can help him out (Note: Only one sleeve can work for a faction)
