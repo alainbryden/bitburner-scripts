@@ -131,3 +131,4 @@ out
 
 # local additions
 helpers.js
+!dist/helpers.js
