@@ -286,8 +286,8 @@ async function mainLoop(ns) {
                 timesTrained += options['update-interval'] / 30000; // Take into account the training time (30 seconds) vs how often this code is called
                 bestActionName = "Training";
                 reason = `Nothing better to do, times trained (${timesTrained.toFixed(0)}) < --training-limit (${options['training-limit']}), and ` +
-                    `some actions are below success threshold: ` + unreservedActions.filter(a => maxChance(a) < options['success-threshold'])
-                        .map(a => `${a} (${(100 * maxChance(a)).toFixed(1)})`).join(", ");
+                    `actions are below success threshold: ` + unreservedActions.filter(a => maxChance(a) < options['success-threshold'])
+                        .map(a => `${a} (${(100 * maxChance(a)).toFixed(1)}%)`).join(", ");
             } else { // Otherwise, Field Analysis
                 bestActionName = "Field Analysis"; // Gives a little rank, and improves population estimate. Best we can do when there's nothing else.
                 reason = `Nothing better to do`;
