@@ -526,18 +526,25 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // NEXT STEP: Add as many NeuroFlux levels to our purchase as we can (unless disabled)
     if (options['neuroflux-disabled']) return;
     const augNf = augmentationData[strNF];
-    // Prefer to purchase NF first from whatever joined factions can currently afford the next NF level, next from factions with donations unlocked
+    // Prefer to purchase NF first from whatever **joined** factions can currently afford the next NF level, next from factions with donations unlocked
     //   (allow us to continuously donate for more), finally by faction with the most current reputation.
     augNf.getFromJoined = function () { // NOTE: Must be a function (not a lambda) so that `this` is bound to the augmentation object.
-        return this.joinedFactionsWithAug().sort((a, b) => ((b.reputation >= this.reputation ? 1 : 0) - (a.reputation >= this.reputation ? 1 : 0)) ||
+        // This sort order prefers factions that already have enough reputation to buy at least one level of NF (whether they support donations or not)
+        //return this.joinedFactionsWithAug().sort((a, b) => ((b.reputation >= this.reputation ? 1 : 0) - (a.reputation >= this.reputation ? 1 : 0)) ||
+        //    ((b.donationsUnlocked ? 1 : 0) - (a.donationsUnlocked ? 1 : 0)) || (b.reputation - a.reputation))[0]?.name;
+        // This sort order prefers factions that support donations over ones that already have sufficient rep for one or more NF levels.
+        return this.joinedFactionsWithAug().sort((a, b) =>
             ((b.donationsUnlocked ? 1 : 0) - (a.donationsUnlocked ? 1 : 0)) || (b.reputation - a.reputation))[0]?.name;
     };
-    if (!augNf.canAfford() && !augNf.canAffordWithDonation()) { // No currently joined factions can provide us with the next level of Neuroflux
-        const getFrom = augNf.getFromJoined();
+    let getFrom = augNf.getFromJoined();
+    // If No currently joined factions can provide us with the next level of Neuroflux, look for the best joined **or unjoined** faction to get NF from.
+    if (!augNf.canAfford() && !augNf.canAffordWithDonation()) {
         outputRows.push(`Cannot purchase any ${strNF} because the next level requires ${formatNumberShort(augNf.reputation)} reputation, but ` +
             (!getFrom ? `it isn't being offered by any of our factions` : `the best faction (${getFrom}) has insufficient rep (${formatNumberShort(factionData[getFrom].reputation)}).`));
-        const factionsWithAug = Object.values(factionData).filter(f => f.augmentations.includes(augNf.name)).sort((a, b) => b.favor - a.favor);
-        const factionsWithAugAndInvite = factionsWithAug.filter(f => f.invited || f.joined).sort((a, b) => b.favor - a.favor);
+        // Prefer factions that support donating for reputation, otherwise grinding rep takes a long time.
+        const factionSort = (a, b) => ((b.donationsUnlocked ? 1 : 0) - (a.donationsUnlocked ? 1 : 0)) || (b.favor - a.favor);
+        const factionsWithAug = Object.values(factionData).filter(f => f.augmentations.includes(augNf.name)).sort(factionSort);
+        const factionsWithAugAndInvite = factionsWithAug.filter(f => f.invited || f.joined).sort(factionSort);
         const factionWithMostFavor = factionsWithAugAndInvite[0] ?? factionsWithAug[0];
         let joined = 0;
         if (getFrom != factionsWithAug[0].name && factionsWithAug[0] != factionsWithAugAndInvite[0])
@@ -556,12 +563,19 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
                     outputRows.push(`Failed to join ${factionWithMostFavor.name}. NeuroFlux will not be accessible.`);
             }
             // If after the above potential attempt to join a faction offering NF we still can't afford it, we're done here
-            if (!augNf.getFromJoined())
-                return log(ns, "Cannot buy any NF due to no joined or joinable factions offering it.");
+            getFrom = augNf.getFromJoined();
+            if (!getFrom) return log(ns, "Cannot buy any NF due to no joined or joinable factions offering it.");
         }
         if (!augNf.canAfford() && !augNf.canAffordWithDonation())
-            return log(ns, `Cannot buy any NF due to best provider faction ${augNf.getFromJoined()} having insufficient rep, and donations are not unlocked.`);
+            return log(ns, `Cannot buy any NF due to best provider faction ${getFrom} having insufficient rep, and donations are not unlocked.`);
         if (joined) outputRows.push(`SUCCESS: Joined ${joined} factions just to gain access to additional NeuroFlux levels.`);
+    }
+    if (getFrom && !factionData[getFrom].donationsUnlocked) {
+        // TODO: If the faction with the most reputation does not suport dontating for additional rep, and another faction with less rep does,
+        //       we should be able to test both and see which one would let us buy the most additional levels of NF given our current money.
+        if (factionData[getFrom].favor >= favorToDonate)
+            outputRows.push(`WARNING: The current faction (${getFrom}) with the most rep for buying NeuroFlux levels does not support donating for reputation. ` +
+                `Until logic is built to handle this, consider joining one or more factions that support donating for reputation.`);
     }
     // Start adding as many neuroflux levels as we can afford
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
