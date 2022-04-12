@@ -2,6 +2,7 @@ const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persiste
 
 // This contract solver has the bare-minimum footprint of 1.6 GB (base) + 10 GB (ns.codingcontract.attempt)
 // It does this by requiring all contract information being gathered in advance and passed in as a JSON blob argument.
+// TODO: Pull solvers directly from https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts
 /** @param {NS} ns **/
 export async function main(ns) {
     if (ns.args.length < 1)
