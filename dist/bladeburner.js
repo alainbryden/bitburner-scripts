@@ -299,14 +299,15 @@ async function mainLoop(ns) {
 
     // Detect our current action (API returns an object like { "type":"Operation", "name":"Investigation" })
     const currentAction = await getBBInfo(ns, `getCurrentAction()`);
-
-    // Normally, we don't switch tasks if our previously assigned task hasn't had time to complete once.
-    // EXCEPTION: Early after a reset, this time is LONG, and in a few seconds it may be faster to just stop and restart it.
-    const currentDuration = await getBBInfo(ns, `getActionTime(ns.args[0], ns.args[1])`, currentAction.type, currentAction.name);
-    if (currentDuration < currentTaskEndTime - Date.now()) {
-        log(ns, `INFO: ${bestActionName == currentAction.name ? 'Restarting' : 'Cancelling'} action ${currentAction.name} because its new duration ` +
-            `is less than the time remaining (${formatDuration(currentDuration)} < ${formatDuration(currentTaskEndTime - Date.now())})`);
-    } else if (Date.now() < currentTaskEndTime || bestActionName == currentAction.name) return;
+    if (currentAction) {
+        // Normally, we don't switch tasks if our previously assigned task hasn't had time to complete once.
+        // EXCEPTION: Early after a reset, this time is LONG, and in a few seconds it may be faster to just stop and restart it.
+        const currentDuration = await getBBInfo(ns, `getActionTime(ns.args[0], ns.args[1])`, currentAction.type, currentAction.name);
+        if (currentDuration < currentTaskEndTime - Date.now()) {
+            log(ns, `INFO: ${bestActionName == currentAction.name ? 'Restarting' : 'Cancelling'} action ${currentAction.name} because its new duration ` +
+                `is less than the time remaining (${formatDuration(currentDuration)} < ${formatDuration(currentTaskEndTime - Date.now())})`);
+        } else if (Date.now() < currentTaskEndTime || bestActionName == currentAction.name) return;
+    } // Otherwise prior action was stopped or ended and no count remain, so we should start a new one regardless of expected currentTaskEndTime
 
     // Change actions if we're not currently doing the desired action
     const bestActionType = nextBlackOp == bestActionName ? "Black Op" : contractNames.includes(bestActionName) ? "Contract" :
