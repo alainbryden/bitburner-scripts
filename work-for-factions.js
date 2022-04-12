@@ -1,5 +1,5 @@
 import {
-    getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers,
+    getNsDataThroughFile, getFilePath, getActiveSourceFiles, tryGetBitNodeMultipliers,
     formatDuration, formatMoney, formatNumberShort, disableLogs, log
 } from './helpers.js'
 
@@ -10,7 +10,9 @@ const argsSchema = [
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
-    ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements
+    ['no-studying', false], // Disable studying.
+    ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
+    ['training-stat-per-multi-threshold', 50], // Heuristic: Only bother training stats if our mult/exp_mult for that stat are more than 1 per this many (50) stat levels we need.
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
     ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
@@ -74,24 +76,12 @@ const loopSleepInterval = 5000; // 5 seconds
 const restartWorkInteval = 30 * 1000; // 30 seconds Collect e.g. rep earned by stopping and starting work;
 const statusUpdateInterval = 60 * 1000; // 1 minute (outside of this, minor updates in e.g. stats aren't logged)
 const checkForNewPrioritiesInterval = 10 * 60 * 1000; // 10 minutes. Interrupt whatever we're doing and check whether we could be doing something more useful.
-let noFocus = false; // Can be set via command line to disable doing work that requires focusing (crime, studying, or focused faction/company work)
-let noStudying = false; // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements (Also disabled with --no-focus)
-let noCrime = false; // Disable doing crimes at all. (Also disabled with --no-focus)
-let crimeFocus = false; // Useful in crime-focused BNs when you want to focus on crime related factions
-let fastCrimesOnly = false; // Can be set via command line argument
-let prioritizeInvites = false;
-let hasFocusPenaly = true;
-let hasSimulacrum = false;
-let shouldFocusAtWork = false; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
-let repToDonate = 150; // Updated after looking at bitnode mults
-let lastActionRestart = 0;
-let crimeCount = 0; // A simple count of crime commited since last script restart
-let mostExpensiveAugByFaction = [];
-let mostExpensiveDesiredAugByFaction = [];
-let playerGang = null;
-let dictFactionFavors;
-let firstFactions = []; // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
-let mainLoopStart;
+
+let shouldFocusAtWork; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
+// And a bunch of globals because managing state and encapsulation is hard.
+let hasFocusPenaly, hasSimulacrum, repToDonate, fulcrummHackReq;
+let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastActionRestart, crimeCount;
+let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -107,88 +97,32 @@ const breakToMainLoop = () => Date.now() > mainLoopStart + checkForNewPriorities
 /** @param {NS} ns */
 export async function main(ns) {
     disableLogs(ns, ['sleep']);
+
+    // Reset globals whose value can persist between script restarts in weird situations
+    lastActionRestart = crimeCount = 0;
+
+    // Parse options
     options = ns.flags(argsSchema);
-    const desiredAugStats = options['desired-stats'];
-    firstFactions = options.first = (options.first || []).map(f => f.replaceAll('_', ' '));
-    let skipFactionsConfig = options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
-    noFocus = options['no-focus'];
-    noStudying = options['no-studying'];
-    noCrime = options['no-crime'] || noFocus; // Can't crime if we aren't allowed to steal focus
-    crimeFocus = options['crime-focus'];
-    prioritizeInvites = options['prioritize-invites'];
-    if (crimeFocus && noFocus)
+    firstFactions = (options['first'] || []).map(f => f.replaceAll('_', ' ')); // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
+    options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
+    options['no-crime'] = options['no-crime'] || options['no-focus']; // Can't crime if we aren't allowed to steal focus
+    if (options['crime-focus'] && options['no-focus'])
         return log(ns, "ERROR: Cannot use --no-focus and --crime-focus at the same time. You need to focus to do crime!", true, 'error');
-    if (desiredAugStats.length == 0)
-        desiredAugStats.push(...(crimeFocus ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacking', 'hacknet', 'crime'] :
-            ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']))
-    fastCrimesOnly = options['fast-crimes-only'];
-    const karmaThreshold = options['karma-threshold-for-gang-invites'];
-    // Log command line args used
+    // Default desired-stats if none were specified
+    if (options['desired-stats'].length == 0)
+        options['desired-stats'] = options['crime-focus'] ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacking', 'hacknet', 'crime'] :
+            ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']
+
+    // Log some of the options in effect
+    ns.print(`--desired-stats matching: ${options['desired-stats'].join(", ")}`);
     if (firstFactions.length > 0) ns.print(`--first factions: ${firstFactions.join(", ")}`);
-    if (skipFactionsConfig.length > 0) ns.print(`--skip factions: ${skipFactionsConfig.join(", ")}`);
-    if (desiredAugStats.length > 0) ns.print(`--desired-stats matching: ${desiredAugStats.join(", ")}`);
-    if (fastCrimesOnly) ns.print(`--fast-crimes-only`);
+    if (options.skip.length > 0) ns.print(`--skip factions: ${options.skip.join(", ")}`);
+    if (options['fast-crimes-only']) ns.print(`--fast-crimes-only`);
 
     let loadingComplete = false; // In the event of suboptimal RAM conditions, keep trying to start until we succeed
-    let dictSourceFiles, numJoinedFactions, completedFactions, skipFactions, softCompletedFactions;
     while (!loadingComplete) {
         try {
-            dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
-            if (!(4 in dictSourceFiles))
-                return log(ns, "ERROR: You cannot automate working for factions until you have unlocked singularity access (SF4).", true, 'error');
-            else if (dictSourceFiles[4] < 3)
-                log(ns, `WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
-                    `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`, false, 'warning');
-
-            const bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
-            repToDonate = 150 * (bitnodeMults?.RepToDonateToFaction || 1);
-            crimeCount = 0;
-
-            const playerInfo = await getPlayerInfo(ns);
-            const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
-
-            // Get some augmentation information to decide what remains to be purchased            
-            const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(allKnownFactions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
-            const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
-            const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
-            const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
-            dictFactionFavors = await getNsDataThroughFile(ns, dictCommand(allKnownFactions, 'ns.getFactionFavor(o)'), '/Temp/faction-favor.txt');
-
-            const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
-            const installedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
-            hasFocusPenaly = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
-            shouldFocusAtWork = !noFocus && hasFocusPenaly; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
-            hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
-
-            mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
-                .filter(aug => !ownedAugmentations.includes(aug))
-                .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-            //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-            // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-            mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
-                .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || desiredAugStats.length == 0 ||
-                    Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
-                .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-            //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
-
-            if (options['get-invited-to-every-faction']) {
-                softCompletedFactions = completedFactions = [];
-                // Prioritize joining these 3 city factions, since it is the largest non-precluding group of city factions
-                firstFactions = firstFactions.concat(["Chongqing", "New Tokyo", "Ishima"]);
-                skipFactions = ["Aevum", "Sector-12", "Volhaven"];
-            } else {
-                completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1);
-                softCompletedFactions = Object.keys(mostExpensiveDesiredAugByFaction).filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
-                skipFactions = skipFactionsConfig.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
-                if (completedFactions.length > 0)
-                    ns.print(`${completedFactions.length} factions are completed (all augs purchased): ${completedFactions.join(", ")}`);
-                if (softCompletedFactions.length > 0)
-                    ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
-            }
-
-            numJoinedFactions = playerInfo.factions.length;
-            var fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
-
+            await loadStartupData(ns);
             loadingComplete = true;
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' + err, true, 'warning');
@@ -196,123 +130,11 @@ export async function main(ns) {
         }
     }
 
-    let scope = 0; // Scope increases each time we complete a type of work and haven't progressed enough to unlock more factions
     mainLoopStart = Date.now();
+    scope = 0;
     while (true) { // After each loop, we will repeat all prevous work "strategies" to see if anything new has been unlocked, and add one more "strategy" to the queue
         try {
-            if (!breakToMainLoop()) scope++; // Increase the scope of work if the last iteration completed early (i.e. due to all work within that scope being complete)
-            mainLoopStart = Date.now();
-            ns.print(`INFO: Starting main work loop with scope: ${scope}...`);
-
-            // Update information that may have changed since our last loop
-            const player = (await getPlayerInfo(ns));
-            if (player.factions.length > numJoinedFactions) { // If we've recently joined a new faction, reset our work scope
-                scope = 1; // Back to basics until we've satisfied all highest-priority work
-                numJoinedFactions = player.factions.length;
-            }
-            if (2 in dictSourceFiles) { // Get some information about gangs (if unlocked)
-                if (!playerGang) { // Check if we've joined a gang since our last iteration
-                    const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
-                    playerGang = gangInfo ? gangInfo.faction : null;
-                }
-                if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
-                    if (!playerGang) {
-                        log(ns, `INFO: We are nearing the Karma required to unlock gangs (${formatNumberShort(ns.heart.break())} / -54K). Prioritize earning gang faction invites.`);
-                        for (const factionName of desiredGangFactions)
-                            await earnFactionInvite(ns, factionName);
-                    }
-                    // Whether we're in a gang or will be soon, there's no point in working for any factions that will become gangs, since we will lose all rep with them
-                    if (!options['get-invited-to-every-faction'])
-                        skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
-                }
-            }
-            // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, whether we pause working.        
-            if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check'] && player.inBladeburner) {
-                if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working
-                    ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
-                    await ns.sleep(checkForNewPrioritiesInterval);
-                    continue;
-                }
-            }
-
-            // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
-            let priorityFactions = crimeFocus ? preferredCrimeFactionOrder.slice() : preferredEarlyFactionOrder.slice();
-            if (player.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
-                priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
-                ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
-            } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
-
-            // Strategy 1: Tackle a consolidated list of desired faction order, interleaving simple factions and megacorporations
-            const factionWorkOrder = firstFactions.concat(priorityFactions.filter(f => // Remove factions from our initial "work order" if we've bought all desired augmentations.
-                !firstFactions.includes(f) && !skipFactions.includes(f) && !softCompletedFactions.includes(f)));
-            for (const faction of factionWorkOrder) {
-                if (breakToMainLoop()) break; // Only continue on to the next faction if it isn't time for a high-level update.
-                let earnedNewFactionInvite = false;
-                if (preferredCompanyFactionOrder.includes(faction)) // If this is a company faction, we need to work for the company first
-                    earnedNewFactionInvite = await workForMegacorpFactionInvite(ns, faction, true);
-                // If new work was done for a company or their faction, restart the main work loop to see if we've since unlocked a higher-priority faction in the list
-                if (earnedNewFactionInvite || await workForSingleFaction(ns, faction)) {
-                    scope--; // De-increment scope so that effecitve scope doesn't increase on the next loop (i.e. it will be incremented back to what it is now)
-                    break;
-                }
-            }
-            if (scope <= 1 || breakToMainLoop()) continue;
-
-            // Strategy 2: Grind XP with all priority factions that are joined or can be joined, until every single one has desired REP
-            for (const faction of factionWorkOrder)
-                if (!breakToMainLoop()) await workForSingleFaction(ns, faction);
-            if (scope <= 2 || breakToMainLoop()) continue;
-
-            // Strategy 3: Work for any megacorporations not yet completed to earn their faction invites. Once joined, we don't lose these factions on reset.
-            let megacorpFactions = preferredCompanyFactionOrder.filter(f => !skipFactions.includes(f));
-            await workForAllMegacorps(ns, megacorpFactions, false);
-            if (scope <= 3 || breakToMainLoop()) continue;
-
-            // Strategy 4: Work for megacorps again, but this time also work for the company factions once the invite is earned
-            await workForAllMegacorps(ns, megacorpFactions, true);
-            if (scope <= 4 || breakToMainLoop()) continue;
-
-            // Strategies 5+ now work towards getting an invite to *all factions in the game* (sorted by least-expensive final aug (correlated to easiest faction-invite requirement))
-            let joinedFactions = player.factions; // In case our hard-coded list of factions is missing anything, merge it with the list of all factions
-            let knownFactions = factions.concat(joinedFactions.filter(f => !factions.includes(f)));
-            let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f)).sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]);
-            // Strategy 5: For *all factions in the game*, try to earn an invite and work for rep until we can afford the most-expensive *desired* aug (or unlock donations, whichever comes first)
-            for (const faction of allIncompleteFactions.filter(f => !softCompletedFactions.includes(f)))
-                if (!breakToMainLoop()) await workForSingleFaction(ns, faction);
-            if (scope <= 5 || breakToMainLoop()) continue;
-
-            // Strategy 6: Revisit all factions until each has enough rep to unlock donations - so if we can't afford all augs this reset, at least we don't need to grind for rep on the next reset
-            // For this, we reverse the order (ones with augs costing the most-rep to least) since these will take the most time to re-grind rep for if we can't buy them this reset.
-            for (const faction of allIncompleteFactions.reverse())
-                if (breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
-                    await workForSingleFaction(ns, faction, true);
-            if (scope <= 6 || breakToMainLoop()) continue;
-
-            // Strategy 7:  Next, revisit all factions and grind XP until we can afford the most expensive aug, even if we could just buy the required rep next reset
-            for (const faction of allIncompleteFactions.reverse()) // Re-reverse the sort order so we start with the easiest (cheapest) faction augs to complete
-                if (breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
-                    await workForSingleFaction(ns, faction, true, true);
-            if (scope <= 7 || breakToMainLoop()) continue;
-
-            // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
-            let factionsWeCanWorkFor = joinedFactions.filter(f => !skipFactionsConfig.includes(f) &&
-                !(playerGang ? allGangFactions : []).includes(f) && !cannotWorkForFactions.includes(f));
-            let foundWork = false;
-            if (factionsWeCanWorkFor.length > 0 && !crimeFocus) {
-                // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
-                let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
-                let targetRep = 1000 + (await getFactionReputation(ns, mostFavorFaction)) * 1.05; // Hack: Grow rep by ~5%, plus 1000 incase it's currently 0
-                ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
-                foundWork = await workForSingleFaction(ns, mostFavorFaction, false, false, targetRep);
-            }
-            if (!foundWork && !noCrime) { // Otherwise, kill some time by doing crimes for a little while
-                ns.print(`INFO: Nothing to do. Doing a little crime...`);
-                await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
-            } else { // If our hands our tied, twiddle our thumbs a bit
-                ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
-                await ns.sleep(30000);
-            }
-            if (scope <= 8) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
+            await mainLoop(ns);
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' + err, true, 'warning');
             await ns.sleep(5000);
@@ -320,6 +142,193 @@ export async function main(ns) {
         }
         await ns.sleep(1); // Infinite loop protection in case somehow we loop without doing any meaningful work
     }
+}
+
+async function loadStartupData(ns) {
+    dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
+    if (!(4 in dictSourceFiles))
+        return log(ns, "ERROR: You cannot automate working for factions until you have unlocked singularity access (SF4).", true, 'error');
+    else if (dictSourceFiles[4] < 3)
+        log(ns, `WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
+            `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`, false, 'warning');
+
+    repToDonate = 150 * ((await tryGetBitNodeMultipliers(ns))?.RepToDonateToFaction || 1);
+    const playerInfo = await getPlayerInfo(ns);
+    const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
+
+    // Get some faction and augmentation information to decide what remains to be purchased
+    dictFactionFavors = await getNsDataThroughFile(ns, dictCommand(allKnownFactions, 'ns.getFactionFavor(o)'), '/Temp/faction-favor.txt');
+    const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand(allKnownFactions, 'ns.getAugmentationsFromFaction(o)'), '/Temp/faction-augs.txt');
+    const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
+    const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationRepReq(o)'), '/Temp/aug-repreqs.txt');
+    const dictAugStats = await getNsDataThroughFile(ns, dictCommand(augmentationNames, 'ns.getAugmentationStats(o)'), '/Temp/aug-stats.txt');
+    const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
+    const installedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
+    // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
+    hasFocusPenaly = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
+    shouldFocusAtWork = !options['no-focus'] && hasFocusPenaly; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
+    hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
+
+    mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
+        .filter(aug => !ownedAugmentations.includes(aug))
+        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+    //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
+    // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
+    mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
+        .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || options['desired-stats'].length == 0 ||
+            Object.keys(dictAugStats[aug]).some(key => options['desired-stats'].some(stat => key.includes(stat)))))
+        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+    //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
+
+    if (options['get-invited-to-every-faction']) {
+        softCompletedFactions = completedFactions = [];
+        // Prioritize joining these 3 city factions, since it is the largest non-precluding group of city factions
+        firstFactions = firstFactions.concat(["Chongqing", "New Tokyo", "Ishima"]);
+        skipFactions = ["Aevum", "Sector-12", "Volhaven"];
+    } else {
+        completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1);
+        softCompletedFactions = Object.keys(mostExpensiveDesiredAugByFaction).filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
+        skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
+        if (completedFactions.length > 0)
+            ns.print(`${completedFactions.length} factions are completed (all augs purchased): ${completedFactions.join(", ")}`);
+        if (softCompletedFactions.length > 0)
+            ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
+    }
+
+    numJoinedFactions = playerInfo.factions.length;
+    fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
+
+    // Find out if we're in a gang
+    const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
+    playerGang = gangInfo ? gangInfo.faction : null;
+    if (playerGang) { // Log a one-time warning if the user has permanently lost access to now-gang faction unique augs due to being in a gang.
+        const otherGangAugs = [...new Set(allGangFactions.filter(g => g != playerGang).flatMap(f => dictFactionAugs[f]))];
+        const accessibleFactions = [...new Set(factions.filter(f => !allGangFactions.includes(f)).concat(playerInfo.factions))];
+        const accessibleAugs = [...new Set(accessibleFactions.flatMap(f => dictFactionAugs[f]))];
+        const missingAugs = otherGangAugs.filter(a => !accessibleAugs.includes(a));
+        if (missingAugs.length > 0)
+            log(ns, `WARNING: By joining the gang "${playerGang}", you have lost access to ${missingAugs.length} augmentations that were uniquely offered ` +
+                `by the other gang factions: ${missingAugs.map(a => `"${a}" (${allGangFactions.filter(g => dictFactionAugs[g].includes(a))[0]})`).join(", ")}. ` +
+                `The only way to get these augmentations now will be to graft them (visit Vitalife in New Tokyo)`, true, 'warning');
+    }
+}
+
+async function mainLoop(ns) {
+    if (!breakToMainLoop()) scope++; // Increase the scope of work if the last iteration completed early (i.e. due to all work within that scope being complete)
+    mainLoopStart = Date.now();
+    ns.print(`INFO: Starting main work loop with scope: ${scope}...`);
+
+    // Update information that may have changed since our last loop
+    const player = (await getPlayerInfo(ns));
+    if (player.factions.length > numJoinedFactions) { // If we've recently joined a new faction, reset our work scope
+        scope = 1; // Back to basics until we've satisfied all highest-priority work
+        numJoinedFactions = player.factions.length;
+    }
+    if (2 in dictSourceFiles) { // Get some information about gangs (if unlocked)
+        if (!playerGang) { // Check if we've joined a gang since our last iteration
+            const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
+            playerGang = gangInfo ? gangInfo.faction : null;
+            // If we've only just now joined a gang, we have to reload startup data, because the augs offered by our gang faction has now changed.
+            if (playerGang) await loadStartupData(ns);
+        }
+        if (ns.heart.break() <= options['karma-threshold-for-gang-invites']) { // Start trying to earn gang faction invites if we're close to unlocking gangs
+            if (!playerGang) {
+                log(ns, `INFO: We are nearing the Karma required to unlock gangs (${formatNumberShort(ns.heart.break())} / -54K). Prioritize earning gang faction invites.`);
+                for (const factionName of desiredGangFactions)
+                    await earnFactionInvite(ns, factionName);
+            }
+            // Whether we're in a gang or will be soon, there's no point in working for any factions that will become gangs, since we will lose all rep with them
+            if (!options['get-invited-to-every-faction'])
+                skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
+        }
+    }
+    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, whether we pause working.        
+    if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check'] && player.inBladeburner) {
+        if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working
+            ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
+            await ns.sleep(checkForNewPrioritiesInterval);
+            return;
+        }
+    }
+
+    // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
+    let priorityFactions = options['crime-focus'] ? preferredCrimeFactionOrder.slice() : preferredEarlyFactionOrder.slice();
+    if (player.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
+        priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
+        ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
+    } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
+
+    // Strategy 1: Tackle a consolidated list of desired faction order, interleaving simple factions and megacorporations
+    const factionWorkOrder = firstFactions.concat(priorityFactions.filter(f => // Remove factions from our initial "work order" if we've bought all desired augmentations.
+        !firstFactions.includes(f) && !skipFactions.includes(f) && !softCompletedFactions.includes(f)));
+    for (const faction of factionWorkOrder) {
+        if (breakToMainLoop()) break; // Only continue on to the next faction if it isn't time for a high-level update.
+        let earnedNewFactionInvite = false;
+        if (preferredCompanyFactionOrder.includes(faction)) // If this is a company faction, we need to work for the company first
+            earnedNewFactionInvite = await workForMegacorpFactionInvite(ns, faction, true);
+        // If new work was done for a company or their faction, restart the main work loop to see if we've since unlocked a higher-priority faction in the list
+        if (earnedNewFactionInvite || await workForSingleFaction(ns, faction)) {
+            scope--; // De-increment scope so that effecitve scope doesn't increase on the next loop (i.e. it will be incremented back to what it is now)
+            break;
+        }
+    }
+    if (scope <= 1 || breakToMainLoop()) return;
+
+    // Strategy 2: Grind XP with all priority factions that are joined or can be joined, until every single one has desired REP
+    for (const faction of factionWorkOrder)
+        if (!breakToMainLoop()) await workForSingleFaction(ns, faction);
+    if (scope <= 2 || breakToMainLoop()) return;
+
+    // Strategy 3: Work for any megacorporations not yet completed to earn their faction invites. Once joined, we don't lose these factions on reset.
+    let megacorpFactions = preferredCompanyFactionOrder.filter(f => !skipFactions.includes(f));
+    await workForAllMegacorps(ns, megacorpFactions, false);
+    if (scope <= 3 || breakToMainLoop()) return;
+
+    // Strategy 4: Work for megacorps again, but this time also work for the company factions once the invite is earned
+    await workForAllMegacorps(ns, megacorpFactions, true);
+    if (scope <= 4 || breakToMainLoop()) return;
+
+    // Strategies 5+ now work towards getting an invite to *all factions in the game* (sorted by least-expensive final aug (correlated to easiest faction-invite requirement))
+    let joinedFactions = player.factions; // In case our hard-coded list of factions is missing anything, merge it with the list of all factions
+    let knownFactions = factions.concat(joinedFactions.filter(f => !factions.includes(f)));
+    let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f)).sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]);
+    // Strategy 5: For *all factions in the game*, try to earn an invite and work for rep until we can afford the most-expensive *desired* aug (or unlock donations, whichever comes first)
+    for (const faction of allIncompleteFactions.filter(f => !softCompletedFactions.includes(f)))
+        if (!breakToMainLoop()) await workForSingleFaction(ns, faction);
+    if (scope <= 5 || breakToMainLoop()) return;
+
+    // Strategy 6: Revisit all factions until each has enough rep to unlock donations - so if we can't afford all augs this reset, at least we don't need to grind for rep on the next reset
+    // For this, we reverse the order (ones with augs costing the most-rep to least) since these will take the most time to re-grind rep for if we can't buy them this reset.
+    for (const faction of allIncompleteFactions.reverse())
+        if (breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
+            await workForSingleFaction(ns, faction, true);
+    if (scope <= 6 || breakToMainLoop()) return;
+
+    // Strategy 7:  Next, revisit all factions and grind XP until we can afford the most expensive aug, even if we could just buy the required rep next reset
+    for (const faction of allIncompleteFactions.reverse()) // Re-reverse the sort order so we start with the easiest (cheapest) faction augs to complete
+        if (breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
+            await workForSingleFaction(ns, faction, true, true);
+    if (scope <= 7 || breakToMainLoop()) return;
+
+    // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
+    let factionsWeCanWorkFor = joinedFactions.filter(f => !options.skip.includes(f) &&
+        !(playerGang ? allGangFactions : []).includes(f) && !cannotWorkForFactions.includes(f));
+    let foundWork = false;
+    if (factionsWeCanWorkFor.length > 0 && !options['crime-focus']) {
+        // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
+        let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
+        let targetRep = 1000 + (await getFactionReputation(ns, mostFavorFaction)) * 1.05; // Hack: Grow rep by ~5%, plus 1000 incase it's currently 0
+        ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
+        foundWork = await workForSingleFaction(ns, mostFavorFaction, false, false, targetRep);
+    }
+    if (!foundWork && !options['no-crime']) { // Otherwise, kill some time by doing crimes for a little while
+        ns.print(`INFO: Nothing to do. Doing a little crime...`);
+        await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
+    } else if (!foundWork) { // If our hands our tied, twiddle our thumbs a bit
+        ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
+        await ns.sleep(30000);
+    }
+    if (scope <= 8) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
 }
 
 // Ram-dodging helper, runs a command for all items in a list and returns a dictionary.
@@ -379,37 +388,75 @@ async function earnFactionInvite(ns, factionName) {
         && !(reqHackingOrCombat.includes(factionName) && player.hacking >= requiredHackByFaction[factionName])) { // Some special-case factions (just 'Daedalus' for now) require *either* hacking *or* combat
         ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, ` +
             `Have Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility}`);
-        const em = requirement / 50; // Hack: A rough heuristic suggesting we need an additional x1 multi for every ~50 pysical stat points we wish to grind out in a reasonable amount of time. TODO: Be smarter
-        if (!crimeFocus && (player.strength_exp_mult * player.strength_mult < em || player.defense_exp_mult * player.defense_mult < em ||
+        const em = requirement / options['training-stat-per-multi-threshold']; // Hack: A rough heuristic suggesting we need an additional x1 multi for every ~50 pysical stat points we wish to grind out in a reasonable amount of time. TODO: Be smarter
+        if (!options['crime-focus'] && (player.strength_exp_mult * player.strength_mult < em || player.defense_exp_mult * player.defense_mult < em ||
             player.dexterity_exp_mult * player.dexterity_mult < em || player.agility_exp_mult * player.agility_mult < em))
             return ns.print("Physical mults / exp_mults are too low to increase stats in a reasonable amount of time");
         doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
-    if (doCrime && noCrime)
+    if (doCrime && options['no-crime'])
         return ns.print(`${reasonPrefix} Doing crime to meet faction requirements is disabled. (--no-crime or --no-focus)`);
     if (doCrime)
         workedForInvite = await crimeForKillsKarmaStats(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
 
-    // Skip factions for which money/hack level requirements aren't met. We do not attempt to "train up" for these things (happens automatically outside this script)
+    // Study for hack levels if that's what's keeping us
+    // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
+    let serverReqHackingLevel = 0;
+    if (requirement = requiredBackdoorByFaction[factionName]) {
+        serverReqHackingLevel = await getServerRequiredHackLevel(ns, requirement);
+        if (player.hacking < serverReqHackingLevel) {
+            ns.print(`${reasonPrefix} you must fist backdoor ${requirement}, which needs hack: ${serverReqHackingLevel}, Have: ${player.hacking}`);
+        }
+    }
+    requirement = Math.max(serverReqHackingLevel, requiredHackByFaction[factionName] || 0)
+    if (requirement && player.hacking < requirement) {
+        ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
+        const em = requirement / options['training-stat-per-multi-threshold'];
+        if (options['no-studying'])
+            return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
+        else if (player.hacking_exp_mult * player.hacking_mult < em)
+            return ns.print(`Hacking mult ${formatNumberShort(player.hacking_mult)} and exp_mult ${formatNumberShort(player.hacking_exp_mult)} ` +
+                `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time.`);
+        let studying = false;
+        if (player.money > options['pay-for-studies-threshold']) { // If we have sufficient money, pay for the best studies
+            if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
+            studying = await study(ns, false, "Algorithms");
+        } else if (uniByCity[player.city]) // Otherwise only go to free university if our city has a university
+            studying = await study(ns, false, "Study Computer Science");
+        else
+            return ns.print(`You have insufficient money (${formatMoney(player.money)} < --pay-for-studies-threshold ${formatMoney(options['pay-for-studies-threshold'])})` +
+                ` to travel or pay for studies, and your current city ${player.city} does not have a university from which to take free computer science.`);
+        if (studying)
+            workedForInvite = await monitorStudies(ns, 'hacking', requirement);
+        // If we studied for hacking, and were awaiting a backdoor, spawn the backdoor script now  
+        if (workedForInvite && serverReqHackingLevel) {
+            player = await getPlayerInfo(ns);
+            if (player.hacking > requirement) {
+                ns.print(`Current hacking level ${player.hacking} seems to now meet the backdoor requirement ${requirement}. Spawning backdoor-all-servers.js...`);
+                ns.run(getFilePath("/Tasks/backdoor-all-servers.js"));
+            }
+        }
+    }
+    if (breakToMainLoop()) return false;
+
+    // Skip factions whose remaining requirement is money. There's not much we can do to earn money
     if ((requirement = requiredMoneyByFaction[factionName]) && player.money < requirement)
         return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
-    if ((requirement = requiredHackByFaction[factionName]) && player.hacking < requirement && !reqHackingOrCombat.includes(factionName))
-        return ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
-    // Note: This only complains if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
-    let serverReqHackingLevel;
-    if ((requirement = requiredBackdoorByFaction[factionName]) && player.hacking < (serverReqHackingLevel = (await getServerRequiredHackLevel(ns, requirement))))
-        return ns.print(`${reasonPrefix} you must fist backdoor ${requirement}, which needs hack: ${serverReqHackingLevel}, Have: ${player.hacking}`);
-    //await getNsDataThroughFile(ns, `ns.connect('fulcrumassets'); await ns.installBackdoor(); ns.connect(home)`, '/Temp/backdoor-fulcrum.txt') // TODO: Do backdoor if we can but haven't yet?
-    if (breakToMainLoop()) return false;
 
     // If travelling can help us join a faction - we can do that too
     player = await getPlayerInfo(ns);
+    let travelledForInvite = false;
     if (['Tian Di Hui', 'Tetrads', 'The Dark Army'].includes(factionName) && player.city != 'Chongqing')
         workedForInvite = await goToCity(ns, 'Chongqing');
     else if (['The Syndicate'].includes(factionName) && player.city != 'Sector-12')
         workedForInvite = await goToCity(ns, 'Sector-12');
     else if (["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"].includes(factionName) && player.city != factionName)
         workedForInvite = await goToCity(ns, factionName);
+    if (travelledForInvite) {
+        workedForInvite = true;
+        player = await getPlayerInfo(ns);
+    }
+
     // Special case, earn a CEO position to gain an invite to Silhouette
     if ("Silhouette" == factionName) {
         ns.print(`You must be a CO (e.g. CEO/CTO) of a company to earn an invite to ${factionName}. This may take a while!`);
@@ -432,16 +479,20 @@ async function earnFactionInvite(ns, factionName) {
 
 /** @param {NS} ns */
 async function goToCity(ns, cityName) {
-    if ((await getPlayerInfo(ns)).city == cityName) {
+    const player = await getPlayerInfo(ns);
+    if (player.city == cityName) {
         ns.print(`Already in city ${cityName}`);
         return true;
     }
     if (await getNsDataThroughFile(ns, `ns.travelToCity('${cityName}')`, '/Temp/travel.txt')) {
         lastActionRestart = Date.now();
-        announce(ns, `Travelled to ${cityName}`, 'info');
+        announce(ns, `Travelled from ${player.city} to ${cityName}`, 'info');
         return true;
     }
-    announce(ns, `Failed to travelled to ${cityName} for some reason...`, 'error');
+    if (player.money < 200000)
+        announce(ns, `WARN: Insufficient funds to travel from ${player.city} to ${cityName}`, 'warning');
+    else
+        announce(ns, `ERROR: Failed to travel from ${player.city} to ${cityName} for some reason...`, 'error');
     return false;
 }
 
@@ -450,7 +501,7 @@ async function goToCity(ns, cityName) {
 export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, crimeCommand = null, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
-    doFastCrimesOnly = doFastCrimesOnly || fastCrimesOnly;
+    doFastCrimesOnly = doFastCrimesOnly || options['fast-crimes-only'];
     if (!crimeCommand) crimeCommand = async crime => await getNsDataThroughFile(ns, `ns.commitCrime('${crime}')`, '/Temp/crime-time.txt');
     let player = await getPlayerInfo(ns);
     let strRequirements = [];
@@ -465,8 +516,8 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let needStats = player.strength < reqStats || player.defense < reqStats || player.dexterity < reqStats || player.agility < reqStats;
         let karma = -ns.heart.break();
         crime = crimeCount < 10 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
-            (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that
-                bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly ? index > 1 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
+            (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
+                bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly && index <= 1 ? 0 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` + (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
             lastCrime = crime;
@@ -485,14 +536,50 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 /** @param {NS} ns */
 async function studyForCharisma(ns, focus) {
     await goToCity(ns, 'Volhaven');
-    if (await getNsDataThroughFile(ns, `ns.universityCourse('ZB Institute Of Technology', 'Leadership', ${focus})`, '/Temp/study.txt')) {
+    return await study(ns, focus, 'Leadership', 'ZB Institute Of Technology');
+}
+
+const uniByCity = Object.fromEntries([["Aevum", "Summit University"], ["Sector-12", "Rothman University"], ["Volhaven", "ZB Institute of Technology"]]);
+
+/** @param {NS} ns */
+async function study(ns, focus, course, university = null) {
+    if (options['no-studying'])
+        return announce(ns, `WARNING: Could not study '${course}' because --no-studying is set.`, 'warning');
+    const playerCity = (await getPlayerInfo(ns)).city;
+    if (!university) { // Auto-detect the university in our city
+        university = uniByCity[playerCity];
+        if (!university)
+            return announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
+    }
+    if (await getNsDataThroughFile(ns, `ns.universityCourse('${university}', '${course}', ${focus})`, '/Temp/study.txt')) {
         lastActionRestart = Date.now();
-        announce(ns, `Started studying 'Leadership' at 'ZB Institute Of Technology`, 'success');
+        announce(ns, `Started studying '${course}' at '${university}`, 'success');
         return true;
     }
-    announce(ns, `For some reason, failed to study at university (not in correct city?)`, 'error');
+    announce(ns, `ERROR: For some reason, failed to study '${course}' at university '${university}' (Not in correct city? Player is in '${playerCity}')`, 'error');
     return false;
 }
+
+/** @param {NS} ns
+ * Helper to wait for studies to be complete */
+async function monitorStudies(ns, stat, requirement) {
+    let lastStatusUpdateTime = 0;
+    while (!breakToMainLoop()) {
+        const player = await getPlayerInfo(ns);
+        if (!player.className)
+            return announce(ns, 'WARNING: Somebody interrupted our studies.', 'warning');
+        if (player[stat] >= requirement) {
+            announce(ns, `SUCCESS: Achieved ${stat} level ${player[stat]} >= ${requirement} while studying`);
+            return true;
+        }
+        if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+            lastStatusUpdateTime = Date.now();
+            announce(ns, `Studying until ${stat} reaches ${requirement}. Currently at ${player[stat]}...`)
+        }
+        await ns.sleep(loopSleepInterval);
+    }
+}
+
 
 /** @param {NS} ns */
 export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000) {
@@ -596,7 +683,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         `${startingFavor?.toFixed(2)}/${repToDonate?.toFixed(2)}) Req: ${formatNumberShort(Math.round(favorRepRequired))}`);
     if (options['invites-only'])
         return ns.print(`--invites-only Skipping working for faction...`);
-    if (prioritizeInvites && !forceUnlockDonations && !forceBestAug && !forceRep)
+    if (options['prioritize-invites'] && !forceUnlockDonations && !forceBestAug && !forceRep)
         return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
     let lastStatusUpdateTime = 0, repGainRatePerMs = 0;
@@ -681,13 +768,17 @@ export async function workForAllMegacorps(ns, megacorpFactionsInPreferredOrder, 
         ns.print(`${joinedCompanyFactions.length} companies' factions have already been joined: ${joinedCompanyFactions.join(", ")}`)
     let doFactionWork = alsoWorkForCompanyFactions && oneCompanyFactionAtATime;
     // Earn each obtainabl megacorp faction invite, and optionally also grind faction rep
+    let earnedAnyInvite = false;
     for (const factionName of megacorpFactionsInPreferredOrder) {
-        if ((await workForMegacorpFactionInvite(ns, factionName, doFactionWork)) && doFactionWork && !breakToMainLoop())
+        const earnedInvite = await workForMegacorpFactionInvite(ns, factionName, doFactionWork);
+        earnedAnyInvite = earnedAnyInvite || earnedInvite;
+        if (earnedInvite && doFactionWork && !breakToMainLoop())
             await workForSingleFaction(ns, factionName);
         if (breakToMainLoop()) return;
     }
     if (alsoWorkForCompanyFactions && !oneCompanyFactionAtATime) { // If configured, start grinding rep with company factions we've joined
-        ns.print(`Done working for companies, now working for all incomplete company factions...`);
+        if (earnedAnyInvite) // Avoid log noise by only logging this when a new invite was earned
+            ns.print(`Done working for companies, now working for all incomplete company factions...`);
         for (const factionName of megacorpFactionsInPreferredOrder)
             if (!breakToMainLoop()) await workForSingleFaction(ns, factionName);
     }
@@ -757,7 +848,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         let status = `Next promotion ('${nextJobName}' #${nextJobTier}) at Hack:${requiredHack} Cha:${requiredCha} Rep:${formatNumberShort(requiredRep)}` +
             (repRequiredForFaction > nextJob.reqRep[nextJobTier] ? '' : `, but we won't need it, because we'll sooner hit ${formatNumberShort(repRequiredForFaction)} reputation to unlock company faction "${factionName}"!`);
         // We should only study at university if every other requirement is met but Charisma
-        if (currentReputation >= requiredRep && player.hacking >= requiredHack && player.charisma < requiredCha && !noStudying) {
+        if (currentReputation >= requiredRep && player.hacking >= requiredHack && player.charisma < requiredCha && !options['no-studying']) {
             status = `Studying at ZB university until Cha reaches ${requiredCha}...\n` + status;
             if (studying && player.className !== 'taking a Leadership course' && player.className !== 'Leadership' /* In case className is made more intuitive in the future */) {
                 announce(ns, `Leadership studies were interrupted. player.className="${player.className}" Restarting in 5 seconds...`, 'warning');

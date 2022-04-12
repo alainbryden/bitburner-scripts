@@ -93,10 +93,12 @@ async function initialize(ns) {
         await runCommand(ns, `${JSON.stringify(gangsByPower)}.forEach(g => ns.gang.createGang(g))`, '/Temp/gang-createGang.js');
         await ns.sleep(1000); // Wait for our human to join a gang
     }
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     log(ns, "Collecting gang information...");
     const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
     myGangFaction = myGangInfo.faction;
-    if (loggedWaiting) log(ns, `SUCCESS: Created gang ${myGangFaction}`, 'success', true);
+    if (loggedWaiting)
+        log(ns, `SUCCESS: Created gang ${myGangFaction} (At ${formatDuration(playerData.playtimeSinceLastBitnode)} into BitNode)`, 'success', true);
     isHackGang = myGangInfo.isHacking;
     importantStats = isHackGang ? ["hack"] : ["str", "def", "dex", "agi"];
     territoryNextTick = lastTerritoryPower = lastOtherGangInfo = null;
@@ -128,7 +130,6 @@ async function initialize(ns) {
         requiredRep = 2.5e6
 
     // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when gang income is severely nerfed)
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8) {
         defaultMaxSpendPerTickPermanentEquipment /= 100;
         defaultMaxSpendPerTickTransientEquipment /= 100;;

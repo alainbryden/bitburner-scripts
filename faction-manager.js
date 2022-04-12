@@ -83,6 +83,13 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     _ns = ns;
     options = ns.flags(argsSchema);
+
+    // Ensure all globals are reset before we proceed with the script, in case we've done things out of order
+    augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;
+    factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
+    ownedAugmentations = [], simulatedOwnedAugmentations = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
+    factionData = {}, augmentationData = {};
+
     printToTerminal = (options.v || options.verbose === true || options.verbose === null) && !options['join-only'];
     const allFactions = options.a || options.all;
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
@@ -93,18 +100,24 @@ export async function main(ns) {
     let desiredAugs = priorityAugs.concat(options['aug-desired'].map(f => f.replaceAll("_", " ")));
     const ignorePlayerData = options.i || options['ignore-player-data'];
 
-    // Collect information about the player
-    const ownedSourceFiles = await getActiveSourceFiles(ns);
-    const sf4Level = ownedSourceFiles[4] || 0;
-    const sf11Level = ownedSourceFiles[11] || 0;
+    // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    const ownedSourceFiles = await getActiveSourceFiles(ns, false);
+    const sf4Level = playerData.bitNodeN == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
     if (sf4Level == 0)
         return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'ERROR');
     else if (sf4Level < 3)
         log(ns, `WARNING: This script makes heavy use of singularity functions, which are quite expensive before you have SF4.3. ` +
             `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
+    const sf11Level = ownedSourceFiles[11] || 0;
     augCountMult = [1.9, 1.824, 1.786, 1.767][sf11Level];
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    log(ns, `Player has sf11Level ${sf11Level}, so the multiplier after each aug purchased is ${augCountMult}.`);
+
+    // Collect information about the player
+    gangFaction = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation().faction : false', '/Temp/gang-faction.txt');
+    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
     startingPlayerMoney = playerData.money;
+    // Get total stocks value if player has access
     if (options['ignore-stocks'] || !playerData.hasTixApiAccess) {
         stockValue = 0
     } else { // Break this into two requests since there's lot's of RAM involved.
@@ -114,7 +127,6 @@ export async function main(ns) {
             `.reduce((total, stk) => total + stk.pos[0] * stk.bid + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) -100000 * (stk.pos[0] + stk.pos[2] > 0 ? 1 : 0), 0)`,
             '/Temp/stock-portfolio-value.txt');
     }
-    log(ns, `Player has sf11Level ${sf11Level}, so the multiplier after each aug purchased is ${augCountMult}.`);
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
     log(ns, 'In factions: ' + joinedFactions);
     // Get owned augmentations (whether they've been installed or not). Ignore strNF because you can always buy more.
@@ -124,18 +136,16 @@ export async function main(ns) {
     // Clear "priority" / "desired" lists of any augs we already own
     priorityAugs = priorityAugs.filter(name => !simulatedOwnedAugmentations.includes(name));
     desiredAugs = desiredAugs.filter(name => !simulatedOwnedAugmentations.includes(name));
-
     // Determine the set of desired augmentation stats. If not specified by the user, it's based on our situation
     desiredStatsFilters = options['stat-desired'];
     if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
         desiredStatsFilters = ownedAugmentations.length > 40 ? ['_'] : // Once we have more than 40 augs, switch to buying up anything and everything
-            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || factionData["Bladeburners"]?.joined ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
+            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || playerData.factions.includes("Bladeburners") ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
                 gangFaction ? ['hacking'] : // If in a gang (provider of all augs), we can focus on hacking augs only - we won't be grinding rep with corps/factions to unlock augs
                     ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
 
     // Prepare global data sets of faction and augmentation information
     log(ns, 'Getting all faction data...');
-    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt')
     await updateFactionData(ns, allFactions, omitFactions);
     log(ns, 'Getting all augmentation data...');
     await updateAugmentationData(ns, desiredAugs);
@@ -150,7 +160,8 @@ export async function main(ns) {
             forceJoinFactions.push(potentialGangFactions); // Try to join all gang factions as we near unlocking gangs, regardless of their augmentations
             log(ns, `INFO: Will join any gang faction because Karma is at ${formatNumberShort(ns.heart.break())}`, printToTerminal, printToTerminal ? 'info' : undefined);
         }
-        await joinFactions(ns, forceJoinFactions);
+        let joined = await joinFactions(ns, forceJoinFactions);
+        if (joined) log(ns, `SUCCESS: Joined ${joined} factions.`);
         if (options['join-only']) return;
         displayJoinedFactionSummary(ns);
     }
@@ -212,7 +223,6 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
     let dictFactionFavors = await getNsDataThroughFile(ns, factionsDictCommand('ns.getFactionFavor(faction)'), '/Temp/faction-favor.txt');
 
     // Need information about our gang to work around a TRP bug - gang faction appears to have it available, but it's not (outside of BN2)  
-    gangFaction = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation().faction : false', '/Temp/gang-faction.txt');
     if (gangFaction && playerData.bitNodeN != 2) dictFactionAugs[gangFaction] = dictFactionAugs[gangFaction]?.filter(a => a != "The Red Pill");
 
     factionData = Object.fromEntries(factionNames.map(faction => [faction, {
@@ -221,8 +231,9 @@ async function updateFactionData(ns, allFactions, factionsToOmit) {
         joined: joinedFactions.includes(faction),
         reputation: dictFactionReps[faction] || 0,
         favor: dictFactionFavors[faction],
-        donationsUnlocked: dictFactionFavors[faction] >= favorToDonate && faction !== gangFaction // Can't donate to gang factions for rep
-            && faction !== "Church of the Machine God", // Can't donate to this faction either
+        donationsUnlocked: dictFactionFavors[faction] >= favorToDonate &&
+            // As a rule, cannot donate to gang factions or any of the below factions - need to use other mechanics to gain rep.
+            ![gangFaction, "Bladeburners", "Church of the Machine God"].includes(faction),
         augmentations: dictFactionAugs[faction],
         unownedAugmentations: function (includeNf = false) { return this.augmentations.filter(aug => !simulatedOwnedAugmentations.includes(aug) && (aug != strNF || includeNf)) },
         mostExpensiveAugCost: function () { return this.augmentations.map(augName => augmentationData[augName]).reduce((max, aug) => Math.max(max, aug.price), 0) },
@@ -314,6 +325,7 @@ async function joinFactions(ns, forceJoinFactions) {
     // Check for faction invitations
     const invitations = Object.values(factionData).filter(f => f.invited);
     log(ns, `Outstanding invitations from ${invitations.length} factions: ${JSON.stringify(invitations.map(f => f.name))}`);
+    let joined = 0;
     // Join all factions with remaining augmentations we care about
     for (const faction of invitations.sort(factionSortOrder)) {
         let unownedAugs = faction.unownedAugmentations(true); // Filter out augmentations we've already purchased
@@ -332,11 +344,13 @@ async function joinFactions(ns, forceJoinFactions) {
                 faction.joined = true;
                 faction.augmentations.forEach(aug => accessibleAugmentations.add(aug));
                 joinedFactions.push(faction.name);
-                log(ns, `SUCCESS: Joined faction ${faction.name} (Response: ${response})`, true, 'success')
+                log(ns, `SUCCESS: Joined faction ${faction.name} (Response: ${response})`, true, 'success');
+                joined++;
             } else
-                log(ns, `ERROR: Error joining faction ${faction.name}. Response: ${response}`, false, 'error')
+                log(ns, `ERROR: Error joining faction ${faction.name}. Response: ${response}`, false, 'error');
         }
     }
+    return joined;
 }
 
 /** Compute how much money must be donated to the faction to afford an augmentation. Faction can be either a faction object, or faction name */
@@ -525,37 +539,41 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         const factionsWithAug = Object.values(factionData).filter(f => f.augmentations.includes(augNf.name)).sort((a, b) => b.favor - a.favor);
         const factionsWithAugAndInvite = factionsWithAug.filter(f => f.invited || f.joined).sort((a, b) => b.favor - a.favor);
         const factionWithMostFavor = factionsWithAugAndInvite[0] ?? factionsWithAug[0];
+        let joined = 0;
         if (getFrom != factionsWithAug[0].name && factionsWithAug[0] != factionsWithAugAndInvite[0])
             outputRows.push(`SUGGESTION: Earn an invitation to faction ${factionsWithAug[0].name} to make it easier to get rep for ${strNF} since it has the most favor (${factionsWithAug[0].favor}).`);
         else if (factionsWithAug[0].joined && !factionsWithAug[0].donationsUnlocked)
             outputRows.push(`SUGGESTION: Do some work for faction ${factionsWithAug[0].name} to qickly earn rep for ${strNF} since it has the most favor (${factionsWithAug[0].favor}).`);
-        else if ((!getFrom || factionData[getFrom].favor < factionWithMostFavor.favor) && factionWithMostFavor.invited) {
-            outputRows.push(`Attempting to join faction ${factionWithMostFavor.name} to make it easier to get rep for ${strNF} since it has the most favor (${factionWithMostFavor.favor}).`);
-            await joinFactions(ns, [factionWithMostFavor.name]);
+        else if (!getFrom || (factionData[getFrom].favor < factionWithMostFavor.favor && factionWithMostFavor.invited)) {
+            outputRows.push(`Attempting to join faction ${factionWithMostFavor.name} to make it easier to earn rep for ${strNF} since it has the most favor (${factionWithMostFavor.favor}).`);
+            joined = await joinFactions(ns, [factionWithMostFavor.name]);
             if (!joinedFactions.includes(factionWithMostFavor.name)) {
                 invitedFactionsWithDonation = factionsWithAugAndInvite.filter(f => f.donationsUnlocked).map(f => f.name);
                 if (invitedFactionsWithDonation.length > 0) {
                     outputRows.push(`Failed to join ${factionWithMostFavor.name}. Attempting to join any factions with whom we have enough favour to donate: ${invitedFactionsWithDonation.join(", ")}.`);
-                    await joinFactions(ns, invitedFactionsWithDonation);
+                    joined = await joinFactions(ns, invitedFactionsWithDonation);
                 } else
                     outputRows.push(`Failed to join ${factionWithMostFavor.name}. NeuroFlux will not be accessible.`);
             }
+            // If after the above potential attempt to join a faction offering NF we still can't afford it, we're done here
+            if (!augNf.getFromJoined())
+                return log(ns, "Cannot buy any NF due to no joined or joinable factions offering it.");
         }
-        // If after the above potential attempt to join a faction offering NF we still can't afford it, we're done here
-        if (!augNf.getFromJoined() && !augNf.canAfford() && !augNf.canAffordWithDonation())
-            return log("Cannot buy any NF due to no joined or joinable factions offering it.");
+        if (!augNf.canAfford() && !augNf.canAffordWithDonation())
+            return log(ns, `Cannot buy any NF due to best provider faction ${augNf.getFromJoined()} having insufficient rep, and donations are not unlocked.`);
+        if (joined) outputRows.push(`SUCCESS: Joined ${joined} factions just to gain access to additional NeuroFlux levels.`);
     }
     // Start adding as many neuroflux levels as we can afford
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
     const augNfFaction = factionData[augNf.getFromJoined()];
     log(ns, `nfPurchased: ${nfPurchased}, augNfFaction: ${augNfFaction.name} (rep: ${augNfFaction.reputation}), augNf.price: ${augNf.price}, augNf.reputation: ${augNf.reputation}`);
-    while (nfPurchased < 200) {
+    while (nfPurchased < 200) { // Limit to 200 to avoid breaking the game if near infinite money.
         const nextNfCost = augNf.price * (augCountMult ** purchaseableAugs.length) * (nfCountMult ** nfPurchased);
         const nextNfRep = augNf.reputation * (nfCountMult ** nfPurchased);
+        const nextNfRepCost = (nextNfRep <= augNfFaction.reputation) ? 0 : // Compute the incremental cost of donating for rep
+            Math.max(0, purchaseFactionDonations[augNfFaction.name] || 0 - getReqDonationForRep(nextNfRep, augNfFaction));
         let nfMsg = `Cost of NF ${nfPurchased + 1} is ${formatMoney(nextNfCost)} and will require ${formatNumberShort(nextNfRep)} reputation`
-        if (totalAugCost + totalRepCost + nextNfCost + nextNfRep > budget) break;
-        purchaseableAugs.push(augNf);
-        totalAugCost += nextNfCost;
+        if (totalAugCost + totalRepCost + nextNfCost + nextNfRepCost > budget) break;
         if (nextNfRep > augNfFaction.reputation) {
             if (augNfFaction.donationsUnlocked) {
                 purchaseFactionDonations[augNfFaction.name] = Math.max(purchaseFactionDonations[augNfFaction.name] || 0, getReqDonationForRep(nextNfRep, augNfFaction));
@@ -567,6 +585,8 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             }
         } else
             nfMsg += ` (✓ have ${formatNumberShort(augNfFaction.reputation)} rep with faction ${augNfFaction.name})`
+        purchaseableAugs.push(augNf);
+        totalAugCost += nextNfCost;
         log(ns, nfMsg);
         nfPurchased++;
     }
