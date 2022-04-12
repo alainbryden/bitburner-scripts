@@ -83,9 +83,6 @@ export async function main(ns) {
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
-    // Upgrade home RAM after purchasing augmentations if this option was set.
-    if (options['prioritize-augmentations']) await spendOnHomeRam();
-
     // Sanity check, if we are not slated to install any augmentations, ABORT
     // Get owned + purchased augmentations, then installed augmentations. Ensure there's a difference
     let purchasedAugmentations = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt');
@@ -94,6 +91,9 @@ export async function main(ns) {
     if (noAugsToInstall && !options['allow-soft-reset'])
         return log(ns, `ERROR: See above faction-manager.js logs - there are no new purchased augs. ` +
             `Specify --allow-soft-reset to proceed without any purchased augs.`, true, 'error');
+
+    // STEP 2 (Deferred): Upgrade home RAM after purchasing augmentations if this option was set.
+    if (options['prioritize-augmentations']) await spendOnHomeRam();
 
     // STEP 4: Try to Buy 4S data / API if we haven't already and can afford it (although generally stockmaster.js would have bought these if it could)
     log(ns, 'Checking on Stock Market upgrades...', true, 'info');

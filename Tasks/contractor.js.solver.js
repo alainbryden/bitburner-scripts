@@ -1,25 +1,42 @@
+const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
+
 // This contract solver has the bare-minimum footprint of 1.6 GB (base) + 10 GB (ns.codingcontract.attempt)
 // It does this by requiring all contract information being gathered in advance and passed in as a JSON blob argument.
+// TODO: Pull solvers directly from https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts
 /** @param {NS} ns **/
 export async function main(ns) {
     if (ns.args.length < 1)
         ns.tprint('Contractor solver was incorrectly invoked without arguments.')
     var contractsDb = JSON.parse(ns.args[0]);
+    const fContents = ns.read(fUnsolvedContracts);
+    const notified = fContents ? JSON.parse(fContents) : [];
     for (const contractInfo of contractsDb) {
         const answer = findAnswer(contractInfo)
+        let notice = null;
         if (answer != null) {
             const solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
             if (solvingResult) {
                 ns.toast(`Solved ${contractInfo.contract} on ${contractInfo.hostname}`, 'success');
                 ns.tprint(`Solved ${contractInfo.contract} on ${contractInfo.hostname}. Reward: ${solvingResult}`)
             } else {
-                ns.tprint(`Wrong answer for ${contractInfo.contract} on ${contractInfo.hostname}: ${JSON.stringify(answer)}`)
+                notice = `ERROR: Wrong answer for ${contractInfo.contract} on ${contractInfo.hostname}: ${JSON.stringify(answer)}`;
             }
         } else {
-            ns.tprint(`Unable to find the answer for: ${JSON.stringify(contractInfo)}`)
+            notice = `WARNING: No solver available for contract type "${contractInfo.type}"\nFull info: ${JSON.stringify(contractInfo)})`;
+        }
+        if (notice) {
+            if (!notified.includes(contractInfo.contract)) {
+                ns.tprint(notice)
+                ns.toast(notice, 'warning');
+                notified.push(contractInfo.contract)
+            }
+            ns.print(notice);
         }
         await ns.sleep(10)
     }
+    // Keep tabs of failed contracts
+    if (notified.length > 0)
+        await ns.write(fUnsolvedContracts, JSON.stringify(notified), "w");
 }
 
 function findAnswer(contract) {

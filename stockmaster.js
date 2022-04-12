@@ -527,12 +527,12 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget, allStockSymbol
         await liquidate(ns, allStockSymbols);
     if (!playerStats.has4SData) {
         if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt'))
-            log(ns, `Purchased 4SMarketData for ${formatMoney(cost4sData)}!`, true, 'success');
+            log(ns, `SUCCESS: Purchased 4SMarketData for ${formatMoney(cost4sData)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
         else
             log(ns, 'ERROR attempting to purchase 4SMarketData!', false, 'error');
     }
     if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/purchase-4s-api.txt')) {
-        log(ns, `Purchased 4SMarketDataTixApi for ${formatMoney(cost4sApi)}!`, true, 'success');
+        log(ns, `SUCCESS: Purchased 4SMarketDataTixApi for ${formatMoney(cost4sApi)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
         return true;
     } else {
         log(ns, 'ERROR attempting to purchase 4SMarketDataTixApi!', false, 'error');

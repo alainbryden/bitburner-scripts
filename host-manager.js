@@ -139,7 +139,8 @@ async function tryToBuyBestServerPossible(ns) {
 
     // Don't buy if it would put us below our reserve (shouldn't happen, since we calculated how much to buy based on reserve amount)
     if (spendableMoney < cost)
-        return setStatus(ns, `${prefix}spendableMoney (${formatMoney(spendableMoney)}) is less than the cost (${formatMoney(cost)})`);
+        return setStatus(ns, `${prefix}spendableMoney (${formatMoney(spendableMoney)}) is less than the cost ` +
+            `of even the cheapest server (${formatMoney(cost)} for ${formatRam(2 ** exponentLevel)})`);
     // Don't buy if we can't afford our configured --min-ram-exponent
     if (exponentLevel < minRamExponent)
         return setStatus(ns, `${prefix}The highest ram exponent we can afford (2^${exponentLevel} for ${formatMoney(cost)}) on our budget ` +
@@ -163,9 +164,9 @@ async function tryToBuyBestServerPossible(ns) {
     const maxPurchasableServerRam = Math.pow(2, maxPurchasableServerRamExponent);
     const ramByServer = Object.fromEntries(purchasedServers.map(server => [server, ns.getServerMaxRam(server)]));
     let [worstServerName, worstServerRam] = purchasedServers.reduce(([minS, minR], s) =>
-        ramByServer[s] < minS ? [s, ramByServer[s]] : [minS, minR], [null, maxPurchasableServerRam]);
-    let [bestServerName, bestServerRam] = purchasedServers.reduce(([minS, minR], s) =>
-        ramByServer[s] > minS ? [s, ramByServer[s]] : [minS, minR], [null, 0]);
+        ramByServer[s] < minR ? [s, ramByServer[s]] : [minS, minR], [null, maxPurchasableServerRam]);
+    let [bestServerName, bestServerRam] = purchasedServers.reduce(([maxS, maxR], s) =>
+        ramByServer[s] > maxR ? [s, ramByServer[s]] : [maxS, maxR], [null, 0]);
 
     // Abort if our worst previously-purchased server is better than the one we're looking to buy (ensures we buy in sane increments of capacity)
     if (worstServerName != null && maxRamPossibleToBuy < worstServerRam && !options['allow-worse-purchases'])
