@@ -108,14 +108,16 @@ function ps(ns, server, canUseCache = true) {
     return canUseCache && cachedResult ? cachedResult : (psCache[server] = ns.ps(server));
 }
 
-// Returns true if we're at a point where we want to save money for a big purchase on the horizon
-function shouldReserveMoney() {
-    let playerMoney = _ns.getServerMoneyAvailable("home");
-    if (!doesFileExist("SQLInject.exe", "home") && playerMoney > 20000000)
-        return true; // Start saving at 200m of the 250m required for SQLInject
-    if (!playerStats.has4SDataTixApi && playerMoney >= (bitnodeMults.FourSigmaMarketDataApiCost * 25000000000) / 2)
-        return true; // Start saving if we're half-way to buying 4S market access
-    return false;
+// Returns the amount of money we should currently be reserving. Dynamically adapts to save money for a couple of big purchases on the horizon
+function reservedMoney(ns) {
+    let shouldReserve = Number(ns.read("reserve.txt") || 0);
+    let playerMoney = ns.getServerMoneyAvailable("home");
+    if (!doesFileExist("SQLInject.exe", "home") && playerMoney > 200e6)
+        shouldReserve += 250e6; // Start saving at 200m of the 250m required for SQLInject
+    const fourSigmaCost = (bitnodeMults.FourSigmaMarketDataApiCost * 25000000000);
+    if (!playerStats.has4SDataTixApi && playerMoney >= fourSigmaCost / 2)
+        shouldReserve += fourSigmaCost; // Start saving if we're half-way to buying 4S market access
+    return shouldReserve;
 }
 
 let options;
@@ -245,12 +247,12 @@ export async function main(ns) {
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
     asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-    let shouldUpgradeHacknet = () => !shouldReserveMoney() && (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false) === null);
+    let shouldUpgradeHacknet = () => (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false) === null) && reservedMoney(ns) < ns.getServerMoneyAvailable("home");
     // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
     let shouldImproveHacking = () => bitnodeMults.ScriptHackMoneyGain != 0 && playerStats.bitNodeN != 8 || ns.getServerMoneyAvailable("home") > 1e12;
     // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
     periodicScripts = [
-        // Buy tor as soon as we can if we haven't already, and all the port crackers
+        // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
         { interval: 25000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !addedServerNames.includes("darkweb") },
         { interval: 26000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers() != 5 && (getNumPortCrackers() < 3 || shouldImproveHacking()) },
         { interval: 27000, name: "/Tasks/contractor.js", requiredServer: "home" }, // Periodically look for coding contracts that need solving
@@ -260,8 +262,8 @@ export async function main(ns) {
         // Buy upgrades regardless of payoff if they cost less than 0.1% of our money
         { interval: 29000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "1E100h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.001] },
         {
-            interval: 30000, name: "/Tasks/ram-manager.js", args: ['--budget', '0.25',], // Spend about 25% of un-reserved cash on home RAM upgrades (permanent) when they become available
-            shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && !shouldReserveMoney() && shouldImproveHacking() // Only trigger if we have SF4, not saving for anything, and hack income is important
+            interval: 30000, name: "/Tasks/ram-manager.js", args: () => ['--budget', '0.5', '--reserve', reservedMoney(ns)], // Spend about 50% of un-reserved cash on home RAM upgrades (permanent) when they become available
+            shouldRun: () => 4 in dictSourceFiles && dictSourceFiles[4] >= 2 && shouldImproveHacking() // Only trigger if hack income is important
         },
         {   // Periodically check for new faction invites and join if deemed useful to be in that faction
             interval: 31000, name: "faction-manager.js", requiredServer: "home", args: ['--join-only'],
@@ -273,9 +275,9 @@ export async function main(ns) {
             interval: 32000, name: "host-manager.js", requiredServer: "home",
             // Funky heuristic warning: I find that new players with fewer SF levels under their belt are obsessed with hack income from servers,
             // but established players end up finding auto-purchased hosts annoying - so now the % of money we spend shrinks as SF levels grow.
-            args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--utilization-trigger', '0'],
+            args: () => ['--reserve-percent', Math.max(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
             shouldRun: () => {
-                if (shouldReserveMoney() || !shouldImproveHacking()) return false; // Skip if we're saving up, or if hack income is not important in this BN or at this time               
+                if (!shouldImproveHacking()) return false; // Skip if hack income is not important in this BN or at this time               
                 let utilization = getTotalNetworkUtilization(); // Utilization-based heuristics for when we likely could use more RAM for hacking
                 return utilization >= maxUtilization || utilization > 0.80 && maxTargets < 20 || utilization > 0.50 && maxTargets < 5;
             }
