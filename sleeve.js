@@ -99,7 +99,7 @@ async function mainLoop(ns) {
     let canTrain = !options['disable-training'] && (playerInfo.money - costByNextLoop) > (options['training-reserve'] ||
         (promptedForTrainingBudget ? ns.read(trainingReserveFile) : undefined) || globalReserve);
     // If any sleeve is training at the gym, see if we can purchase a gym upgrade to help them
-    if (canTrain && task.some(t => t.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
+    if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
 
@@ -116,7 +116,7 @@ async function mainLoop(ns) {
         // These tasks should be immediately discontinued in certain conditions, even if it hasn't been 'minTaskWorkTime'
         if (task[i] == "recover from shock" && sleeve.shock == 0 ||
             task[i] == "synchronize" && sleeve.sync == 100 ||
-            task[i].startsWith("train") && !canTrain)
+            task[i]?.startsWith("train") && !canTrain)
             lastReassignTime[i] = 0;
         // Otherwise, don't change tasks if we've changed tasks recently (avoids e.g. disrupting long crimes too frequently)
         if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
