@@ -16,17 +16,17 @@ const argsSchema = [
     ['min-shock-recovery', 97], // Minimum shock recovery before attempting to train or do crime (Set to 100 to disable, 0 to recover fully)
     ['shock-recovery', 0.05], // Set to a number between 0 and 1 to devote that ratio of time to periodic shock recovery (until shock is at 0)
     ['crime', null], // If specified, sleeves will perform only this crime regardless of stats
-    ['homicide-chance-threshold', 0.5], // Sleeves will automatically start homicide once their chance of success succeeds this ratio
+    ['homicide-chance-threshold', 0.45], // Sleeves will automatically start homicide once their chance of success exceeds this ratio
     ['aug-budget', 0.1], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
     ['buy-cooldown', 60 * 1000], // Must wait this may milliseconds before buying more augs for a sleeve
     ['min-aug-batch', 20], // Must be able to afford at least this many augs before we pull the trigger (or fewer if buying all remaining augs)
     ['reserve', null], // Reserve this much cash before determining spending budgets (defaults to contents of reserve.txt if not specified)
     ['disable-follow-player', false], // Set to true to disable having Sleeve 0 work for the same faction/company as the player to boost re
     ['disable-training', false], // Set to true to disable having sleeves workout at the gym (costs money)
-    ['train-to-strength', 100], // Sleeves will go to the gym until they reach this much Str
-    ['train-to-defense', 100], // Sleeves will go to the gym until they reach this much Def
-    ['train-to-dexterity', 67], // Sleeves will go to the gym until they reach this much Dex
-    ['train-to-agility', 67], // Sleeves will go to the gym until they reach this much Agi
+    ['train-to-strength', 105], // Sleeves will go to the gym until they reach this much Str
+    ['train-to-defense', 105], // Sleeves will go to the gym until they reach this much Def
+    ['train-to-dexterity', 70], // Sleeves will go to the gym until they reach this much Dex
+    ['train-to-agility', 70], // Sleeves will go to the gym until they reach this much Agi
     ['training-reserve', null], // Defaults to global reserve.txt. Can be set to a negative number to allow debt. Sleeves will not train if money is below this amount.
     ['disable-spending-hashes-for-gym-upgrades', false], // Set to true to disable spending hashes on gym upgrades when training up sleeves.
 ];
