@@ -130,5 +130,4 @@ out
 .pnp.*
 
 # local additions
-helpers.js
-!dist/helpers.js
+# helpers.js

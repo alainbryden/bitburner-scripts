@@ -27,4 +27,4 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "**CI** Apply built files"
-          file_pattern: dist/**
+          file_pattern: helpers.js

@@ -1,8 +1,0 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
-# disable for CI
-[ -n "$CI" ] && exit 0
-
-[ -d dist ] && echo "please remove dist folder before committing" && exit 1
-exit 0
