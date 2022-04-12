@@ -391,7 +391,7 @@ async function beingInBladeburner(ns) {
                 log(ns, `Waiting for physical stats >100 to join bladeburner ` +
                     `(Currently Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility})`);
             else if (await getNsDataThroughFile(ns, 'ns.bladeburner.joinBladeburnerDivision()', '/Temp/bladeburner-join.txt')) {
-                let message = 'SUCCESS: Joined Bladeburner!';
+                let message = `SUCCESS: Joined Bladeburner (At ${formatDuration(player.playtimeSinceLastBitnode)} into BitNode)`;
                 if (9 in ownedSourceFiles) message += ' Consider running the following command to give it a boost:\n' +
                     'run spend-hacknet-hashes.js --spend-on Exchange_for_Bladeburner_Rank --spend-on Exchange_for_Bladeburner_SP --liquidate';
                 log(ns, message, true, 'success');
