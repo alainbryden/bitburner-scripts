@@ -94,7 +94,9 @@ async function mainLoop(ns) {
     playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
-    let canTrain = !options['disable-training'] && playerInfo.money > (options['training-reserve'] ||
+    // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
+    const costByNextLoop = interval / 1000 * task.filter(t => t.startsWith("train")).length * 12000; // TODO: Training cost/sec seems to be a bug. Should be 1/5 this ($2400/sec)
+    let canTrain = !options['disable-training'] && (playerInfo.money - costByNextLoop) > (options['training-reserve'] ||
         (promptedForTrainingBudget ? ns.read(trainingReserveFile) : undefined) || globalReserve);
     // If any sleeve is training at the gym, see if we can purchase a gym upgrade to help them
     if (canTrain && task.some(t => t.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
@@ -111,8 +113,10 @@ async function mainLoop(ns) {
             budget -= await manageSleeveAugs(ns, i, budget);
 
         // ASSIGN SLEEVE TASK
-        // If shock/sync just completed, and they were on that task, allow this sleeve to immediately be reassigned
-        if (sleeve.shock == 0 && task[i] == "recover from shock" || sleeve.sync == 100 && task[i] == "synchronize")
+        // These tasks should be immediately discontinued in certain conditions, even if it hasn't been 'minTaskWorkTime'
+        if (task[i] == "recover from shock" && sleeve.shock == 0 ||
+            task[i] == "synchronize" && sleeve.sync == 100 ||
+            task[i].startsWith("train") && !canTran)
             lastReassignTime[i] = 0;
         // Otherwise, don't change tasks if we've changed tasks recently (avoids e.g. disrupting long crimes too frequently)
         if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
@@ -149,7 +153,7 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
     if (canTrain) {
         let untrainedStats = trainStats.filter(stat => sleeve[stat] < options[`train-to-${stat}`]);
         if (untrainedStats.length > 0) {
-            if (playerInfo.money < 1E6 && !promptedForTrainingBudget)
+            if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
             var trainStat = untrainedStats.reduce((min, s) => sleeve[s] < sleeve[min] ? s : min, untrainedStats[0]);
             return [`train ${trainStat}`, `ns.sleeve.setToGymWorkout(${i}, 'Powerhouse Gym', '${trainStat}')`,
