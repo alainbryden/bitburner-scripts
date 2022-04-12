@@ -144,8 +144,8 @@ async function mainLoop(ns) {
     const limitedActions = [nextBlackOp].concat(operationNames).concat(contractNames);
     const populationActions = ["Undercover Operation", "Investigation", "Tracking"];
     const reservedActions = ["Raid", "Stealth Retirement Operation"].concat(populationActions
-        // Only reserve these actions if their count is below the configured reserve amount, scaled for how close we are to our final rank
-        .filter(a => getCount(a) <= (options['reserved-action-count'] * (1 - rank / maxRankNeeded))));
+        // Only reserve these actions if their count is below the configured reserve amount, scaled down as we approach our final rank (stop reserving at 99% of max rank)
+        .filter(a => getCount(a) <= (options['reserved-action-count'] * (1 - rank / (0.99 * maxRankNeeded)))));
     if (rank < blackOpsRanks[nextBlackOp]) reservedActions.push(nextBlackOp); // Remove blackop from "available actions" if we have insufficient rank.
     const unreservedActions = limitedActions.filter(o => !reservedActions.includes(o));
     //log(ns, 'Unreserved Action Counts: ' + unreservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
@@ -250,8 +250,12 @@ async function mainLoop(ns) {
         candidateActions = candidateActions.filter(a => getCount(a) > 0);
         // SPECIAL CASE: If we can complete the last bladeburner operation, leave it to the user (they may not be ready to leave the BN).
         if (remainingBlackOpsNames.length == 1 && minChance(nextBlackOp) > options['success-threshold']) {
-            if (!lastBlackOpReady) log(ns, "SUCCESS: Bladeburner is ready to undertake the last BlackOp when you are!", true, 'success')
-            lastBlackOpReady = true;
+            if (!lastBlackOpReady) { // If this is our first time discovering this, alert the user
+                const time = (await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).playtimeSinceLastBitnode;
+                log(ns, `SUCCESS: Bladeburner is ready to undertake the last BlackOp! (At ${formatDuration(time)})`, true, 'success');
+                ns.alert("Bladeburner is ready to undertake the last BlackOp (ends the bitnode)");
+                lastBlackOpReady = true;
+            }
             candidateActions = candidateActions.filter(a => a != nextBlackOp);
         }
 
