@@ -1,9 +1,7 @@
 name: Scheduled Merge Remote Action
-on: 
-  schedule:
-    - cron: '5 * * * *'
-    # scheduled for every hour
-
+on:
+  workflow_dispatch:
+  
 jobs:
   merge-upstream:
     runs-on: ubuntu-latest
@@ -18,4 +16,4 @@ jobs:
         with:
           upstream: alainbryden/bitburner-scripts      # set the upstream repo
           upstream-branch: main   # set the upstream branch to merge from
-          branch: upstream-merge          # set the branch to merge to
+          branch: upstream          # set the branch to merge to
