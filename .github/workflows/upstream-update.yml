@@ -1,9 +1,7 @@
 name: Scheduled Merge Remote Action
-on: 
-  schedule:
-    - cron: '5 * * * *'
-    # scheduled for every hour
-
+on:
+  workflow_dispatch:
+  
 jobs:
   merge-upstream:
     runs-on: ubuntu-latest
