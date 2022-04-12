@@ -523,7 +523,7 @@ const uniByCity = Object.fromEntries([["Aevum", "Summit University"], ["Sector-1
 /** @param {NS} ns */
 async function study(ns, focus, course, university = null) {
     if (!university) { // Auto-detect the university in our city
-        const playerCity = (await getPlayerInfo()).city;
+        const playerCity = (await getPlayerInfo(ns)).city;
         university = uniByCity[playerCity];
         if (!university) {
             announce(ns, `WARNING: Could not study ${course} because we are in city ${playerCity} without a university.`, 'warning');
