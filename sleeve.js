@@ -116,7 +116,7 @@ async function mainLoop(ns) {
         // These tasks should be immediately discontinued in certain conditions, even if it hasn't been 'minTaskWorkTime'
         if (task[i] == "recover from shock" && sleeve.shock == 0 ||
             task[i] == "synchronize" && sleeve.sync == 100 ||
-            task[i].startsWith("train") && !canTran)
+            task[i].startsWith("train") && !canTrain)
             lastReassignTime[i] = 0;
         // Otherwise, don't change tasks if we've changed tasks recently (avoids e.g. disrupting long crimes too frequently)
         if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
