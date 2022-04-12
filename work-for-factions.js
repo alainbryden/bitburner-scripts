@@ -12,6 +12,7 @@ const argsSchema = [
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 100E6], // Only be willing to pay for our studies if we have this much money
+    ['training-stat-per-multi-threshold', 50], // Heuristic: Only bother training stats if our mult/exp_mult for that stat are more than 1 per this many (50) stat levels we need.
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
     ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
@@ -387,7 +388,7 @@ async function earnFactionInvite(ns, factionName) {
         && !(reqHackingOrCombat.includes(factionName) && player.hacking >= requiredHackByFaction[factionName])) { // Some special-case factions (just 'Daedalus' for now) require *either* hacking *or* combat
         ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, ` +
             `Have Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility}`);
-        const em = requirement / 50; // Hack: A rough heuristic suggesting we need an additional x1 multi for every ~50 pysical stat points we wish to grind out in a reasonable amount of time. TODO: Be smarter
+        const em = requirement / options['training-stat-per-multi-threshold']; // Hack: A rough heuristic suggesting we need an additional x1 multi for every ~50 pysical stat points we wish to grind out in a reasonable amount of time. TODO: Be smarter
         if (!options['crime-focus'] && (player.strength_exp_mult * player.strength_mult < em || player.defense_exp_mult * player.defense_mult < em ||
             player.dexterity_exp_mult * player.dexterity_mult < em || player.agility_exp_mult * player.agility_mult < em))
             return ns.print("Physical mults / exp_mults are too low to increase stats in a reasonable amount of time");
@@ -403,7 +404,7 @@ async function earnFactionInvite(ns, factionName) {
         return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
     if ((requirement = requiredHackByFaction[factionName]) && player.hacking < requirement && !reqHackingOrCombat.includes(factionName)) {
         ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
-        const em = requirement / 50; // Hack: A rough heuristic suggesting we need an additional x1 multi for every ~50 pysical stat points we wish to grind out in a reasonable amount of time. TODO: Be smarter
+        const em = requirement / options['training-stat-per-multi-threshold'];
         if (player.hacking_exp_mult * player.hacking_mult < em)
             return ns.print(`Hacking mult ${formatNumberShort(player.hacking_mult)} and exp_mult ${formatNumberShort(player.hacking_exp_mult)} ` +
                 `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time.`);
