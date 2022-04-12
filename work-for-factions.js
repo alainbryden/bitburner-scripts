@@ -422,7 +422,7 @@ async function earnFactionInvite(ns, factionName) {
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
             studying = await study(ns, false, "Algorithms");
         } else if (uniByCity[player.city]) // Otherwise only go to free university if our city has a university
-            studying = await study(ns, false, "Computer Science");
+            studying = await study(ns, false, "Study Computer Science");
         else
             return ns.print(`You have insufficient money (${formatMoney(player.money)} < --pay-for-studies-threshold ${formatMoney(options['pay-for-studies-threshold'])})` +
                 ` to travel or pay for studies, and your current city ${player.city} does not have a university from which to take free computer science.`);
@@ -545,8 +545,8 @@ const uniByCity = Object.fromEntries([["Aevum", "Summit University"], ["Sector-1
 async function study(ns, focus, course, university = null) {
     if (options['no-studying'])
         return announce(ns, `WARNING: Could not study '${course}' because --no-studying is set.`, 'warning');
+    const playerCity = (await getPlayerInfo(ns)).city;
     if (!university) { // Auto-detect the university in our city
-        const playerCity = (await getPlayerInfo(ns)).city;
         university = uniByCity[playerCity];
         if (!university)
             return announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
