@@ -399,13 +399,9 @@ async function earnFactionInvite(ns, factionName) {
     if (doCrime)
         workedForInvite = await crimeForKillsKarmaStats(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
 
-    // Skip factions for which money requirements aren't met. There's not much we can do to earn money
-    if ((requirement = requiredMoneyByFaction[factionName]) && player.money < requirement)
-        return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
-
     // Study for hack levels if that's what's keeping us
     // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
-    let serverReqHackingLevel;
+    let serverReqHackingLevel = 0;
     if (requirement = requiredBackdoorByFaction[factionName]) {
         serverReqHackingLevel = await getServerRequiredHackLevel(ns, requirement);
         if (player.hacking < serverReqHackingLevel) {
@@ -416,17 +412,22 @@ async function earnFactionInvite(ns, factionName) {
     if (requirement && player.hacking < requirement) {
         ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
         const em = requirement / options['training-stat-per-multi-threshold'];
-        if (player.hacking_exp_mult * player.hacking_mult < em)
+        if (options['no-studying'])
+            return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
+        else if (player.hacking_exp_mult * player.hacking_mult < em)
             return ns.print(`Hacking mult ${formatNumberShort(player.hacking_mult)} and exp_mult ${formatNumberShort(player.hacking_exp_mult)} ` +
                 `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time.`);
+        let studying = false;
         if (player.money > options['pay-for-studies-threshold']) { // If we have sufficient money, pay for the best studies
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
-            workedForInvite = await study(ns, false, "Algorithms");
+            studying = await study(ns, false, "Algorithms");
         } else if (uniByCity[player.city]) // Otherwise only go to free university if our city has a university
-            workedForInvite = await study(ns, false, "Computer Science");
+            studying = await study(ns, false, "Computer Science");
         else
             return ns.print(`You have insufficient money (${formatMoney(player.money)} < --pay-for-studies-threshold ${formatMoney(options['pay-for-studies-threshold'])})` +
                 ` to travel or pay for studies, and your current city ${player.city} does not have a university from which to take free computer science.`);
+        if (studying)
+            workedForInvite = await monitorStudies(ns, 'hacking', requirement);
         // If we studied for hacking, and were awaiting a backdoor, spawn the backdoor script now  
         if (workedForInvite && serverReqHackingLevel) {
             player = await getPlayerInfo(ns);
@@ -437,6 +438,10 @@ async function earnFactionInvite(ns, factionName) {
         }
     }
     if (breakToMainLoop()) return false;
+
+    // Skip factions whose remaining requirement is money. There's not much we can do to earn money
+    if ((requirement = requiredMoneyByFaction[factionName]) && player.money < requirement)
+        return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
 
     // If travelling can help us join a faction - we can do that too
     player = await getPlayerInfo(ns);
@@ -451,6 +456,7 @@ async function earnFactionInvite(ns, factionName) {
         workedForInvite = true;
         player = await getPlayerInfo(ns);
     }
+
     // Special case, earn a CEO position to gain an invite to Silhouette
     if ("Silhouette" == factionName) {
         ns.print(`You must be a CO (e.g. CEO/CTO) of a company to earn an invite to ${factionName}. This may take a while!`);
@@ -537,13 +543,13 @@ const uniByCity = Object.fromEntries([["Aevum", "Summit University"], ["Sector-1
 
 /** @param {NS} ns */
 async function study(ns, focus, course, university = null) {
+    if (options['no-studying'])
+        return announce(ns, `WARNING: Could not study '${course}' because --no-studying is set.`, 'warning');
     if (!university) { // Auto-detect the university in our city
         const playerCity = (await getPlayerInfo(ns)).city;
         university = uniByCity[playerCity];
-        if (!university) {
-            announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
-            return false;
-        }
+        if (!university)
+            return announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
     }
     if (await getNsDataThroughFile(ns, `ns.universityCourse('${university}', '${course}', ${focus})`, '/Temp/study.txt')) {
         lastActionRestart = Date.now();
@@ -553,6 +559,27 @@ async function study(ns, focus, course, university = null) {
     announce(ns, `ERROR: For some reason, failed to study '${course}' at university '${university}' (Not in correct city? Player is in '${playerCity}')`, 'error');
     return false;
 }
+
+/** @param {NS} ns
+ * Helper to wait for studies to be complete */
+async function monitorStudies(ns, stat, requirement) {
+    let lastStatusUpdateTime = 0;
+    while (!breakToMainLoop()) {
+        const player = await getPlayerInfo(ns);
+        if (!player.className)
+            return announce(ns, 'WARNING: Somebody interrupted our studies.', 'warning');
+        if (player[stat] >= requirement) {
+            announce(ns, `SUCCESS: Achieved ${stat} level ${player[stat]} >= ${requirement} while studying`);
+            return true;
+        }
+        if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+            lastStatusUpdateTime = Date.now();
+            announce(ns, `Studying until ${stat} reaches ${requirement}. Currently at ${player[stat]}...`)
+        }
+        await ns.sleep(loopSleepInterval);
+    }
+}
+
 
 /** @param {NS} ns */
 export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000) {
