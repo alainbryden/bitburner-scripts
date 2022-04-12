@@ -136,12 +136,11 @@ export async function main(ns) {
     // Clear "priority" / "desired" lists of any augs we already own
     priorityAugs = priorityAugs.filter(name => !simulatedOwnedAugmentations.includes(name));
     desiredAugs = desiredAugs.filter(name => !simulatedOwnedAugmentations.includes(name));
-
     // Determine the set of desired augmentation stats. If not specified by the user, it's based on our situation
     desiredStatsFilters = options['stat-desired'];
     if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
         desiredStatsFilters = ownedAugmentations.length > 40 ? ['_'] : // Once we have more than 40 augs, switch to buying up anything and everything
-            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || factionData["Bladeburners"]?.joined ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
+            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || playerData.factions.includes("Bladeburners") ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
                 gangFaction ? ['hacking'] : // If in a gang (provider of all augs), we can focus on hacking augs only - we won't be grinding rep with corps/factions to unlock augs
                     ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
 
