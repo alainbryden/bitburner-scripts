@@ -695,7 +695,7 @@ function displayFactionSummary(ns, sortBy, unique, overrideFinishedFactions, exc
     // Apply any override faction options
     joinedFactions.push(...overrideFinishedFactions.filter(f => !joinedFactions.includes(f)));
     for (const faction of overrideFinishedFactions)
-        simulatedOwnedAugmentations.push(...factionData[faction].unownedAugmentations());
+        simulatedOwnedAugmentations.push(...factionData[faction]?.unownedAugmentations() || []);
     // Grab disctinct augmentations stats 
     const relevantAugStats = allAugStats.filter(s => !excludedStats.find(excl => s.includes(excl)) &&
         undefined !== summaryFactions.find(f => f.unownedAugmentations().find(aug => 1 != (augmentationData[aug].stats[s] || 1))));
