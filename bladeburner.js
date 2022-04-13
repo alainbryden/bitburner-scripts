@@ -101,7 +101,8 @@ async function gatherBladeburnerInfo(ns) {
         remainingBlackOpsNames.map(n => `${n} (${blackOpsRanks[n]})`).join(", "));
     maxRankNeeded = blackOpsRanks[remainingBlackOpsNames[remainingBlackOpsNames.length - 1]];
     // Check if we have the aug that lets us do bladeburner while otherwise busy
-    haveSimulacrum = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations().includes("${simulacrumAugName}")`, '/Temp/bladeburner-hasSimulacrum.txt');
+    haveSimulacrum = !(4 in ownedSourceFiles) ? true : // If player doesn't have SF4, we cannot check, so hope for the best.
+        await getNsDataThroughFile(ns, `ns.getOwnedAugmentations().includes("${simulacrumAugName}")`, '/Temp/bladeburner-hasSimulacrum.txt');
     // Initialize some flags that may change over time
     lastAssignedTask = null;
     lastBlackOpReady = false; // Flag will track whether we've notified the user that the last black-op is ready
@@ -404,7 +405,7 @@ async function beingInBladeburner(ns) {
             if (player.strength < 100 || player.defense < 100 || player.dexterity < 100 || player.agility < 100)
                 log(ns, `Waiting for physical stats >100 to join bladeburner ` +
                     `(Currently Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility})`);
-            else if (await getNsDataThroughFile(ns, 'ns.bladeburner.joinBladeburnerDivision()', '/Temp/bladeburner-join.txt')) {
+            else if (await getBBInfo(ns, 'joinBladeburnerDivision()')) {
                 let message = `SUCCESS: Joined Bladeburner (At ${formatDuration(player.playtimeSinceLastBitnode)} into BitNode)`;
                 if (9 in ownedSourceFiles && options['disable-spending-hashes'])
                     message += ' --disable-spending-hashes is set, but consider running the following command to give it a boost:\n' +
