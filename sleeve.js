@@ -1,4 +1,4 @@
-import { getNsDataThroughFile, runCommand, formatMoney, formatDuration, disableLogs, log } from './helpers.js'
+import { getActiveSourceFiles, getNsDataThroughFile, runCommand, formatMoney, formatDuration, disableLogs, log } from './helpers.js'
 
 const interval = 5000; // Uodate (tick) this often
 const minTaskWorkTime = 29000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
@@ -9,7 +9,7 @@ const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
 
 let cachedCrimeStats, workByFaction; // Cache of crime statistics and which factions support which work
 let task, lastStatusUpdateTime, lastPurchaseTime, lastPurchaseStatusUpdate, availableAugs, cacheExpiry, lastReassignTime; // State by sleeve
-let playerInfo, numSleeves;
+let playerInfo, numSleeves, ownedSourceFiles;
 let options;
 
 const argsSchema = [
@@ -43,13 +43,11 @@ export async function main(ns) {
     // Ensure the global state is reset (e.g. after entering a new bitnode)
     task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [], cacheExpiry = [], lastReassignTime = [];
     workByFaction = {}, cachedCrimeStats = {};
-
-    // Collect info that won't change or that we can track ourselves going forward
-    try { numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt'); }
-    catch { return ns.print("User does not appear to have access to sleeves. Exiting..."); }
-    for (let i = 0; i < numSleeves; i++)
-        availableAugs[i] = null;
-
+    // Ensure we have access to sleeves
+    ownedSourceFiles = await getActiveSourceFiles(ns);
+    if (!(10 in ownedSourceFiles))
+        return ns.tprint("WARNING: You cannot run sleeve.js until you do BN10.");
+    // Start the main loop
     while (true) {
         try { await mainLoop(ns); }
         catch (error) {
@@ -91,7 +89,9 @@ async function manageSleeveAugs(ns, i, budget) {
 /** @param {NS} ns 
  * Main loop that gathers data, checks on all sleeves, and manages them. */
 async function mainLoop(ns) {
-    playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
+    // Update info
+    numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
+    playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
     // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
@@ -218,15 +218,20 @@ async function promptForTrainingBudget(ns) {
 /** @param {NS} ns 
  * Calculate the chance a sleeve has of committing homicide successfully. */
 async function calculateCrimeChance(ns, sleeve, crimeName) {
-    const crimeStats = cachedCrimeStats[crimeName] ?? // If not in the cache, retrieve this crime's stats
-        (cachedCrimeStats[crimeName] = await getNsDataThroughFile(ns, `ns.getCrimeStats("${crimeName}")`, '/Temp/get-crime-stats.txt'));
+    // If not in the cache, retrieve this crime's stats
+    const crimeStats = cachedCrimeStats[crimeName] ?? (cachedCrimeStats[crimeName] = (4 in ownedSourceFiles ?
+        await getNsDataThroughFile(ns, `ns.getCrimeStats("${crimeName}")`, '/Temp/get-crime-stats.txt') :
+        // Hack: To support players without SF4, hard-code values as of the current release
+        crimeName == "homicide" ? { difficulty: 1, strength_success_weight: 2, defense_success_weight: 2, dexterity_success_weight: 0.5, agility_success_weight: 0.5 } :
+            crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :
+                undefined));
     let chance =
-        crimeStats.hacking_success_weight * sleeve['hacking'] +
-        crimeStats.strength_success_weight * sleeve.strength +
-        crimeStats.defense_success_weight * sleeve.defense +
-        crimeStats.dexterity_success_weight * sleeve.dexterity +
-        crimeStats.agility_success_weight * sleeve.agility +
-        crimeStats.charisma_success_weight * sleeve.charisma;
+        (crimeStats.hacking_success_weight || 0) * sleeve.hacking +
+        (crimeStats.strength_success_weight || 0) * sleeve.strength +
+        (crimeStats.defense_success_weight || 0) * sleeve.defense +
+        (crimeStats.dexterity_success_weight || 0) * sleeve.dexterity +
+        (crimeStats.agility_success_weight || 0) * sleeve.agility +
+        (crimeStats.charisma_success_weight || 0) * sleeve.charisma;
     chance /= 975;
     chance /= crimeStats.difficulty;
     return Math.min(chance, 1);
