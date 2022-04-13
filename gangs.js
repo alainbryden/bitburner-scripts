@@ -107,7 +107,7 @@ async function initialize(ns) {
 
     // If possible, determine how much rep we would need to get the most expensive unowned augmentation
     const sf4Level = ownedSourceFiles[4] || 0;
-    requiredRep = -1;
+    requiredRep = 2.5e6;
     if (sf4Level == 0)
         log(ns, `INFO: SF4 required to get gang augmentation info. Defaulting to assuming ~2.5 million rep is desired.`);
     else {
@@ -126,8 +126,6 @@ async function initialize(ns) {
                 `Proceeding with the default assumption that ~2.5 million rep is desired.`);
         }
     }
-    if (requiredRep == -1)
-        requiredRep = 2.5e6
 
     // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when gang income is severely nerfed)
     if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8) {
