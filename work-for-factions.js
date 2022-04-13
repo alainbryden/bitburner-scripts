@@ -110,7 +110,7 @@ export async function main(ns) {
         return log(ns, "ERROR: Cannot use --no-focus and --crime-focus at the same time. You need to focus to do crime!", true, 'error');
     // Default desired-stats if none were specified
     if (options['desired-stats'].length == 0)
-        options['desired-stats'] = options['crime-focus'] ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacking', 'hacknet', 'crime'] :
+        options['desired-stats'] = options['crime-focus'] ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacknet', 'crime'] :
             ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']
 
     // Log some of the options in effect
@@ -501,7 +501,7 @@ async function goToCity(ns, cityName) {
 export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, crimeCommand = null, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
-    doFastCrimesOnly = doFastCrimesOnly || options['fast-crimes-only'];
+    doFastCrimesOnly = doFastCrimesOnly || options ? options['fast-crimes-only'] : false;
     if (!crimeCommand) crimeCommand = async crime => await getNsDataThroughFile(ns, `ns.commitCrime('${crime}')`, '/Temp/crime-time.txt');
     let player = await getPlayerInfo(ns);
     let strRequirements = [];
@@ -671,7 +671,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     let currentReputation = await getFactionReputation(ns, factionName);
     // If the best faction aug is within 10% of our current rep, grind all the way to it so we can get it immediately, regardless of our current rep target
     if (forceBestAug || highestRepAug <= 1.1 * Math.max(currentReputation, factionRepRequired)) {
-        forceBestAug = true;
+        // forceBestAug = true; //TODO: I'm almost positive we don't want to set this flag.
         factionRepRequired = Math.max(highestRepAug, factionRepRequired);
     }
 
