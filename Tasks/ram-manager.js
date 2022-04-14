@@ -1,8 +1,6 @@
 import { formatMoney, formatRam } from './helpers.js'
 
 const max_ram = 2 ** 30;
-
-let options;
 const argsSchema = [
     ['budget', 0.2], // Spend up to this much of current cash on ram upgrades per tick (Default is high, because these are permanent for the rest of the BN)
     ['reserve', null], // Reserve this much cash before determining spending budgets (defaults to contents of reserve.txt if not specified)
@@ -15,7 +13,7 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    options = ns.flags(argsSchema);
+    const options = ns.flags(argsSchema);
     const reserve = (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
     const money = ns.getServerMoneyAvailable("home");
     let spendable = Math.min(money - reserve, money * options.budget);

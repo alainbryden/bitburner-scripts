@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, tryGetBitNodeMultipliers, getNsDataThroughFile, scanAllServers, log } from './helpers.js'
+import { formatMoney, formatRam, instanceCount, getNsDataThroughFile, scanAllServers, log } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -36,6 +36,7 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
+    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     ns.disableLog('ALL')
     options = ns.flags(argsSchema);
 

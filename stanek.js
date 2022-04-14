@@ -1,4 +1,4 @@
-import { log, disableLogs, getFilePath, getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, formatNumberShort } from './helpers.js'
+import { log, disableLogs, getFilePath, instanceCount, getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, formatNumberShort } from './helpers.js'
 
 // Default sripts called at startup and shutdown of stanek
 const defaultStartupScript = getFilePath('daemon.js');
@@ -35,6 +35,7 @@ export function autocomplete(data, args) {
  * IMPORTANT: You should have no other scripts running on home while you do this.
  * NOTE: Stanek stats benefit more from fewer charges with a high avg RAM used per charge, rather than just more charges. **/
 export async function main(ns) {
+    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     disableLogs(ns, ['sleep', 'run', 'getServerMaxRam', 'getServerUsedRam'])
     options = ns.flags(argsSchema);
     let currentServer = ns.getHostname();

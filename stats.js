@@ -1,4 +1,4 @@
-import { formatNumberShort, formatMoney, getNsDataThroughFile, getActiveSourceFiles, disableLogs } from './helpers.js'
+import { formatNumberShort, formatMoney, instanceCount, getNsDataThroughFile, getActiveSourceFiles, disableLogs } from './helpers.js'
 
 const argsSchema = [
     ['hide-stocks', false],
@@ -12,6 +12,7 @@ export function autocomplete(data, args) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
+    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     const options = ns.flags(argsSchema);
     const doc = eval('document');
     const hook0 = doc.getElementById('overview-extra-hook-0');

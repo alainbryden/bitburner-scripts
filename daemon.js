@@ -164,8 +164,6 @@ export function autocomplete(data, args) {
 // script entry point
 /** @param {NS} ns **/
 export async function main(ns) {
-    _ns = ns;
-    disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan', 'asleep']);
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
 
     // Ensure no other copies of this script are running (they share memory)
@@ -178,6 +176,8 @@ export async function main(ns) {
         await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), killPid);
     }
 
+    _ns = ns;
+    disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan', 'asleep']);
     // Reset global vars on startup since they persist in memory in certain situations (such as on Augmentation)
     lastUpdate = "";
     lastUpdateTime = Date.now();

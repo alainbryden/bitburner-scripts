@@ -26,7 +26,9 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** @param {NS} ns **/
+/** @param {NS} ns 
+ * Executes instructions to spend hacknet hashes continuously.
+ * NOTE: This script is written to support multiple concurrent instances running with different arguments. **/
 export async function main(ns) {
     const options = ns.flags(argsSchema);
     const liquidate = options.l || options.liquidate;

@@ -1,6 +1,6 @@
 import {
     formatMoney, formatNumberShort, formatDuration,
-    getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers
+    instanceCount, getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers
 } from './helpers.js'
 
 let disableShorts = false;
@@ -67,9 +67,19 @@ export function autocomplete(data, args) {
 /** Requires access to the TIX API. Purchases access to the 4S Mkt Data API as soon as it can 
  * @param {NS} ns */
 export async function main(ns) {
+    const localOptions = ns.flags(argsSchema); // Don't set the global "options" until we're sure we aren't conflicting with another instance.
+    // If given the "liquidate" command, try to kill any versions of this script trading in stocks
+    if (localOptions.l || localOptions.liquidate) {
+        await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
+            `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-stockmarket-scripts.js');
+        await liquidate(ns); // Sell all stocks
+        return;
+    } // Otherwise, prevent multiple instances of this script from being started, even with different args.
+    if (await instanceCount(ns) > 1) return;
+
     ns.disableLog("ALL");
     // Extract various options from the args (globals, purchasing decision factors, pre-4s factors)
-    options = ns.flags(argsSchema);
+    options = localOptions;
     mock = options.mock;
     noisy = options.noisy;
     const fracB = options.fracB;
@@ -91,28 +101,14 @@ export async function main(ns) {
     if (!ns.getPlayer().hasTixApiAccess) // You cannot use the stockmaster until you have API access
         return log(ns, "ERROR: You have to buy stock market access and API access before you can run this script!", true);
 
-    if (options.l || options.liquidate) // If given the "liquidate" command, try to kill the version of ourself trading in stocks
-        await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
-            `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-script.js');
-
     dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!disableShorts && (!(8 in dictSourceFiles) || dictSourceFiles[8] < 2)) {
         log(ns, "INFO: Shorting stocks has been disabled (you have not yet unlocked access to shorting)");
         disableShorts = true;
     }
 
-    allStockSymbols = await getNsDataThroughFile(ns, 'ns.stock.getSymbols()', '/Temp/stock-symbols.txt');
+    allStockSymbols = await getAllStockSymbols(ns);
     allStocks = await initAllStocks(ns, allStockSymbols);
-
-    if (options.l || options.liquidate) {
-        await liquidate(ns, allStockSymbols); // Sell all stocks
-        return;
-    } else if (!options.mock) { // If we're not liquidating or in mock mode, we MUST not run two stockmasters at once, or chaos will ensue
-        let otherStockmasters = (await getNsDataThroughFile(ns, `ns.ps()`, '/Temp/process-list.txt')).filter(p => p.filename == ns.getScriptName()); // TODO: For bonus points, check all servers
-        otherStockmasters = otherStockmasters.filter(p => JSON.stringify(ns.args) != JSON.stringify(p.args)); // Don't detect ourselves of course.
-        if (otherStockmasters.some(p => !p.args.includes("--mock"))) // Exception, feel free to run multiple stockmasters in mock mode
-            return log(ns, `ERROR: Another version of ${ns.getScriptName()} is already running with different args. Running twice is a bad idea!`, true, 'error');
-    }
 
     let bitnodeMults;
     if (5 in dictSourceFiles) bitnodeMults = await tryGetBitNodeMultipliers(ns);
@@ -211,6 +207,12 @@ export async function main(ns) {
         }
         await ns.sleep(sleepInterval);
     }
+}
+
+/** @param {NS} ns
+ * Ram-dodging helper to get an array of all stock symbols in the game */
+export async function getAllStockSymbols(ns) {
+    return await getNsDataThroughFile(ns, 'ns.stock.getSymbols()', '/Temp/stock-symbols.txt');
 }
 
 /* A sorting function to put stocks in the order we should prioritize investing in them */
@@ -499,7 +501,8 @@ function doStatusUpdate(ns, stocks, myStocks, hudElement = null) {
 }
 
 /** @param {NS} ns **/
-async function liquidate(ns, allStockSymbols) {
+async function liquidate(ns, allStockSymbols = null) {
+    if (!allStockSymbols) allStockSymbols = await getAllStockSymbols(ns);
     let totalStocks = 0, totalSharesLong = 0, totalSharesShort = 0, totalRevenue = 0;
     const dictPositions = mock ? null : await getStockInfoDict(ns, 'getPosition');
     for (const sym of allStockSymbols) {
