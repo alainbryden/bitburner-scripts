@@ -6,7 +6,7 @@ import { getNsDataThroughFile, runCommand } from './helpers.js'
  **/
 export async function main(ns) {
     const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/purchased-servers.txt');
-    if (!purchasedServers)
+    if (purchasedServers.length === 0)
         return ns.tprint("Nothing to delete - you have purchased no servers.");
 
     const minServer = purchasedServers.reduce((minServer, currServer) => {
