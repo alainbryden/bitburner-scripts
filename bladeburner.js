@@ -302,6 +302,8 @@ async function mainLoop(ns) {
 
     // Detect our current action (API returns an object like { "type":"Operation", "name":"Investigation" })
     const currentAction = await getBBInfo(ns, `getCurrentAction()`);
+    // Special case: If the user has manually kicked off the last BlackOps, don't interrupt it, let it be our last task
+    if (currentAction?.name == remainingBlackOpsNames[remainingBlackOpsNames - 1]) lastAssignedTask = currentAction;
     // Warn the user if it looks like a task was interrupted by something else (user activity or bladeburner automation). Ignore if our last assigned task has run out of actions.
     if (lastAssignedTask && lastAssignedTask != currentAction?.name && getCount(lastAssignedTask) > 0) {
         log(ns, `WARNING: The last task this script assigned was "${lastAssignedTask}", but you're now doing "${currentAction?.name || '(nothing)'}". ` +
@@ -327,8 +329,9 @@ async function mainLoop(ns) {
         operationNames.includes(bestActionName) ? "Operation" : "General Action";
     const success = await getBBInfo(ns, `startAction(ns.args[0], ns.args[1])`, bestActionType, bestActionName);
     const expectedDuration = await getBBInfo(ns, `getActionTime(ns.args[0], ns.args[1])`, bestActionType, bestActionName);
-    log(ns, (!success ? `ERROR: Failed to switch to Bladeburner ${bestActionType} "${bestActionName}"` :
-        `INFO: Switched to Bladeburner ${bestActionType} "${bestActionName}" (${reason}). ETA: ${formatDuration(expectedDuration)}`),
+    log(ns, (success ? `INFO: Switched to Bladeburner ${bestActionType} "${bestActionName}" (${reason}). ETA: ${formatDuration(expectedDuration)}` :
+        `ERROR: Failed to switch to Bladeburner ${bestActionType} "${bestActionName}" (Count: ${getCount(bestActionName)}, ` +
+        `ETA: ${formatDuration(expectedDuration)}, Details: ${reason})`),
         !success, success ? (options['toast-operations'] ? 'info' : undefined) : 'error');
     // Ensure we perform this new action at least once before interrupting it
     lastAssignedTask = bestActionName;
