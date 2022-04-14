@@ -3,9 +3,9 @@ import { formatMoney, formatNumberShort, getNsDataThroughFile, getActiveSourceFi
 // Global config
 const updateInterval = 200; // We can improve our timing by updating more often than gang stats do (which is every 2 seconds for stats, every 20 seconds for territory)
 const wantedPenaltyThreshold = 0.0001; // Don't let the wanted penalty get worse than this
-let defaultMaxSpendPerTickTransientEquipment = 0.002; // If the --equipment-budget is not specified, spend up to this percent of non-reserved cash on temporary upgrades (equipment)
-let defaultMaxSpendPerTickPermanentEquipment = 0.2; // If the --augmentation-budget is not specified, spend up to this percent of non-reserved cash on permanent member upgrades
 const offStatCostPenalty = 50; // Equipment that doesn't contribute to our main stats suffers a percieved cost penalty of this multiple
+const defaultMaxSpendPerTickTransientEquipment = 0.002; // If the --equipment-budget is not specified, spend up to this percent of non-reserved cash on temporary upgrades (equipment)
+const defaultMaxSpendPerTickPermanentEquipment = 0.2; // If the --augmentation-budget is not specified, spend up to this percent of non-reserved cash on permanent member upgrades
 
 // Territory-related variables
 const gangsByPower = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Tetrads", "Slum Snakes", /* Hack gangs don't scale as far */ "The Black Hand", /* "NiteSec" Been there, not fun. */]
@@ -125,12 +125,6 @@ async function initialize(ns) {
             log(ns, `WARNING: Failed to get augmentation info despite having SF4.${sf4Level}. This may be due to you having insufficient RAM to launch the temporary scripts. ` +
                 `Proceeding with the default assumption that ~2.5 million rep is desired.`);
         }
-    }
-
-    // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when gang income is severely nerfed)
-    if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8) {
-        defaultMaxSpendPerTickPermanentEquipment /= 100;
-        defaultMaxSpendPerTickTransientEquipment /= 100;;
     }
 
     // Initialize equipment information
@@ -403,10 +397,16 @@ async function tryUpgradeMembers(ns, dictMembers) {
     const maxBudget = 0.99; // Note: To avoid rounding issues and micro-spend race-conditions, only allow budgeting up to 99% of money per tick
     let budget = Math.min(maxBudget, (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment)) * homeMoney;
     let augBudget = Math.min(maxBudget, (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment)) * homeMoney;
-    if (budget <= 0) return;
+    // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when BitnodeMults are such that gang income is severely nerfed)
+    if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8) {
+        budget /= 100;
+        augBudget /= 100;
+    }
     // Find out what outstanding equipment can be bought within our budget
     for (const equip of equipments) {
+        if (augBudget <= 0) break;
         for (const member of Object.values(dictMembers)) { // Get this equip for each member before considering the next most expensive equip
+            if (augBudget <= 0) break;
             // Bit of a hack: Inflate the "cost" of equipment that doesn't contribute to our main stats so that we don't purchase them unless we have ample cash
             let percievedCost = equip.cost * (Object.keys(equip.stats).some(stat => importantStats.some(i => stat.includes(i))) ? 1 : offStatCostPenalty);
             if (percievedCost > augBudget) continue;
