@@ -409,7 +409,9 @@ async function earnFactionInvite(ns, factionName) {
         }
     }
     requirement = Math.max(serverReqHackingLevel, requiredHackByFaction[factionName] || 0)
-    if (requirement && player.hacking < requirement) {
+    if (requirement && player.hacking < requirement &&
+        // Special case (Daedalus): Don't grind for hack requirement if we previously did a grind for the physical requirements
+        !(reqHackingOrCombat.includes(factionName) && workedForInvite)) {
         ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
         const em = requirement / options['training-stat-per-multi-threshold'];
         if (options['no-studying'])
