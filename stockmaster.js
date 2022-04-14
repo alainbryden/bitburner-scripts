@@ -68,6 +68,7 @@ export function autocomplete(data, args) {
  * @param {NS} ns */
 export async function main(ns) {
     const localOptions = ns.flags(argsSchema); // Don't set the global "options" until we're sure we aren't conflicting with another instance.
+    allStockSymbols = await getAllStockSymbols(ns);
     // If given the "liquidate" command, try to kill any versions of this script trading in stocks
     if (localOptions.l || localOptions.liquidate) {
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
@@ -107,7 +108,6 @@ export async function main(ns) {
         disableShorts = true;
     }
 
-    allStockSymbols = await getAllStockSymbols(ns);
     allStocks = await initAllStocks(ns, allStockSymbols);
 
     let bitnodeMults;
@@ -218,9 +218,10 @@ export async function getAllStockSymbols(ns) {
 /* A sorting function to put stocks in the order we should prioritize investing in them */
 let purchaseOrder = (a, b) => (Math.ceil(a.timeToCoverTheSpread()) - Math.ceil(b.timeToCoverTheSpread())) || (b.absReturn() - a.absReturn());
 
-/* Generic helper for dodging the hefty RAM requirements of stock functions by spawning a temporary script to collect info for us. */
-let getStockInfoDict = async (ns, stockFuncion) => await getNsDataThroughFile(ns,
-    `Object.fromEntries(${JSON.stringify(allStockSymbols)}.map(sym => [sym, ns.stock.${stockFuncion}(sym)]))`, `/Temp/stock-${stockFuncion}.txt`);
+/* Generic helper for dodging the hefty RAM requirements of stock functions by spawning a temporary script to collect info for us.
+ Relies on the global variable 'allStockSymbols' being populated. */
+let getStockInfoDict = async (ns, stockFunction) => await getNsDataThroughFile(ns,
+    `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${stockFunction}(sym)]))`, `/Temp/stock-${stockFunction}.txt`, allStockSymbols);
 
 /** @param {NS} ns **/
 async function initAllStocks(ns, allStockSymbols) {
@@ -501,8 +502,8 @@ function doStatusUpdate(ns, stocks, myStocks, hudElement = null) {
 }
 
 /** @param {NS} ns **/
-async function liquidate(ns, allStockSymbols = null) {
-    if (!allStockSymbols) allStockSymbols = await getAllStockSymbols(ns);
+async function liquidate(ns) {
+    if (!allStockSymbols) allStockSymbols = await getAllStockSymbols(ns); // If the global property allStockSymbols hasn't been initialized, do so now
     let totalStocks = 0, totalSharesLong = 0, totalSharesShort = 0, totalRevenue = 0;
     const dictPositions = mock ? null : await getStockInfoDict(ns, 'getPosition');
     for (const sym of allStockSymbols) {
