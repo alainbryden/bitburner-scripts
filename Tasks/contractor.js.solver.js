@@ -1,5 +1,8 @@
 const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
 
+//Silly human, you can't import a typescript module into a javascript 
+//import { codingContractTypesMetadata } from 'https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts'
+
 // This contract solver has the bare-minimum footprint of 1.6 GB (base) + 10 GB (ns.codingcontract.attempt)
 // It does this by requiring all contract information being gathered in advance and passed in as a JSON blob argument.
 // TODO: Pull solvers directly from https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts
