@@ -1,7 +1,9 @@
 import { getNsDataThroughFile, runCommand } from './helpers.js'
 
-/** @param {NS} ns
-* Remove the worst server we own (RAM) **/
+/** 
+ * Remove the worst owned server respective of RAM
+ * @param {NS} ns
+ **/
 export async function main(ns) {
     const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/purchased-servers.txt');
     if (!purchasedServers)
