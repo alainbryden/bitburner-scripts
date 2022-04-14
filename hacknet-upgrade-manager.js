@@ -1,8 +1,6 @@
-import { disableLogs, formatDuration, formatMoney } from './helpers.js'
+import { disableLogs, formatDuration, formatMoney, } from './helpers.js'
 
-let haveHacknetServers = true;
-let haveFormulas = true;
-let options;
+let haveHacknetServers = true; // Cached flag after detecting whether we do (or don't) have hacknet servers
 const argsSchema = [
     ['max-payoff-time', '1h'], // Controls how far to upgrade hacknets. Can be a number of seconds, or an expression of minutes/hours (e.g. '123m', '4h')
     ['time', null], // alias for max-payoff-time
@@ -22,7 +20,7 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    options = ns.flags(argsSchema);
+    const options = ns.flags(argsSchema);
     const continuous = options.c || options.continuous;
     const interval = options.interval;
     let maxSpend = options["max-spend"];
@@ -39,7 +37,7 @@ export async function main(ns) {
         (maxSpend == Number.MAX_VALUE ? 'no spending limit' : `a spend limit of ${formatMoney(maxSpend)}`) +
         `. Current fleet: ${ns.hacknet.numNodes()} nodes...`);
     do {
-        const moneySpent = upgradeHacknet(ns, maxSpend, maxPayoffTime);
+        const moneySpent = upgradeHacknet(ns, maxSpend, maxPayoffTime, options);
         // Using this method, we cannot know for sure that we don't have hacknet servers until we have purchased one
         if (haveHacknetServers && ns.hacknet.numNodes() > 0 && ns.hacknet.hashCapacity() == 0)
             haveHacknetServers = false;
@@ -57,7 +55,7 @@ function log(ns, logMessage) { if (logMessage != lastUpgradeLog) ns.print(lastUp
 
 // Will buy the most effective hacknet upgrade, so long as it will pay for itself in the next {payoffTimeSeconds} seconds.
 /** @param {NS} ns **/
-export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600 sec == 1 hour */) {
+export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600 sec == 1 hour */, options) {
     const currentHacknetMult = ns.getPlayer().hacknet_node_money_mult;
     // Get the lowest cache level, we do not consider upgrading the cache level of servers above this until all have the same cache level
     const minCacheLevel = [...Array(ns.hacknet.numNodes()).keys()].reduce((min, i) => Math.min(min, ns.hacknet.getNodeStats(i).cache), Number.MAX_VALUE);
@@ -84,9 +82,9 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
     let worstNodeProduction = Number.MAX_VALUE; // Used to how productive a newly purchased node might be
     for (var i = 0; i < ns.hacknet.numNodes(); i++) {
         let nodeStats = ns.hacknet.getNodeStats(i);
-        if (haveFormulas && haveHacknetServers) { // When a hacknet server runs scripts, nodeStats.production lags behind what it should be for current ram usage. Get the "raw" rate
+        if (haveHacknetServers) { // When a hacknet server runs scripts, nodeStats.production lags behind what it should be for current ram usage. Get the "raw" rate
             try { nodeStats.production = ns.formulas.hacknetServers.hashGainRate(nodeStats.level, 0, nodeStats.ram, nodeStats.cores, currentHacknetMult); }
-            catch { haveFormulas = false; }
+            catch { /* If we do not have the formulas API yet, we cannot account for this and must simply fall-back to using the production reported by the node */ }
         }
         worstNodeProduction = Math.min(worstNodeProduction, nodeStats.production);
         for (let up = 1; up < upgrades.length; up++) {
@@ -130,7 +128,7 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
         return false; // Shut-down. As long as maxPayoffTimeSeconds doesn't change, we will never purchase another upgrade
     }
     const reserve = (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
-    const playerMoney = ns.getServerMoneyAvailable("home");
+    const playerMoney = ns.getPlayer().money;
     if (cost > playerMoney - reserve) {
         log(ns, `The next best purchase would be ${strPurchase}, but the cost exceeds the our ` +
             `current available funds` + (reserve == 0 ? '.' : ` (after reserving ${formatMoney(reserve)}).`));
