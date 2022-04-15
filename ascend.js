@@ -1,6 +1,6 @@
 import { getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
 
-const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeves.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']
+const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeve.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']
     .map(s => getFilePath(s));
 
 const argsSchema = [
