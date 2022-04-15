@@ -54,6 +54,7 @@ export function formatDateTime(datetime) { return datetime.toISOString(); }
 /** Format a duration (in milliseconds) as e.g. '1h 21m 6s' for big durations or e.g '12.5s' / '23ms' for small durations */
 export function formatDuration(duration) {
     if (duration < 1000) return `${duration.toFixed(0)}ms`
+    if (!isFinite(duration)) return 'forever (Infinity)'
     const portions = [];
     const msInHour = 1000 * 60 * 60;
     const hours = Math.trunc(duration / msInHour);
