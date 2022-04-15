@@ -10,7 +10,7 @@ const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persiste
 export async function main(ns) {
     if (ns.args.length < 1)
         ns.tprint('Contractor solver was incorrectly invoked without arguments.')
-    var contractsDb = JSON.parse(ns.args[0]);
+    let contractsDb = JSON.parse(ns.args[0]);
     const fContents = ns.read(fUnsolvedContracts);
     const notified = fContents ? JSON.parse(fContents) : [];
     for (const contractInfo of contractsDb) {
@@ -48,9 +48,9 @@ function findAnswer(contract) {
 }
 
 function convert2DArrayToString(arr) {
-    var components = []
+    const components = []
     arr.forEach(function (e) {
-        var s = e.toString()
+        let s = e.toString()
         s = ['[', s, ']'].join('')
         components.push(s)
     })
@@ -61,8 +61,8 @@ function convert2DArrayToString(arr) {
 const codingContractTypesMetadata = [{
     name: 'Find Largest Prime Factor',
     solver: function (data) {
-        var fac = 2
-        var n = data
+        let fac = 2
+        let n = data
         while (n > (fac - 1) * (fac - 1)) {
             while (n % fac === 0) {
                 n = Math.round(n / fac)
@@ -75,8 +75,8 @@ const codingContractTypesMetadata = [{
 {
     name: 'Subarray with Maximum Sum',
     solver: function (data) {
-        var nums = data.slice()
-        for (var i = 1; i < nums.length; i++) {
+        const nums = data.slice()
+        for (let i = 1; i < nums.length; i++) {
             nums[i] = Math.max(nums[i], nums[i] + nums[i - 1])
         }
         return Math.max.apply(Math, nums)
@@ -85,11 +85,11 @@ const codingContractTypesMetadata = [{
 {
     name: 'Total Ways to Sum',
     solver: function (data) {
-        var ways = [1]
+        const ways = [1]
         ways.length = data + 1
         ways.fill(0, 1)
-        for (var i = 1; i < data; ++i) {
-            for (var j = i; j <= data; ++j) {
+        for (let i = 1; i < data; ++i) {
+            for (let j = i; j <= data; ++j) {
                 ways[j] += ways[j - i]
             }
         }
@@ -114,18 +114,18 @@ const codingContractTypesMetadata = [{
 },
 {
     name: 'Spiralize Matrix',
-    solver: function (data, ans) {
-        var spiral = []
-        var m = data.length
-        var n = data[0].length
-        var u = 0
-        var d = m - 1
-        var l = 0
-        var r = n - 1
-        var k = 0
+    solver: function (data) {
+        const spiral = []
+        const m = data.length
+        const n = data[0].length
+        let u = 0
+        let d = m - 1
+        let l = 0
+        let r = n - 1
+        let k = 0
         while (true) {
             // Up
-            for (var col = l; col <= r; col++) {
+            for (let col = l; col <= r; col++) {
                 spiral[k] = data[u][col]
                 ++k
             }
@@ -133,7 +133,7 @@ const codingContractTypesMetadata = [{
                 break
             }
             // Right
-            for (var row = u; row <= d; row++) {
+            for (let row = u; row <= d; row++) {
                 spiral[k] = data[row][r]
                 ++k
             }
@@ -141,7 +141,7 @@ const codingContractTypesMetadata = [{
                 break
             }
             // Down
-            for (var col = r; col >= l; col--) {
+            for (let col = r; col >= l; col--) {
                 spiral[k] = data[d][col]
                 ++k
             }
@@ -149,7 +149,7 @@ const codingContractTypesMetadata = [{
                 break
             }
             // Left
-            for (var row = d; row >= u; row--) {
+            for (let row = d; row >= u; row--) {
                 spiral[k] = data[row][l]
                 ++k
             }
@@ -164,12 +164,12 @@ const codingContractTypesMetadata = [{
 {
     name: 'Array Jumping Game',
     solver: function (data) {
-        var n = data.length
-        var i = 0
-        for (var reach = 0; i < n && i <= reach; ++i) {
+        const n = data.length
+        let i = 0
+        for (let reach = 0; i < n && i <= reach; ++i) {
             reach = Math.max(i + data[i], reach)
         }
-        var solution = i === n
+        const solution = i === n
         return solution ? 1 : 0
     },
 },
@@ -201,15 +201,14 @@ const codingContractTypesMetadata = [{
 {
     name: 'Merge Overlapping Intervals',
     solver: function (data) {
-        var intervals = data.slice()
+        const intervals = data.slice()
         intervals.sort(function (a, b) {
             return a[0] - b[0]
         })
-        var result = []
-        var start = intervals[0][0]
-        var end = intervals[0][1]
-        for (var i = 0, intervals_1 = intervals; i < intervals_1.length; i++) {
-            var interval = intervals_1[i]
+        const result = []
+        let  start = intervals[0][0]
+        let  end = intervals[0][1]
+        for (const interval of intervals) {
             if (interval[0] <= end) {
                 end = Math.max(end, interval[1])
             } else {
@@ -219,25 +218,25 @@ const codingContractTypesMetadata = [{
             }
         }
         result.push([start, end])
-        var sanitizedResult = convert2DArrayToString(result)
+        const sanitizedResult = convert2DArrayToString(result)
         return sanitizedResult
     },
 },
 {
     name: 'Generate IP Addresses',
-    solver: function (data, ans) {
-        var ret = []
-        for (var a = 1; a <= 3; ++a) {
-            for (var b = 1; b <= 3; ++b) {
-                for (var c = 1; c <= 3; ++c) {
-                    for (var d = 1; d <= 3; ++d) {
+    solver: function (data) {
+        const  ret = []
+        for (let a = 1; a <= 3; ++a) {
+            for (let b = 1; b <= 3; ++b) {
+                for (let c = 1; c <= 3; ++c) {
+                    for (let d = 1; d <= 3; ++d) {
                         if (a + b + c + d === data.length) {
-                            var A = parseInt(data.substring(0, a), 10)
-                            var B = parseInt(data.substring(a, a + b), 10)
-                            var C = parseInt(data.substring(a + b, a + b + c), 10)
-                            var D = parseInt(data.substring(a + b + c, a + b + c + d), 10)
+                            const A = parseInt(data.substring(0, a), 10)
+                            const B = parseInt(data.substring(a, a + b), 10)
+                            const C = parseInt(data.substring(a + b, a + b + c), 10)
+                            const D = parseInt(data.substring(a + b + c, a + b + c + d), 10)
                             if (A <= 255 && B <= 255 && C <= 255 && D <= 255) {
-                                var ip = [A.toString(), '.', B.toString(), '.', C.toString(), '.', D.toString()].join('')
+                                const ip = [A.toString(), '.', B.toString(), '.', C.toString(), '.', D.toString()].join('')
                                 if (ip.length === data.length + 3) {
                                     ret.push(ip)
                                 }
@@ -253,9 +252,9 @@ const codingContractTypesMetadata = [{
 {
     name: 'Algorithmic Stock Trader I',
     solver: function (data) {
-        var maxCur = 0
-        var maxSoFar = 0
-        for (var i = 1; i < data.length; ++i) {
+        let maxCur = 0
+        let maxSoFar = 0
+        for (let i = 1; i < data.length; ++i) {
             maxCur = Math.max(0, (maxCur += data[i] - data[i - 1]))
             maxSoFar = Math.max(maxCur, maxSoFar)
         }
@@ -265,8 +264,8 @@ const codingContractTypesMetadata = [{
 {
     name: 'Algorithmic Stock Trader II',
     solver: function (data) {
-        var profit = 0
-        for (var p = 1; p < data.length; ++p) {
+        let profit = 0
+        for (let p = 1; p < data.length; ++p) {
             profit += Math.max(data[p] - data[p - 1], 0)
         }
         return profit.toString()
@@ -275,12 +274,11 @@ const codingContractTypesMetadata = [{
 {
     name: 'Algorithmic Stock Trader III',
     solver: function (data) {
-        var hold1 = Number.MIN_SAFE_INTEGER
-        var hold2 = Number.MIN_SAFE_INTEGER
-        var release1 = 0
-        var release2 = 0
-        for (var i = 0, data_1 = data; i < data_1.length; i++) {
-            var price = data_1[i]
+        let hold1 = Number.MIN_SAFE_INTEGER
+        let hold2 = Number.MIN_SAFE_INTEGER
+        let release1 = 0
+        let release2 = 0
+        for (const price of data) {
             release2 = Math.max(release2, hold2 + price)
             hold2 = Math.max(hold2, release1 - price)
             release1 = Math.max(release1, hold1 + price)
@@ -292,31 +290,31 @@ const codingContractTypesMetadata = [{
 {
     name: 'Algorithmic Stock Trader IV',
     solver: function (data) {
-        var k = data[0]
-        var prices = data[1]
-        var len = prices.length
+        const  k = data[0]
+        const  prices = data[1]
+        const  len = prices.length
         if (len < 2) {
             return 0
         }
         if (k > len / 2) {
-            var res = 0
-            for (var i = 1; i < len; ++i) {
+            let  res = 0
+            for (let  i = 1; i < len; ++i) {
                 res += Math.max(prices[i] - prices[i - 1], 0)
             }
             return res
         }
-        var hold = []
-        var rele = []
+        const hold = []
+        const rele = []
         hold.length = k + 1
         rele.length = k + 1
-        for (var i = 0; i <= k; ++i) {
+        for (let i = 0; i <= k; ++i) {
             hold[i] = Number.MIN_SAFE_INTEGER
             rele[i] = 0
         }
-        var cur
-        for (var i = 0; i < len; ++i) {
+        let cur
+        for (let i = 0; i < len; ++i) {
             cur = prices[i]
-            for (var j = k; j > 0; --j) {
+            for (let j = k; j > 0; --j) {
                 rele[j] = Math.max(rele[j], hold[j] + cur)
                 hold[j] = Math.max(hold[j], rele[j - 1] - cur)
             }
@@ -327,10 +325,10 @@ const codingContractTypesMetadata = [{
 {
     name: 'Minimum Path Sum in a Triangle',
     solver: function (data) {
-        var n = data.length
-        var dp = data[n - 1].slice()
-        for (var i = n - 2; i > -1; --i) {
-            for (var j = 0; j < data[i].length; ++j) {
+        const n = data.length
+        const dp = data[n - 1].slice()
+        for (let i = n - 2; i > -1; --i) {
+            for (let j = 0; j < data[i].length; ++j) {
                 dp[j] = Math.min(dp[j], dp[j + 1]) + data[i][j]
             }
         }
@@ -340,15 +338,15 @@ const codingContractTypesMetadata = [{
 {
     name: 'Unique Paths in a Grid I',
     solver: function (data) {
-        var n = data[0] // Number of rows
-        var m = data[1] // Number of columns
-        var currentRow = []
+        const n = data[0] // Number of rows
+        const m = data[1] // Number of columns
+        const currentRow = []
         currentRow.length = n
-        for (var i = 0; i < n; i++) {
+        for (let i = 0; i < n; i++) {
             currentRow[i] = 1
         }
-        for (var row = 1; row < m; row++) {
-            for (var i = 1; i < n; i++) {
+        for (let row = 1; row < m; row++) {
+            for (let i = 1; i < n; i++) {
                 currentRow[i] += currentRow[i - 1]
             }
         }
@@ -358,13 +356,13 @@ const codingContractTypesMetadata = [{
 {
     name: 'Unique Paths in a Grid II',
     solver: function (data) {
-        var obstacleGrid = []
+        const obstacleGrid = []
         obstacleGrid.length = data.length
-        for (var i = 0; i < obstacleGrid.length; ++i) {
+        for (let i = 0; i < obstacleGrid.length; ++i) {
             obstacleGrid[i] = data[i].slice()
         }
-        for (var i = 0; i < obstacleGrid.length; i++) {
-            for (var j = 0; j < obstacleGrid[0].length; j++) {
+        for (let i = 0; i < obstacleGrid.length; i++) {
+            for (let j = 0; j < obstacleGrid[0].length; j++) {
                 if (obstacleGrid[i][j] == 1) {
                     obstacleGrid[i][j] = 0
                 } else if (i == 0 && j == 0) {
@@ -380,10 +378,10 @@ const codingContractTypesMetadata = [{
 {
     name: 'Sanitize Parentheses in Expression',
     solver: function (data) {
-        var left = 0
-        var right = 0
-        var res = []
-        for (var i = 0; i < data.length; ++i) {
+        let  left = 0
+        let  right = 0
+        const res = []
+        for (let  i = 0; i < data.length; ++i) {
             if (data[i] === '(') {
                 ++left
             } else if (data[i] === ')') {
@@ -394,7 +392,7 @@ const codingContractTypesMetadata = [{
         function dfs(pair, index, left, right, s, solution, res) {
             if (s.length === index) {
                 if (left === 0 && right === 0 && pair === 0) {
-                    for (var i = 0; i < res.length; i++) {
+                    for (let i = 0; i < res.length; i++) {
                         if (res[i] === solution) {
                             return
                         }
@@ -423,8 +421,8 @@ const codingContractTypesMetadata = [{
 {
     name: 'Find All Valid Math Expressions',
     solver: function (data) {
-        var num = data[0]
-        var target = data[1]
+        const num = data[0]
+        const target = data[1]
 
         function helper(res, path, num, target, pos, evaluated, multed) {
             if (pos === num.length) {
@@ -433,11 +431,11 @@ const codingContractTypesMetadata = [{
                 }
                 return
             }
-            for (var i = pos; i < num.length; ++i) {
+            for (let i = pos; i < num.length; ++i) {
                 if (i != pos && num[pos] == '0') {
                     break
                 }
-                var cur = parseInt(num.substring(pos, i + 1))
+                const cur = parseInt(num.substring(pos, i + 1))
                 if (pos === 0) {
                     helper(res, path + cur, num, target, i + 1, cur, cur)
                 } else {
@@ -451,7 +449,7 @@ const codingContractTypesMetadata = [{
         if (num == null || num.length === 0) {
             return []
         }
-        var result = []
+        const result = []
         helper(result, '', num, target, 0, 0, 0)
         return result
     },
