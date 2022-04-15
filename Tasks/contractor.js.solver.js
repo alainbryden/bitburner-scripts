@@ -1,4 +1,4 @@
-import { HammingDecode, HammingEncode } from "../HammingCodeTools";
+import { HammingDecode, HammingEncode } from "./HammingCodeTools";
 
 const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
 
