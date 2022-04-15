@@ -1,7 +1,6 @@
-const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
+import { HammingDecode, HammingEncode } from "../HammingCodeTools";
 
-//Silly human, you can't import a typescript module into a javascript 
-//import { codingContractTypesMetadata } from 'https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts'
+const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
 
 // This contract solver has the bare-minimum footprint of 1.6 GB (base) + 10 GB (ns.codingcontract.attempt)
 // It does this by requiring all contract information being gathered in advance and passed in as a JSON blob argument.
@@ -97,6 +96,22 @@ const codingContractTypesMetadata = [{
     },
 },
 {
+    name: 'Total Ways to Sum II',
+    solver: function (data) {
+        const n = data[0];
+        const s = data[1];
+        const ways = [1];
+        ways.length = n + 1;
+        ways.fill(0, 1);
+        for (let i = 0; i < s.length; i++) {
+            for (let j = s[i]; j <= n; j++) {
+                ways[j] += ways[j - s[i]];
+            }
+        }
+        return ways[n];
+    },
+},
+{
     name: 'Spiralize Matrix',
     solver: function (data, ans) {
         var spiral = []
@@ -155,6 +170,31 @@ const codingContractTypesMetadata = [{
         }
         var solution = i === n
         return solution ? 1 : 0
+    },
+},
+{
+    name: 'Array Jumping Game II',
+    solver: function (data) {
+        const n = data.length;
+        let reach = 0;
+        let jumps = 0;
+        let lastJump = -1;
+        while (reach < n - 1) {
+            let jumpedFrom = -1;
+            for (let i = reach; i > lastJump; i--) {
+                if (i + data[i] > reach) {
+                    reach = i + data[i];
+                    jumpedFrom = i;
+                }
+            }
+            if (jumpedFrom === -1) {
+                jumps = 0;
+                break;
+            }
+            lastJump = jumpedFrom;
+            jumps++;
+        }
+        return jumps;
     },
 },
 {
@@ -413,6 +453,18 @@ const codingContractTypesMetadata = [{
         var result = []
         helper(result, '', num, target, 0, 0, 0)
         return result
+    },
+},
+{
+    name: 'HammingCodes: Integer to encoded Binary',
+    solver: function (data) {
+        return HammingEncode(data);
+    },
+},
+{
+    name: 'HammingCodes: Encoded Binary to Integer',
+    solver: function (data) {
+        return HammingDecode(data);
     },
 },
 ]
