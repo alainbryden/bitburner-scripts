@@ -460,7 +460,7 @@ const codingContractTypesMetadata = [{
     name: 'HammingCodes: Integer to encoded Binary',
     solver: function (value) {
         // Calculates the needed amount of parityBits 'without' the "overall"-Parity
-        HammingSumOfParity = lengthOfDBits => lengthOfDBits == 0 ? 0 : lengthOfDBits < 3 ? lengthOfDBits + 1 :
+        const HammingSumOfParity = lengthOfDBits => lengthOfDBits == 0 ? 0 : lengthOfDBits < 3 ? lengthOfDBits + 1 :
             Math.ceil(Math.log2(lengthOfDBits * 2)) <= Math.ceil(Math.log2(1 + lengthOfDBits + Math.ceil(Math.log2(lengthOfDBits)))) ?
                 Math.ceil(Math.log2(lengthOfDBits) + 1) : Math.ceil(Math.log2(lengthOfDBits));
         const data = value.toString(2).split(""); // first, change into binary string, then create array with 1 bit per index
