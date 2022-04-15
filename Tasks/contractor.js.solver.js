@@ -5,7 +5,7 @@ const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persiste
 
 // This contract solver has the bare-minimum footprint of 1.6 GB (base) + 10 GB (ns.codingcontract.attempt)
 // It does this by requiring all contract information being gathered in advance and passed in as a JSON blob argument.
-// TODO: Pull solvers directly from https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts
+// Solvers are mostly taken from source code at https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts
 /** @param {NS} ns **/
 export async function main(ns) {
     if (ns.args.length < 1)
@@ -542,6 +542,7 @@ const codingContractTypesMetadata = [{
     },
 },
 {
+    //Taken from https://github.com/danielyxie/bitburner/blob/dev/src/utils/HammingCodeTools.ts and converted to js by Discord: H3draut3r#6722
     name: 'HammingCodes: Integer to encoded Binary',
     solver: function (value) {
         // Calculates the needed amount of parityBits 'without' the "overall"-Parity
