@@ -2,7 +2,6 @@ import { instanceCount, getActiveSourceFiles, getNsDataThroughFile, runCommand, 
 
 const interval = 5000; // Uodate (tick) this often
 const minTaskWorkTime = 29000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
-const tempFile = '/Temp/sleeve-set-task.txt';
 const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
 const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
@@ -64,23 +63,25 @@ async function manageSleeveAugs(ns, i, budget) {
     // Retrieve and cache the set of available sleeve augs (cached temporarily, but not forever, in case rules around this change)
     if (availableAugs[i] == null || Date.now() > cacheExpiry[i]) {
         cacheExpiry[i] = Date.now() + 60000;
-        availableAugs[i] = (await getNsDataThroughFile(ns, `ns.sleeve.getSleevePurchasableAugs(${i})`, '/Temp/sleeve-augs.txt')).sort((a, b) => a.cost - b.cost); // list of { name, cost }
+        availableAugs[i] = (await getNsDataThroughFile(ns, `ns.sleeve.getSleevePurchasableAugs(ns.args[0])`,  // list of { name, cost }
+            '/Temp/sleeve-augs.txt', [i])).sort((a, b) => a.cost - b.cost);
     }
     if (availableAugs[i].length == 0) return 0;
 
     const cooldownLeft = Math.max(0, options['buy-cooldown'] - (Date.now() - (lastPurchaseTime[i] || 0)));
     const [batchCount, batchCost] = availableAugs[i].reduce(([n, c], aug) => c + aug.cost <= budget ? [n + 1, c + aug.cost] : [n, c], [0, 0]);
-    const purchaseUpdate = `sleeve ${i} can afford ${batchCount.toFixed(0).padStart(2)}/${availableAugs[i].length.toFixed(0).padEnd(2)} remaining augs (cost ${formatMoney(batchCost)} of ` +
-        `${formatMoney(availableAugs[i].reduce((t, aug) => t + aug.cost, 0))}).`;
+    const purchaseUpdate = `sleeve ${i} can afford ${batchCount.toFixed(0).padStart(2)}/${availableAugs[i].length.toFixed(0).padEnd(2)} remaining augs ` +
+        `(cost ${formatMoney(batchCost)} of ${formatMoney(availableAugs[i].reduce((t, aug) => t + aug.cost, 0))}).`;
     if (lastPurchaseStatusUpdate[i] != purchaseUpdate)
-        log(ns, `INFO: With budget ${formatMoney(budget)}, ${(lastPurchaseStatusUpdate[i] = purchaseUpdate)} (Min batch size: ${options['min-aug-batch']}, Cooldown: ${formatDuration(cooldownLeft)})`);
+        log(ns, `INFO: With budget ${formatMoney(budget)}, ${(lastPurchaseStatusUpdate[i] = purchaseUpdate)} ` +
+            `(Min batch size: ${options['min-aug-batch']}, Cooldown: ${formatDuration(cooldownLeft)})`);
     if (cooldownLeft == 0 && batchCount > 0 && ((batchCount >= availableAugs[i].length - 1) || batchCount >= options['min-aug-batch'])) { // Don't require the last aug it's so much more expensive
         let strAction = `Purchase ${batchCount} augmentations for sleeve ${i} at total cost of ${formatMoney(batchCost)}`;
         let toPurchase = availableAugs[i].splice(0, batchCount);
-        if (await getNsDataThroughFile(ns, JSON.stringify(toPurchase.map(a => a.name)) +
-            `.reduce((s, aug) => s && ns.sleeve.purchaseSleeveAug(${i}, aug), true)`, '/Temp/sleeve-purchase.txt'))
+        if (await getNsDataThroughFile(ns, `ns.args.slice(1).reduce((s, aug) => s && ns.sleeve.purchaseSleeveAug(ns.args[0], aug), true)`,
+            '/Temp/sleeve-purchase.txt', [i, ...toPurchase.map(a => a.name)])) {
             log(ns, `SUCCESS: ${strAction}`, true, 'success');
-        else log(ns, `ERROR: Failed to ${strAction}`, true, 'error');
+        } else log(ns, `ERROR: Failed to ${strAction}`, true, 'error');
         lastPurchaseTime[i] = Date.now();
         return batchCost; // Even if we think we failed, return the predicted cost so if the purchase did go through, we don't end up over-budget
     }
@@ -105,10 +106,10 @@ async function mainLoop(ns) {
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
-    let sleveStats = await getNsDataThroughFile(ns, `[...Array(${numSleeves}).keys()].map(i => ns.sleeve.getSleeveStats(i))`, '/Temp/sleeve-stats.txt');
+    let sleeveStats = await getNsDataThroughFile(ns, `[...Array(${numSleeves}).keys()].map(i => ns.sleeve.getSleeveStats(i))`, '/Temp/sleeve-stats.txt');
+    let sleeveInfo = await getNsDataThroughFile(ns, `[...Array(${numSleeves}).keys()].map(i => ns.sleeve.getInformation(i))`, '/Temp/sleeve-information.txt');
     for (let i = 0; i < numSleeves; i++) {
-        let sleeve = sleveStats[i];
-
+        let sleeve = { ...sleeveStats[i], ...sleeveInfo[i] }; // For convenience, merge all sleeve stats/info into one object
         // MANAGE SLEEVE AUGMENTATIONS
         if (sleeve.shock == 0) // No augs are available augs until shock is 0
             budget -= await manageSleeveAugs(ns, i, budget);
@@ -123,13 +124,13 @@ async function mainLoop(ns) {
         if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
 
         // Decide what we think the sleeve should be doing for the next little while
-        let [designatedTask, command, statusUpdate] = await pickSleeveTask(ns, i, sleeve, canTrain);
+        let [designatedTask, command, args, statusUpdate] = await pickSleeveTask(ns, i, sleeve, canTrain);
 
         // Start the clock, this sleeve should stick to this task for minTaskWorkTime
         lastReassignTime[i] = Date.now();
         // Set the sleeve's new task if it's not the same as what they're already doing.
         if (task[i] != designatedTask)
-            await setSleeveTask(ns, i, designatedTask, command);
+            await setSleeveTask(ns, i, designatedTask, command, args);
 
         // For certain tasks, log a periodic status update.
         if (statusUpdate && Date.now() - (lastStatusUpdateTime[i] ?? 0) > minTaskWorkTime) {
@@ -145,10 +146,10 @@ async function mainLoop(ns) {
 async function pickSleeveTask(ns, i, sleeve, canTrain) {
     // Must synchronize first iif you haven't maxed memory on every sleeve.
     if (sleeve.sync < 100)
-        return ["synchronize", `ns.sleeve.setToSynchronize(${i})`, `syncing... ${sleeve.sync.toFixed(2)}%`];
+        return ["synchronize", `ns.sleeve.setToSynchronize(ns.args[0])`, [i], `syncing... ${sleeve.sync.toFixed(2)}%`];
     // Opt to do shock recovery if above the --min-shock-recovery threshold, or if above 0 shock, with a probability of --shock-recovery
     if (sleeve.shock > options['min-shock-recovery'] || sleeve.shock > 0 && options['shock-recovery'] > 0 && Math.random() < options['shock-recovery'])
-        return ["recover from shock", `ns.sleeve.setToShockRecovery(${i})`, `recovering from shock... ${sleeve.shock.toFixed(2)}%`];
+        return ["recover from shock", `ns.sleeve.setToShockRecovery(ns.args[0])`, [i], `recovering from shock... ${sleeve.shock.toFixed(2)}%`];
 
     // Train if our sleeve's physical stats aren't where we want them
     if (canTrain) {
@@ -156,8 +157,12 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
         if (untrainedStats.length > 0) {
             if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
+            if (sleeve.city != "Sector-12") {
+                log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Sector-12 so that they can study at Powerhouse Gym.`);
+                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', '/Temp/sleeve-travel.txt', [i, "Sector-12"]);
+            }
             var trainStat = untrainedStats.reduce((min, s) => sleeve[s] < sleeve[min] ? s : min, untrainedStats[0]);
-            return [`train ${trainStat}`, `ns.sleeve.setToGymWorkout(${i}, 'Powerhouse Gym', '${trainStat}')`,
+            return [`train ${trainStat}`, `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`, [i, 'Powerhouse Gym', trainStat],
             /*   */ `training ${trainStat}... ${sleeve[trainStat]}/${(options[`train-to-${trainStat}`])}`];
         }
     }
@@ -167,17 +172,17 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
         // We'll cycle through work types until we find one that is supported. TODO: Auto-determine the most productive faction work to do.
         const faction = playerInfo.currentWorkFactionName;
         const work = works[workByFaction[faction] || 0];
-        return [`work for faction '${faction}' (${work})`, `ns.sleeve.setToFactionWork(${i}, '${faction}', '${work}')`,
+        return [`work for faction '${faction}' (${work})`, `ns.sleeve.setToFactionWork(ns.args[0], ns.args[1], ns.args[2])`, [i, faction, work],
         /*   */ `helping earn rep with faction ${faction} by doing ${work}.`];
     }
     if (i == 0 && !options['disable-follow-player'] && playerInfo.isWorking && playerInfo.workType == "Working for Company") { // If player is currently working for a company rep, sleeves 0 shall help him out (only one sleeve can work for a company)
-        return [`work for company '${playerInfo.companyName}'`, `ns.sleeve.setToCompanyWork(${i}, '${playerInfo.companyName}')`,
+        return [`work for company '${playerInfo.companyName}'`, `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`, [i, playerInfo.companyName],
         /*   */ `helping earn rep with company ${playerInfo.companyName}.`];
     }
     // Finally, do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
     // TODO: This is less useful after gangs are unlocked, can we think of better things to do afterwards?
     var crime = options.crime || (await calculateCrimeChance(ns, sleeve, "homicide")) >= options['homicide-chance-threshold'] ? 'homicide' : 'mug';
-    return [`commit ${crime} `, `ns.sleeve.setToCommitCrime(${i}, '${crime}')`,
+    return [`commit ${crime} `, `ns.sleeve.setToCommitCrime(ns.args[0], ns.args[1])`, [i, crime],
     /*   */ `committing ${crime} with chance ${((await calculateCrimeChance(ns, sleeve, crime)) * 100).toFixed(2)}% ` +
     /*   */ (options.crime || crime == "homicide" ? '' : // If auto-criming, user may be curious how close we are to switching to homicide 
     /*   */     ` (Note: Homicide chance would be ${((await calculateCrimeChance(ns, sleeve, "homicide")) * 100).toFixed(2)}% `)];
@@ -185,9 +190,9 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
 
 /** @param {NS} ns 
  * Sets a sleeve to its designated task, with some extra error handling logic for working for factions. */
-async function setSleeveTask(ns, i, designatedTask, command) {
+async function setSleeveTask(ns, i, designatedTask, command, args) {
     let strAction = `Set sleeve ${i} to ${designatedTask} `;
-    if (await getNsDataThroughFile(ns, command, tempFile)) {
+    if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
         task[i] = designatedTask;
         log(ns, `SUCCESS: ${strAction} `);
         return true;
@@ -221,7 +226,7 @@ async function promptForTrainingBudget(ns) {
 async function calculateCrimeChance(ns, sleeve, crimeName) {
     // If not in the cache, retrieve this crime's stats
     const crimeStats = cachedCrimeStats[crimeName] ?? (cachedCrimeStats[crimeName] = (4 in ownedSourceFiles ?
-        await getNsDataThroughFile(ns, `ns.getCrimeStats("${crimeName}")`, '/Temp/get-crime-stats.txt') :
+        await getNsDataThroughFile(ns, `ns.getCrimeStats(ns.args[0])`, '/Temp/get-crime-stats.txt', [crimeName]) :
         // Hack: To support players without SF4, hard-code values as of the current release
         crimeName == "homicide" ? { difficulty: 1, strength_success_weight: 2, defense_success_weight: 2, dexterity_success_weight: 0.5, agility_success_weight: 0.5 } :
             crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :
