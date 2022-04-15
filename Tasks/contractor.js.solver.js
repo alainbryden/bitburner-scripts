@@ -19,8 +19,9 @@ export async function main(ns) {
         if (answer != null) {
             const solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
             if (solvingResult) {
-                ns.toast(`Solved ${contractInfo.contract} on ${contractInfo.hostname}`, 'success');
-                ns.tprint(`Solved ${contractInfo.contract} on ${contractInfo.hostname}. Reward: ${solvingResult}`)
+                const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
+                ns.toast(message, 'success');
+                ns.tprint(message);
             } else {
                 notice = `ERROR: Wrong answer for ${contractInfo.contract} on ${contractInfo.hostname}: ${JSON.stringify(answer)}`;
             }
