@@ -268,9 +268,7 @@ async function updateAugmentationData(ns, desiredAugs) {
             .filter(f => f.augmentations.includes(aug))[0]?.name ?? "(unknown)",
         // Get a list of joined factions that have this augmentation
         joinedFactionsWithAug: function () {
-            return factionNames.map(f => factionData[f]).filter(f => f.joined && f.augmentations.includes(this.name))
-                // HACK: To work around a game bug that makes it seem like CotMG offers Neuroflux, but attempting to purchase it via the API fails.
-                .filter(f => this.name != strNF || !["Church of the Machine God"].includes(f.name));
+            return factionNames.map(f => factionData[f]).filter(f => f.joined && f.augmentations.includes(this.name));
         },
         // Whether there is some joined faction which already has enough reputation to buy this augmentation
         canAfford: function () { return this.joinedFactionsWithAug().some(f => f.reputation >= this.reputation); },
