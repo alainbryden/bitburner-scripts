@@ -108,8 +108,8 @@ export async function main(ns) {
             }
             minCharges = Math.ceil(minCharges); // Fractional charges now occur. Round these up.
             if (minCharges >= maxCharges && !shouldContinue) break; // Max charges reached
-            // We will only charge non-booster fragments. Focus on fragments with the lowest charge until things are even.
-            const fragmentsToCharge = fragments.filter(f => f.id < 100 && Math.ceil(f.numCharge) == minCharges)
+            // We will only charge non-booster fragments, and fragments that aren't stuck at 0 charge
+            const fragmentsToCharge = fragments.filter(f => f.id < 100 && (f.numCharge != 0 || chargeAttempts[f.id] < 2));
 
             // Log a status update
             log(ns, `Charging ${fragmentsToCharge.length}/${fragments.length} fragments ` + (!shouldContinue ? `to ${maxCharges}` : `until faction has ` +
