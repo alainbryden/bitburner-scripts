@@ -280,7 +280,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
 
 /** Helper to log a message, and optionally also tprint it and toast it
  * @param {NS} ns - The nestcript instance passed to your script's main entry point */
-export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = 100) {
+export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = Number.MAX_SAFE_INTEGER) {
     checkNsInstance(ns, '"log"');
     ns.print(message);
     if (alsoPrintToTerminal) ns.tprint(message);
