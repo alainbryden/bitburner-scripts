@@ -272,10 +272,10 @@ export async function main(ns) {
                 (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Uses singularity functions, and higher SF4 levels result in lower RAM requirements
         },
         {   // Periodically look to purchase new servers, but note that these are often not a great use of our money (hack income isn't everything) so we may hold-back.
-            interval: 32000, name: "host-manager.js", requiredServer: "home",
+            interval: 32000, name: "host-manager.js", requiredServer: "home", tail: true, // TODO: Temporary, for debugging when servers are/aren't purchased
             // Funky heuristic warning: I find that new players with fewer SF levels under their belt are obsessed with hack income from servers,
             // but established players end up finding auto-purchased hosts annoying - so now the % of money we spend shrinks as SF levels grow.
-            args: () => ['--reserve-percent', Math.max(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
+            args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
             shouldRun: () => {
                 if (!shouldImproveHacking()) return false; // Skip if hack income is not important in this BN or at this time               
                 let utilization = getTotalNetworkUtilization(); // Utilization-based heuristics for when we likely could use more RAM for hacking
@@ -434,7 +434,7 @@ async function tryRunTool(ns, tool) {
         if (tool.tail === true && runningOnServer) {
             log(ns, `Tailing Tool: ${tool.name} on server ${runningOnServer}` + (args.length > 0 ? ` with args ${JSON.stringify(args)}` : ''));
             ns.tail(tool.name, runningOnServer, ...args);
-            tool.tail = false; // Avoid popping open additional tail windows in the future
+            //tool.tail = false; // Avoid popping open additional tail windows in the future
         }
         return true;
     } else
