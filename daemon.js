@@ -272,7 +272,7 @@ export async function main(ns) {
                 (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Uses singularity functions, and higher SF4 levels result in lower RAM requirements
         },
         {   // Periodically look to purchase new servers, but note that these are often not a great use of our money (hack income isn't everything) so we may hold-back.
-            interval: 32000, name: "host-manager.js", requiredServer: "home", tail: true, // TODO: Temporary, for debugging when servers are/aren't purchased
+            interval: 32000, name: "host-manager.js", requiredServer: "home",
             // Funky heuristic warning: I find that new players with fewer SF levels under their belt are obsessed with hack income from servers,
             // but established players end up finding auto-purchased hosts annoying - so now the % of money we spend shrinks as SF levels grow.
             args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
