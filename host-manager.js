@@ -128,7 +128,7 @@ async function tryToBuyBestServerPossible(ns) {
 
     spendableMoney = Math.min(spendableMoney * (1 - pctReservedMoney), spendableMoney - absReservedMoney);
     if (spendableMoney <= 0.01)
-        return setStatus(ns, `${prefix}all cash is currently reserved.`);
+        return setStatus(ns, `${prefix}all cash is currently reserved (% reserve: ${(pctReservedMoney * 100).toFixed(1)}%, abs reserve: ${formatMoney(absReservedMoney)})`);
 
     // Determine the most ram we can buy with our current money
     let exponentLevel = 1;
