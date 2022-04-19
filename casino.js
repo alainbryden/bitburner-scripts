@@ -1,11 +1,16 @@
-import { getFilePath, waitForProcessToComplete, getNsDataThroughFile } from './helpers.js'
+import { log, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
 
+const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
 let options;
 const argsSchema = [
 	['save-sleep-time', 5], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
 	['use-basic-strategy', false], // Set to true to use the basic strategy (Stay on 17+)
 	['enable-logging', false], // Set to true to pop up a tail window and generate logs.
+	['kill-all-scripts', false], // Set to true to kill all running scripts before running.
+	['no-deleting-remote-files', false], // By default, if --kill-all-scripts, we will also remove remote files to speed up save/reload
+	['on-completion-script', null], // Spawn this script when max-charges is reached
+	['on-completion-script-args', []], // Optional args to pass to the script when launched
 ];
 export function autocomplete(data, _) {
 	data.flags(argsSchema);
@@ -49,8 +54,12 @@ export async function main(ns) {
 	const btnStartGame = find("//button[text() = 'Start']");
 	const btnSaveGame = find("//button[@aria-label = 'save game']");
 	// Step 4: Save the fact that this script is now running, so that future reloads start this script back up immediately.
-	if (ns.ls("home", "/Temp/").length > 0) // Do a little clean-up to speed up save/load.
+	if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
+		// Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
+		await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
+		// Clear the temp folder on home (all transient scripts / outputs)
 		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+	}
 	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
 	await click(btnSaveGame);
 	if (saveSleepTime) await ns.asleep(saveSleepTime);
@@ -68,8 +77,9 @@ export async function main(ns) {
 			if (won === null) {
 				if (find("//p[contains(text(), 'Tie')]")) break; // If we tied, break and start a new hand.
 				const txtCount = find("//p[contains(text(), 'Count:')]");
-				if (!txtCount) // I'm incapable of producing a bug, so clearly the only reason for this failing is we've won.
-					return ns.tprint("SUCCESS: We've been kicked out of the casino.");
+				if (!txtCount) { // I'm incapable of producing a bug, so clearly the only reason for this failing is we've won.
+					return await onCompletion(ns);
+				}
 				const allCounts = txtCount.querySelectorAll('span');
 				const highCount = Number(allCounts[allCounts.length - 1].innerText);
 				const shouldHit = options['use-basic-strategy'] ? highCount < 17 : shouldHitAdvanced(ns, txtCount);
@@ -89,6 +99,51 @@ export async function main(ns) {
 		if (saveSleepTime) await ns.asleep(saveSleepTime);
 	}
 }
+
+/** @param {NS} ns 
+ *  Helper to kill all scripts on all other servers, except this one **/
+async function killAllOtherScripts(ns, removeRemoteFiles) {
+	// Kill processes on home (except this one)
+	const thisScript = ns.getScriptName();
+	const otherPids = ns.ps().filter(p => p.filename != thisScript).map(p => p.pid);
+	let pid = await runCommand(ns, 'ns.args.forEach(pid => ns.kill(pid))',
+		'/Temp/kill-scripts-by-id.js', otherPids);
+	await waitForProcessToComplete(ns, pid);
+	log(ns, `INFO: Killed ${otherPids.length} other scripts running on home...`, true);
+
+	// Kill processes on all other servers
+	const allServers = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+	const serversExceptHome = allServers.filter(s => s != "home");
+	pid = await runCommand(ns, 'ns.args.forEach(host => ns.killall(host))',
+		'/Temp/kill-all-scripts-on-servers.js', serversExceptHome);
+	await waitForProcessToComplete(ns, pid);
+	log(ns, 'INFO: Killed all scripts running on other hosts...', true);
+
+	// If enabled, remove files on all other servers
+	if (removeRemoteFiles) {
+		pid = await runCommand(ns, 'ns.args.forEach(host => ns.ls(host).forEach(file => ns.rm(file, host)))',
+			'/Temp/delete-files-on-servers.js', serversExceptHome)
+		await waitForProcessToComplete(ns, pid);
+		log(ns, 'INFO: Removed all files on other hosts...', true)
+	}
+}
+
+/** @param {NS} ns 
+ *  Run when we can no longer gamble at the casino (presumably because we've been kicked out) **/
+async function onCompletion(ns) {
+	await ns.write(ran_flag, true, "w"); // Write an file indicating we think we've been kicked out of the casino.
+	ns.tprint("SUCCESS: We've been kicked out of the casino.");
+
+	// Run the completion script before shutting down    
+	let completionScript = options['on-completion-script'];
+	if (!completionScript) return;
+	let completionArgs = options['on-completion-script-args'];
+	if (ns.run(completionScript, 1, ...completionArgs))
+		log(ns, `INFO: casino.js shutting down and launching ${completionScript}...`, false, 'info');
+	else
+		log(ns, `WARNING: casino.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
+}
+
 // Some DOM helpers (partial credit to @ShamesBond)
 async function click(elem) { await elem[Object.keys(elem)[1]].onClick({ isTrusted: true }); }
 async function setText(input, text) { await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } }); }
