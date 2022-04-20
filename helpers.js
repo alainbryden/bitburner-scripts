@@ -167,13 +167,18 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails
     let lastRead;
-    const fileData = await autoRetry(ns, () => ns.read(fName), f => (lastRead = f) !== undefined && f !== "" && f !== "STALE",
-        () => `ns.read('${fName}') returned no result ("${lastRead}") (command likely failed to run).` +
-            `\n  Command: ${command}\n  Script: ${fNameCommand}` +
-            `\nEnsure you have sufficient free RAM to run this temporary script.`,
-        maxRetries, retryDelayMs, undefined, verbose);
-    if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
-    return JSON.parse(fileData); // Deserialize it back into an object/array and return
+    try {
+        const fileData = await autoRetry(ns, () => ns.read(fName), f => (lastRead = f) !== undefined && f !== "" && f !== "STALE",
+            () => `ns.read('${fName}') returned no result ("${lastRead}") (command likely failed to run).` +
+                `\n  Command: ${command}\n  Script: ${fNameCommand}` +
+                `\nEnsure you have sufficient free RAM to run this temporary script.`,
+            maxRetries, retryDelayMs, undefined, verbose);
+        if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
+        return JSON.parse(fileData); // Deserialize it back into an object/array and return
+    } finally {
+        // If we failed to run the command, clear the "stale" contents we created earlier. Ideally, we would remove the file entirely, but this is not free.
+        if (lastRead == "STALE") await ns.write(fName, "", 'w');
+    }
 }
 
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
@@ -311,7 +316,7 @@ export function scanAllServers(ns) {
 }
 
 /** @param {NS} ns 
- * Get a dictionary of active source files, taking into account the current active bitnode as well. **/
+ * Get a dictionary of active source files, taking into account the current active bitnode as well (optionally disabled). **/
 export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode = true) {
     return await getActiveSourceFiles_Custom(ns, getNsDataThroughFile, includeLevelsFromCurrentBitnode);
 }
@@ -320,18 +325,17 @@ export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode =
  * getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
 export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, includeLevelsFromCurrentBitnode = true) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
-    let tempFile = '/Temp/owned-source-files.txt';
     // Find out what source files the user has unlocked
     let dictSourceFiles;
-    try { await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, tempFile); } catch { }
-    if (!dictSourceFiles) { // Bit of a hack, but if RAM is so low that this fails, we can fallback to using an older version of this file, and even assuming we have no source files.
-        dictSourceFiles = ns.read(tempFile)
-        dictSourceFiles = dictSourceFiles && dictSourceFiles != "STALE" ? JSON.parse(dictSourceFiles) : {};
-    }
+    try {
+        dictSourceFiles = await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, '/Temp/owned-source-files.txt');
+    } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
     // If the user is currently in a given bitnode, they will have its features unlocked
     if (includeLevelsFromCurrentBitnode) {
-        const bitNodeN = (await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN;
-        dictSourceFiles[bitNodeN] = Math.max(3, dictSourceFiles[bitNodeN] || 0);
+        try {
+            const bitNodeN = (await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN;
+            dictSourceFiles[bitNodeN] = Math.max(3, dictSourceFiles[bitNodeN] || 0);
+        } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
     return dictSourceFiles;
 }
