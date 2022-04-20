@@ -49,17 +49,18 @@ export async function main(ns) {
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
-    let stockValue = null;
     if (playerData.hasTixApiAccess) {
-        ns.run(getFilePath('stockmaster.js'), 1, '--liquidate');
         const stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
-        while (stockValue !== 0) { // It takes a bit of time for things to get sold. Wait until we see no stock holdings
-            stockValue = await getNsDataThroughFile(ns, JSON.stringify(stkSymbols) +
-                `.map(sym => ({ sym, pos: ns.stock.getPosition(sym), ask: ns.stock.getAskPrice(sym), bid: ns.stock.getBidPrice(sym) }))` +
-                `.reduce((total, stk) => total + stk.pos[0] * stk.bid + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) -100000 * (stk.pos[0] + stk.pos[2] > 0 ? 1 : 0), 0)`,
-                '/Temp/stock-portfolio-value.txt');
-            log(ns, 'INFO: Waiting for stocks to be sold...', false, 'info');
-            await ns.sleep(200);
+        const countOwnedStocks = async () => await getNsDataThroughFile(ns, `ns.args.map(sym => ns.stock.getPosition(sym))` +
+            `.reduce((t, stk) => t + (stk[0] + stk[2] > 0 ? 1 : 0), 0)`, '/Temp/owned-stocks.txt', stkSymbols);
+        let ownedStocks = await countOwnedStocks();
+        while (ownedStocks > 0) {
+            log(ns, `INFO: Waiting for ${ownedStocks} owned stocks to be sold...`, false, 'info');
+            pid = ns.run(getFilePath('stockmaster.js'), 1, '--liquidate');
+            if (pid) await waitForProcessToComplete(ns, pid, true);
+            else log(ns, `ERROR: Failed to run "stockmaster.js --liquidate" to sell ${ownedStocks} owned stocks. Will try again soon...`, false, 'true');
+            await ns.sleep(1000);
+            ownedStocks = await countOwnedStocks();
         }
     }
 
