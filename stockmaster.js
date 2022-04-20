@@ -75,8 +75,10 @@ export async function main(ns) {
     let player = ns.getPlayer();
     if (localOptions.l || localOptions.liquidate) {
         if (!player.hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
+        log(ns, 'INFO: Killing any other stockmaster processes...', false, 'info');
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
             `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-stockmarket-scripts.js');
+        log(ns, 'INFO: Checking for and liquidating any stocks...', false, 'info');
         await liquidate(ns); // Sell all stocks
         return;
     } // Otherwise, prevent multiple instances of this script from being started, even with different args.
@@ -127,7 +129,7 @@ export async function main(ns) {
         disableShorts = true;
     }
 
-    if (allStockSymbols.length == 0) allStockSymbols = await getAllStockSymbols(ns);
+    allStockSymbols = allStockSymbols || await getAllStockSymbols(ns);
     allStocks = await initAllStocks(ns);
 
     let bitnodeMults;
@@ -155,7 +157,7 @@ export async function main(ns) {
             const holdings = await refresh(ns, playerStats.has4SDataTixApi, allStocks, myStocks); // Returns total stock value
             const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
             const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
-            if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
+            if (pre4s && !mock && await tryGet4SApi(ns, playerStats, reserve, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
                 continue; // Start the loop over if we just bought 4S API access
             // Be more conservative with our decisions if we don't have 4S data
             const thresholdToBuy = pre4s ? options['pre-4s-buy-threshold-return'] : options['buy-threshold'];
@@ -528,7 +530,7 @@ function doStatusUpdate(ns, stocks, myStocks, hudElement = null) {
 
 /** @param {NS} ns **/
 async function liquidate(ns) {
-    if (!allStockSymbols) allStockSymbols = await getAllStockSymbols(ns); // If the global property allStockSymbols hasn't been initialized, do so now
+    if (allStockSymbols.length == 0) allStockSymbols = await getAllStockSymbols(ns); // If the global property allStockSymbols hasn't been initialized, do so now
     let totalStocks = 0, totalSharesLong = 0, totalSharesShort = 0, totalRevenue = 0;
     const dictPositions = mock ? null : await getStockInfoDict(ns, 'getPosition');
     for (const sym of allStockSymbols) {
