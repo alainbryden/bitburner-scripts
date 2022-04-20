@@ -86,7 +86,7 @@ async function initialize(ns) {
     pctTraining = options['no-training'] ? 0 : options['training-percentage'];
 
     let loggedWaiting = false;
-    while (!(await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/player-gang-joined.txt'))) {
+    while (!(await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt'))) {
         if (!loggedWaiting) {
             log(ns, `Waiting to be in a gang. Will create the highest faction gang as soon as it is available...`);
             loggedWaiting = true;
