@@ -108,7 +108,7 @@ export async function main(ns) {
         disableShorts = true;
     }
 
-    allStocks = await initAllStocks(ns, allStockSymbols);
+    allStocks = await initAllStocks(ns);
 
     let bitnodeMults;
     if (5 in dictSourceFiles) bitnodeMults = await tryGetBitNodeMultipliers(ns);
@@ -129,11 +129,12 @@ export async function main(ns) {
 
     while (true) {
         const playerStats = ns.getPlayer();
+        const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
         const pre4s = !playerStats.has4SDataTixApi;
         const holdings = await refresh(ns, playerStats.has4SDataTixApi, allStocks, myStocks); // Returns total stock value
         const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
         const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
-        if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH), allStockSymbols))
+        if (pre4s && !mock && await tryGet4SApi(ns, playerStats, reserve, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
             continue; // Start the loop over if we just bought 4S API access
         // Be more conservative with our decisions if we don't have 4S data
         const thresholdToBuy = pre4s ? options['pre-4s-buy-threshold-return'] : options['buy-threshold'];
@@ -162,7 +163,6 @@ export async function main(ns) {
         }
         if (sales > 0) continue; // If we sold anything, loop immediately (no need to sleep) and refresh stats immediately before making purchasing decisions.
 
-        const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
         // If we haven't gone above a certain liquidity threshold, don't attempt to buy more stock
         // Avoids death-by-a-thousand-commissions before we get super-rich, stocks are capped, and this is no longer an issue
         // BUT may mean we miss striking while the iron is hot while waiting to build up more funds.
@@ -224,7 +224,7 @@ let getStockInfoDict = async (ns, stockFunction) => await getNsDataThroughFile(n
     `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${stockFunction}(sym)]))`, `/Temp/stock-${stockFunction}.txt`, allStockSymbols);
 
 /** @param {NS} ns **/
-async function initAllStocks(ns, allStockSymbols) {
+async function initAllStocks(ns) {
     let dictMaxShares = await getStockInfoDict(ns, 'getMaxShares'); // Only need to get this once, it never changes
     return allStockSymbols.map(s => ({
         sym: s,
@@ -519,7 +519,7 @@ async function liquidate(ns) {
 
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
-async function tryGet4SApi(ns, playerStats, bitnodeMults, budget, allStockSymbols) {
+async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
     if (playerStats.has4SDataTixApi) return false; // Only return true if we just bought it
     const cost4sData = 1E9 * bitnodeMults.FourSigmaMarketDataCost;
     const cost4sApi = 25E9 * bitnodeMults.FourSigmaMarketDataApiCost;
@@ -528,7 +528,7 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget, allStockSymbol
     if (totalCost > budget) /* Need to reserve some money to invest */
         return false;
     if (playerStats.money < totalCost)
-        await liquidate(ns, allStockSymbols);
+        await liquidate(ns);
     if (!playerStats.has4SData) {
         if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt'))
             log(ns, `SUCCESS: Purchased 4SMarketData for ${formatMoney(cost4sData)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
