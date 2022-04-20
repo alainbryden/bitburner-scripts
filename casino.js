@@ -26,6 +26,7 @@ export async function main(ns) {
 		ns.tail()
 	else
 		ns.disableLog("ALL");
+
 	// Step 1: Go to Aevum if we aren't already there. (Must be done manually if you don't have SF4)
 	if (ns.getPlayer().city != "Aevum") {
 		try {
@@ -35,6 +36,7 @@ export async function main(ns) {
 			return ns.tprint("ERROR: You must manually travel to to Aevum to use this script until you get SF4");
 		}
 	}
+
 	// Step 2: Navigate to the City Casino
 	try { // Try to do this without SF4, because it's faster and doesn't require a temp script to be cleaned up below
 		const btnStopAction = find("//button[contains(text(), 'Stop')]");
@@ -49,21 +51,36 @@ export async function main(ns) {
 	}
 	// Pick the game we wish to automate (Blackjack)
 	await click(find("//button[contains(text(), 'blackjack')]"));
+
 	// Step 3: Get some buttons we will need to play blackjack
 	const inputWager = find("//input[@value = 1000000]");
 	const btnStartGame = find("//button[text() = 'Start']");
 	const btnSaveGame = find("//button[@aria-label = 'save game']");
-	// Step 4: Save the fact that this script is now running, so that future reloads start this script back up immediately.
+
+	// Step 4: Clean up temp files and kill other running scripts to speed up the reload cycle
 	if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
+		// Step 4.5: Test that we aren't already kicked out of the casino before doing drastic things like killing scripts
+		await setText(inputWager, `1`); // Bet just a dollar and quick the game right away, no big deal
+		await click(btnStartGame);
+		if (find("//p[contains(text(), 'Count:')]")) {
+			const btnStay = find("//button[text() = 'Stay']");
+			if (btnStay) await click(btnStay); // Trigger the game to end if we didn't instantly win/lose our $1 bet.
+		} else {
+			await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
+			return ns.tprint("INFO: We've appear to already have been previously kicked out of the casino.");
+		}
 		// Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
 		await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
 		// Clear the temp folder on home (all transient scripts / outputs)
 		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
 	}
+
+	// Step 5: Save the fact that this script is now running, so that future reloads start this script back up immediately.
 	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
 	await click(btnSaveGame);
 	if (saveSleepTime) await ns.asleep(saveSleepTime);
-	// Step 5: Play until we lose
+
+	// Step 6: Play until we lose
 	while (true) {
 		const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
 		await setText(inputWager, `${bet}`);
