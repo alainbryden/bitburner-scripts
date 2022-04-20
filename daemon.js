@@ -154,10 +154,14 @@ const argsSchema = [
     ['no-tail-windows', false], // Set to true to prevent the default behaviour of opening a tail window for certain launched scripts. (Doesn't affect scripts that open their own tail windows)
     ['initial-study-time', 10], // Seconds. Set to 0 to not do any studying at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
     ['initial-hack-xp-time', 10], // Seconds. Set to 0 to not do any hack-xp grinding at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
+    ['disable-script', []], // The names of scripts that you do not want run by our scheduler
 ];
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
+    const lastFlag = args.length > 1 ? args[args.length - 2] : null;
+    if (lastFlag == "--disable-script")
+        return data.scripts;
     return [];
 }
 
@@ -417,6 +421,10 @@ const funcResultOrValue = fnOrVal => (fnOrVal instanceof Function ? fnOrVal() : 
 // Returns true if the tool is running (including if it was already running), false if it could not be run.
 /** @param {NS} ns **/
 async function tryRunTool(ns, tool) {
+    if (options['disable-script'].includes(tool.name)) {
+        if (verbose) log(ns, `Tool ${tool.name} was not launched as it was specified with --disable-script`);
+        return false;
+    }
     if (!doesFileExist(tool.name)) {
         log(ns, `ERROR: Tool ${tool.name} was not found on ${daemonHost}`, true, 'error');
         return false;
@@ -739,7 +747,7 @@ async function doTargetingLoop(ns) {
 let actualWeakenPotency = () => bitnodeMults.ServerWeakenRate * weakenThreadPotency * (1 - weakenThreadPadding);
 
 // Dictionaries of static server information
-let serversDictCommand = (servers, command) => `Object.fromEntries(${JSON.stringify(servers)}.map(server => [server, ${command}]))`;
+let serversDictCommand = command => `Object.fromEntries(ns.args.map(server => [server, ${command}]))`;
 let dictServerRequiredHackinglevels;
 let dictServerNumPortsRequired;
 let dictServerMinSecurityLevels;
@@ -748,15 +756,15 @@ let dictServerProfitInfo;
 
 // Gathers up arrays of server data via external request to have the data written to disk.
 async function getStaticServerData(ns, serverNames) {
-    dictServerRequiredHackinglevels = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerRequiredHackingLevel(server)'), '/Temp/servers-hack-req.txt');
-    dictServerNumPortsRequired = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerNumPortsRequired(server)'), '/Temp/servers-num-ports.txt');
+    dictServerRequiredHackinglevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerRequiredHackingLevel(server)'), '/Temp/servers-hack-req.txt', serverNames);
+    dictServerNumPortsRequired = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerNumPortsRequired(server)'), '/Temp/servers-num-ports.txt', serverNames);
     await refreshDynamicServerData(ns, serverNames);
 }
 
 /** @param {NS} ns **/
 async function refreshDynamicServerData(ns, serverNames) {
-    dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt');
-    dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand(serverNames, 'ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt');
+    dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt', serverNames);
+    dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt', serverNames);
     // Get the information about the relative profitability of each server
     const pid = await exec(ns, getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
