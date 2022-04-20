@@ -129,7 +129,7 @@ export async function main(ns) {
         disableShorts = true;
     }
 
-    allStockSymbols = allStockSymbols || await getAllStockSymbols(ns);
+    if (allStockSymbols.length == 0) allStockSymbols = await getAllStockSymbols(ns);
     allStocks = await initAllStocks(ns);
 
     let bitnodeMults;
@@ -157,7 +157,7 @@ export async function main(ns) {
             const holdings = await refresh(ns, playerStats.has4SDataTixApi, allStocks, myStocks); // Returns total stock value
             const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
             const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
-            if (pre4s && !mock && await tryGet4SApi(ns, playerStats, reserve, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
+            if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
                 continue; // Start the loop over if we just bought 4S API access
             // Be more conservative with our decisions if we don't have 4S data
             const thresholdToBuy = pre4s ? options['pre-4s-buy-threshold-return'] : options['buy-threshold'];
