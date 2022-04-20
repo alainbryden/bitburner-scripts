@@ -253,7 +253,7 @@ async function shouldDelayInstall(ns, player) {
 	if (!player.has4SDataTixApi) {
 		const totalWorth = getLiquidationValue(ns, player);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
-			(playerStats.has4SData ? 0 : 5E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
+			(playerStats.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		if (totalWorth / totalCost > 0.5 || options['wait-for-4s']) {
 			setStatus(`Waiting for scripts to purchase the 4SDataTixApi because ` +
