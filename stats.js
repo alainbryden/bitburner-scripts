@@ -22,7 +22,7 @@ export async function main(ns) {
     let inBladeburner = playerInfo.inBladeburner;
     const bitNode = playerInfo.bitNodeN;
     let stkSymbols = null;
-    if (!options['hide-stocks'] && playerInfo.hasTixApiAccess) // Auto-disabled if we do not have the TSK API
+    if (!options['hide-stocks'] && playerInfo.hasTixApiAccess) // Auto-disabled if we do not have the TIX API
         stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
     disableLogs(ns, ['sleep']);
 
@@ -59,7 +59,7 @@ export async function main(ns) {
             addHud("ScrInc", formatMoney(ns.getScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
             addHud("ScrExp", formatNumberShort(ns.getScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
 
-            const reserve = (await ns.read("reserve.txt")) || 0;
+            const reserve = ns.read("reserve.txt") || 0;
             if (reserve > 0) // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing
                 addHud("Reserve", formatNumberShort(reserve, 3, 2), "Most scripts will leave this much money unspent. Remove with `run reserve.js 0`");
 
