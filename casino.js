@@ -66,6 +66,7 @@ export async function main(ns) {
 			const btnStay = find("//button[text() = 'Stay']");
 			if (btnStay) await click(btnStay); // Trigger the game to end if we didn't instantly win/lose our $1 bet.
 		} else {
+			// TODO: Gah, because we haven't killed scripts, it's possible another script stole focus. Detect and handle that case.
 			await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
 			return ns.tprint("INFO: We've appear to already have been previously kicked out of the casino.");
 		}
