@@ -50,7 +50,7 @@ export async function main(ns) {
 	if (!(4 in sourceFiles) && player.bitNodeN != 4)
 		return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'ERROR');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
-	if (player.playtimeSinceLastBitnode < 60 * 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 hour
+	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns);
 
 	// Main loop: Monitor progress in the current BN and automatically reset when we can afford TRP, or N augs.
@@ -68,8 +68,8 @@ export async function main(ns) {
  * Logic run periodically throughout the BN **/
 async function initializeNewBitnode(ns) {
 	// Clean up all temporary scripts, which will include stale temp files
-	launchScriptHelper(ns, 'cleanup.js');
-	await ns.sleep(200); // Wait a short while for the dust to settle.
+	// launchScriptHelper(ns, 'cleanup.js'); // No need, ascedd.js and casino.js do this
+	// await ns.sleep(200); // Wait a short while for the dust to settle.
 }
 
 /** @param {NS} ns 
