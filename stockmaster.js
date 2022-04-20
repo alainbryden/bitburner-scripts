@@ -521,7 +521,7 @@ async function liquidate(ns) {
 /** @param {Player} playerStats **/
 async function tryGet4SApi(ns, playerStats, bitnodeMults, budget, allStockSymbols) {
     if (playerStats.has4SDataTixApi) return false; // Only return true if we just bought it
-    const cost4sData = 5E9 * bitnodeMults.FourSigmaMarketDataCost;
+    const cost4sData = 1E9 * bitnodeMults.FourSigmaMarketDataCost;
     const cost4sApi = 25E9 * bitnodeMults.FourSigmaMarketDataApiCost;
     const totalCost = (playerStats.has4SData ? 0 : cost4sData) + cost4sApi;
     // Liquidate shares if it would allow us to afford 4S API data
