@@ -48,7 +48,7 @@ export async function main(ns) {
 	sourceFiles = await getActiveSourceFiles(ns, false);
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
 	if (!(4 in sourceFiles) && player.bitNodeN != 4)
-		return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'ERROR');
+		return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'error');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns);
