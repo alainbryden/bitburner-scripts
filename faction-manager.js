@@ -569,7 +569,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             outputRows.push(`Attempting to join faction ${factionWithMostFavor.name} to make it easier to earn rep for ${strNF} since it has the most favor (${factionWithMostFavor.favor}).`);
             joined = await joinFactions(ns, [factionWithMostFavor.name]);
             if (!joinedFactions.includes(factionWithMostFavor.name)) {
-                invitedFactionsWithDonation = factionsWithAugAndInvite.filter(f => f.donationsUnlocked).map(f => f.name);
+                const invitedFactionsWithDonation = factionsWithAugAndInvite.filter(f => f.donationsUnlocked).map(f => f.name);
                 if (invitedFactionsWithDonation.length > 0) {
                     outputRows.push(`Failed to join ${factionWithMostFavor.name}. Attempting to join any factions with whom we have enough favour to donate: ${invitedFactionsWithDonation.join(", ")}.`);
                     joined = await joinFactions(ns, invitedFactionsWithDonation);
