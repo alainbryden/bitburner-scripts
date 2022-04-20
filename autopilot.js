@@ -33,7 +33,7 @@ let reservedPurchase; // Flag to indicate whether we've reservedPurchase money a
 let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let spendingHashesOnHacking; // Flag to indicate whether we've kicked off spend-hacknet-hashes already
 let lastScriptsCheck; // Last time we got a listing of all running scripts
-let restartScripts; // A list of scripts flagged to be restarted due to changes in priority
+let killScripts; // A list of scripts flagged to be restarted due to changes in priority
 let dictSourceFiles, bitnodeMults, playerInstalledAugCount; // Info for the current bitnode
 
 /** @param {NS} ns **/
@@ -46,7 +46,7 @@ export async function main(ns) {
 	playerInGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = spendingHashesOnHacking = false;
 	playerInstalledAugCount = wdAvailable = null;
 	lastScriptsCheck = 0;
-	restartScripts = [];
+	killScripts = [];
 
 	// Collect and cache some one-time data
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
@@ -99,7 +99,7 @@ async function checkOnDaedalusStatus(ns, player) {
 	if (player.factions.includes("Daedalus")) {
 		if (reserveForDaedalus) {
 			log(ns, "SUCCESS: We sped along joining the faction 'Daedalus'. Restarting work-for-factions.js to speed along earn rep.", false, 'success');
-			restartScripts.push("work-for-factions.js");
+			killScripts.push("work-for-factions.js"); // Schedule this to be killed (will be restarted) on the next script loop.
 			lastScriptsCheck = 0;
 		}
 		return reserveForDaedalus = false;
@@ -142,23 +142,40 @@ async function checkIfBnIsComplete(ns, player) {
 }
 
 /** @param {NS} ns 
+ * Helper to get a list of all scripts running (on home) **/
+async function getRunningScripts(ns) {
+	return await getNsDataThroughFile(ns, 'ns.ps()', '/Temp/ps.txt');
+}
+
+/** @param {NS} ns 
+ * Helper to get the first instance of a running script by name. **/
+function findScriptHelper(baseScriptName, runningScripts) {
+	return runningScripts.filter(s => s.filename == getFilePath(baseScriptName))[0];
+}
+
+/** @param {NS} ns 
+ * Helper to kill a running script instance by name **/
+async function killScript(ns, baseScriptName, runningScripts = null) {
+	const processInfo = findScriptHelper(baseScriptName, runningScripts || (await getRunningScripts(ns)))
+	if (processInfo) {
+		log(ns, `INFO: Killing script ${baseScriptName} as requested.`, false, 'info');
+		return await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', '/Temp/kill.txt', [processInfo.pid]);
+	}
+	log(ns, `WARNING: Skipping request to kill script ${baseScriptName}, no running instance was found...`, false, 'warning');
+	return false;
+}
+
+/** @param {NS} ns 
  * Logic to ensure scripts are running to progress the BN **/
 async function checkOnRunningScripts(ns, player) {
 	if (lastScriptsCheck > Date.now() - options['interval-check-scripts']) return;
 	lastScriptsCheck = Date.now();
-	const runningScripts = await getNsDataThroughFile(ns, 'ns.ps()', '/Temp/ps.txt');
-	const findScript = (baseScriptName) => runningScripts.filter(s => s.filename == getFilePath(baseScriptName))[0];
+	const runningScripts = await getRunningScripts(ns); // Cache the list of running scripts for the duration
+	const findScript = (baseScriptName) => findScriptHelper(baseScriptName, runningScripts);
 
 	// Kill any scripts that were flagged for restart
-	while (restartScripts.length > 0) {
-		const toRestart = restartScripts.pop();
-		const running = findScript(toRestart);
-		if (running) {
-			log(ns, `INFO: Killing script ${toRestart} as requested.`, false, 'info');
-			await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', '/Temp/kill.txt', [running.pid]);
-		} else
-			log(ns, `WARNING: Skipping request to kill script ${toRestart}, no running instance was found...`, false, 'warning');
-	}
+	while (killScripts.length > 0)
+		await killScript(ns, killScripts.pop(), runningScripts);
 
 	// Launch stock-master in a way that emphasizes it as our main source of income early-on
 	if (!findScript('stockmaster.js') && !reserveForDaedalus)
@@ -231,7 +248,11 @@ async function maybeDoCasino(ns, player) {
 		return ranCasino = true;
 	if (player.money < 210000)
 		return; // We need at least 200K (and change) to run casino so we can travel to aevum
-	// Run casino.js and expect ourself to get killed in the process
+
+	// Run casino.js (and expect ourself to get killed in the process)
+	// Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts. 
+	await killScript(ns, 'work-for-factions.js');
+
 	// TODO: Preserve the current script's state / args through the reset
 	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
 	if (pid) {
