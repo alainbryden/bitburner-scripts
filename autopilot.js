@@ -62,7 +62,7 @@ export async function main(ns) {
 	while (true) {
 		try { await mainLoop(ns); }
 		catch (err) {
-			log(ns, `WARNING: Caught (and suppressed) an unexpected error in the main loop:\n` +
+			log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error in the main loop:\n` +
 				(typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
 		}
 		await ns.asleep(options['interval']);
@@ -92,9 +92,11 @@ async function mainLoop(ns) {
 /** @param {NS} ns 
  * Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite **/
 async function checkOnDaedalusStatus(ns, player) {
+	// Logic below is for rushing a daedalus invite.
 	// We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
 	if (daedalusUnavailable || wdAvailable == true) return reserveForDaedalus = false;
-	if (player.factions.includes("Daedalus") || player.hacking < 2500) {
+	if (player.hacking < 2500) return reserveForDaedalus = false;
+	if (player.factions.includes("Daedalus")) {
 		if (reserveForDaedalus) {
 			log(ns, "SUCCESS: We sped along joining the faction 'Daedalus'. Restarting work-for-factions.js to speed along earn rep.", false, 'success');
 			restartScripts.push("work-for-factions.js");
@@ -253,6 +255,7 @@ async function maybeInstallAugmentations(ns, player) {
 		const pid = launchScriptHelper(ns, 'faction-manager.js');
 		await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down (and output to be generated)
 	}
+
 	// Grab the latest output from faction manager to see if it's a good time to reset
 	const facmanOutput = ns.read(factionManagerOutputFile);
 	if (!facmanOutput) return reservedPurchase = false;
@@ -268,6 +271,9 @@ async function maybeInstallAugmentations(ns, player) {
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
 	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
 		`NeuroFlux and ${affordableAugCount} of ${facman.unowned_count} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
+
+	// TODO: If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
+	//       but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
 
 	// If not ready to reset, set a status with our progress and return
 	if (!shouldReset) {
