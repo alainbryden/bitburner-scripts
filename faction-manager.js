@@ -179,7 +179,7 @@ export async function main(ns) {
     else if (options.purchase && purchaseableAugs) {
         await purchaseDesiredAugs(ns);
         await ns.write(output_file, "", "w"); // Clear the file so it isn't misinterpreted on next reset.
-    } else // Write a temp file that summarizes what augs we could afford if we could ascend right now.
+    } else if (!ignorePlayerData) // Write a temp file that summarizes what augs we could afford if we could ascend right now.
         await ns.write(output_file, JSON.stringify({
             affordable_nf_count: purchaseableAugs.filter(a => a.name == strNF).length,
             affordable_augs: [...new Set(purchaseableAugs.map(a => a.name))],
