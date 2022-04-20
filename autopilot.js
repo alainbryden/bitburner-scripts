@@ -110,7 +110,7 @@ async function checkOnRunningScripts(ns, player) {
 	const findScript = (baseScriptName) => runningScripts.filter(s => s.filename == getFilePath(baseScriptName))[0];
 
 	// Launch stock-master in a way that emphasizes it as our main source of income early-on
-	if (!findScript('stockmaster.js'))
+	if (player.hasTixApiAccess && !findScript('stockmaster.js'))
 		launchScriptHelper(ns, 'stockmaster.js', [
 			"fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
 			"--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
