@@ -15,8 +15,8 @@ const argsSchema = [ // The set of all command line arguments
 	['install-at-aug-plus-nf-count', 18], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
 	['install-for-augs', ["The Red Pill"]], // or... automatically install as soon as we can afford one of these augmentations
 	['reduced-aug-requirement-per-hour', 1], // For every hour since the last reset, require this many fewer augs to install.
-	['interval', 5000], // Wake up this often (milliseconds) to check on things
-	['interval-check-scripts', 60000], // Get a listing of all running processes on home this frequently
+	['interval', 2000], // Wake up this often (milliseconds) to check on things
+	['interval-check-scripts', 10000], // Get a listing of all running processes on home this frequently
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
 	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
 	['wait-for-4s', true], // If true, will not reset until the 4S Tix API has been acquired (major source of income early on, especially in harder nodes)
@@ -27,12 +27,14 @@ export function autocomplete(data, args) {
 }
 
 let playerInGang; // Tells us whether we're in a gang or not
-let wdUnavailable; // A flag indicating whether the BN is completable on this reset
+let wdAvailable; // A flag indicating whether the BN is completable on this reset
 let ranCasino; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
+let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let spendingHashesOnHacking; // Flag to indicate whether we've kicked off spend-hacknet-hashes already
 let lastScriptsCheck; // Last time we got a listing of all running scripts
-let dictSourceFiles, bitnodeMults; // Info for the current bitnode
+let restartScripts; // A list of scripts flagged to be restarted due to changes in priority
+let dictSourceFiles, bitnodeMults, playerInstalledAugCount; // Info for the current bitnode
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -41,8 +43,10 @@ export async function main(ns) {
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
 
 	// Clear reset global state
-	playerInGang = wdUnavailable = ranCasino = reservedPurchase = spendingHashesOnHacking = false;
+	playerInGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = spendingHashesOnHacking = false;
+	playerInstalledAugCount = wdAvailable = null;
 	lastScriptsCheck = 0;
+	restartScripts = [];
 
 	// Collect and cache some one-time data
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
@@ -78,6 +82,7 @@ async function initializeNewBitnode(ns) {
 async function mainLoop(ns) {
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
 	await manageReservedMoney(ns, player);
+	await checkOnDaedalusStatus(ns, player);
 	await checkIfBnIsComplete(ns, player);
 	await checkOnRunningScripts(ns, player);
 	await maybeDoCasino(ns, player);
@@ -85,20 +90,52 @@ async function mainLoop(ns) {
 }
 
 /** @param {NS} ns 
- * Logic run periodically throughout the BN **/
+ * Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite **/
+async function checkOnDaedalusStatus(ns, player) {
+	// We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
+	if (daedalusUnavailable || wdAvailable == true) return reserveForDaedalus = false;
+	if (player.factions.includes("Daedalus") || player.hacking < 2500) {
+		if (reserveForDaedalus) {
+			log(ns, "SUCCESS: We sped along joining the faction 'Daedalus'. Restarting work-for-factions.js to speed along earn rep.", false, 'success');
+			restartScripts.push("work-for-factions.js");
+			lastScriptsCheck = 0;
+		}
+		return reserveForDaedalus = false;
+	}
+	if (reserveForDaedalus) { // Already waiting for a Daedalus invite, try joining them
+		return (4 in dictSourceFiles) ? await getNsDataThroughFile(ns, 'ns.joinFaction(ns.args[0])', '/Temp/joinFaction.txt', ["Daedalus"]) :
+			log(ns, "INFO: Please manually join the faction 'Daedalus' as soon as possible to proceed", false, 'info');
+	}
+	const bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || { DaedalusAugsRequirement: 1 };
+	// Note: A change coming soon will convert DaedalusAugsRequirement from a fractional multiplier, to an integer number of augs. This should support both for now.
+	const reqDaedalusAugs = bitNodeMults.DaedalusAugsRequirement < 2 ? Math.round(30 * bitNodeMults.DaedalusAugsRequirement) : bitNodeMults.DaedalusAugsRequirement;
+	if (playerInstalledAugCount !== null && playerInstalledAugCount < reqDaedalusAugs)
+		return daedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
+	// If we have sufficient augs and hacking, all we need is the money (100b)
+	const totalWorth = getLiquidationValue(ns, player);
+	if (totalWorth > 100E9 && player.money < 100E9) {
+		reserveForDaedalus = true;
+		log(ns, "INFO: Temporarily liquidating stocks to earn an invite to Daedalus...", true, 'info');
+		launchScriptHelper(ns, 'stockmaster.js', ['--liquidate']);
+	}
+}
+
+/** @param {NS} ns 
+ * Logic run periodically throughout the BN to see if we are ready to complete it. **/
 async function checkIfBnIsComplete(ns, player) {
-	if (wdUnavailable) return false;
+	if (wdAvailable === false) return false;
 	const wdHack = await getNsDataThroughFile(ns,
 		'ns.scan("The-Cave").includes("w0r1d_d43m0n") ? ns.getServerRequiredHackingLevel("w0r1d_d43m0n"): -1',
 		'/Temp/wd-hackingLevel.txt');
-	if (wdHack == -1) return !(wdUnavailable = true);
+	if (wdHack == -1) return !(wdAvailable = false);
+	wdAvailable = true; // WD is available this bitnode. Are we ready to hack it yet?
 	if (player.hacking < wdHack)
 		return false; // We can't hack it yet, but soon!
 	const text = `BN ${player.bitNodeN}.${dictSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 	// TODO: Use the new singularity function coming soon to automate entering a new BN
-	wdUnavailable = true; // TODO: Temporary: For now, set this so this doesn't run again
+	wdAvailable = false; // TODO: Temporary: For now, set this so this routine doesn't run again
 	return true;
 }
 
@@ -110,8 +147,19 @@ async function checkOnRunningScripts(ns, player) {
 	const runningScripts = await getNsDataThroughFile(ns, 'ns.ps()', '/Temp/ps.txt');
 	const findScript = (baseScriptName) => runningScripts.filter(s => s.filename == getFilePath(baseScriptName))[0];
 
+	// Kill any scripts that were flagged for restart
+	while (restartScripts.length > 0) {
+		const toRestart = restartScripts.pop();
+		const running = findScript(toRestart);
+		if (running) {
+			log(ns, `INFO: Killing script ${toRestart} as requested.`, false, 'info');
+			await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', '/Temp/kill.txt', [running.pid]);
+		} else
+			log(ns, `WARNING: Skipping request to kill script ${toRestart}, no running instance was found...`, false, 'warning');
+	}
+
 	// Launch stock-master in a way that emphasizes it as our main source of income early-on
-	if (!findScript('stockmaster.js'))
+	if (!findScript('stockmaster.js') && !reserveForDaedalus)
 		launchScriptHelper(ns, 'stockmaster.js', [
 			"--fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
 			"--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
@@ -210,6 +258,7 @@ async function maybeInstallAugmentations(ns, player) {
 	if (!facmanOutput) return reservedPurchase = false;
 	const facman = JSON.parse(facmanOutput); // { affordable_nf_count: int, affordable_augs: [string], owned_count: int, unowned_count: int, total_rep_cost: number, total_aug_cost: number }
 	const affordableAugCount = facman.affordable_augs.length;
+	playerInstalledAugCount = facman.owned_count;
 
 	// Determine whether we can afford enough augmentations to merit a reset
 	const reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * player.playtimeSinceLastAug / 3.6E6);
@@ -218,7 +267,7 @@ async function maybeInstallAugmentations(ns, player) {
 	const shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
 	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
-		`NeuroFlux and ${affordableAugCount} of ${facman.unowned_count} remaining unique augmentations: ${facman.affordable_augs.join(", ")}`;
+		`NeuroFlux and ${affordableAugCount} of ${facman.unowned_count} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
 
 	// If not ready to reset, set a status with our progress and return
 	if (!shouldReset) {
@@ -281,8 +330,11 @@ async function shouldDelayInstall(ns, player) {
  * Consolidated logic for all the times we want to reserve money **/
 async function manageReservedMoney(ns, player) {
 	if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
-	// if(!player.has4SDataTixApi) {
-	if (Number(ns.read("reserve.txt") || 0) != 8E9)
+	const currentReserve = Number(ns.read("reserve.txt") || 0);
+	if (reserveForDaedalus && currentReserve != 100E9)
+		await ns.write("reserve.txt", 100E9, "w"); // Reserve 100b to get the daedalus invite
+	// Otherwise, reserve 8B for stocks, always
+	if (currentReserve != 8E9)
 		await ns.write("reserve.txt", 8E9, "w"); // Reserve 8 of the 10b casino money for stock seed money
 	// NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
 	// - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
