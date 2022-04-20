@@ -292,6 +292,7 @@ async function manageReservedMoney(ns, player) {
 /** @param {NS} ns 
  * Helper to launch a script and log whether if it succeeded or failed **/
 function launchScriptHelper(ns, baseScriptName, args = []) {
+	ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
 	const pid = ns.run(getFilePath(baseScriptName), 1, ...args);
 	if (!pid)
 		log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
