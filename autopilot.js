@@ -31,7 +31,6 @@ let wdAvailable; // A flag indicating whether the BN is completable on this rese
 let ranCasino; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
 let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
-let spendingHashesOnHacking; // Flag to indicate whether we've kicked off spend-hacknet-hashes already
 let lastScriptsCheck; // Last time we got a listing of all running scripts
 let killScripts; // A list of scripts flagged to be restarted due to changes in priority
 let dictSourceFiles, bitnodeMults, playerInstalledAugCount; // Info for the current bitnode
@@ -43,7 +42,7 @@ export async function main(ns) {
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
 
 	// Clear reset global state
-	playerInGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = spendingHashesOnHacking = false;
+	playerInGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = false;
 	playerInstalledAugCount = wdAvailable = null;
 	lastScriptsCheck = 0;
 	killScripts = [];
@@ -149,8 +148,8 @@ async function getRunningScripts(ns) {
 
 /** @param {NS} ns 
  * Helper to get the first instance of a running script by name. **/
-function findScriptHelper(baseScriptName, runningScripts) {
-	return runningScripts.filter(s => s.filename == getFilePath(baseScriptName))[0];
+function findScriptHelper(baseScriptName, runningScripts, filter = null) {
+	return runningScripts.filter(s => s.filename == getFilePath(baseScriptName) && (!filter || filter(s)))[0];
 }
 
 /** @param {NS} ns 
@@ -171,7 +170,7 @@ async function checkOnRunningScripts(ns, player) {
 	if (lastScriptsCheck > Date.now() - options['interval-check-scripts']) return;
 	lastScriptsCheck = Date.now();
 	const runningScripts = await getRunningScripts(ns); // Cache the list of running scripts for the duration
-	const findScript = (baseScriptName) => findScriptHelper(baseScriptName, runningScripts);
+	const findScript = (baseScriptName, filter = null) => findScriptHelper(baseScriptName, runningScripts, filter);
 
 	// Kill any scripts that were flagged for restart
 	while (killScripts.length > 0)
@@ -198,6 +197,7 @@ async function checkOnRunningScripts(ns, player) {
 	}
 
 	// Spend hacknet hashes on our boosting best hack-income server once established
+	const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
 	if ((9 in dictSourceFiles) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= 20 * 60 * 1000) { // 20 minutes seems about right
 		const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
 		if (strServerIncomeInfo) {
@@ -210,7 +210,6 @@ async function checkOnRunningScripts(ns, player) {
 			log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
 			launchScriptHelper(ns, 'spend-hacknet-hashes.js',
 				["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
-			spendingHashesOnHacking = true;
 		}
 	}
 
@@ -268,7 +267,10 @@ async function maybeDoCasino(ns, player) {
 /** @param {NS} ns 
  * Logic to detect if it's a good time to install augmentations, and if so, do so **/
 async function maybeInstallAugmentations(ns, player) {
-	if (!(4 in dictSourceFiles)) return false; // Cannot automate augmentations or installs without singularity
+	if (!(4 in dictSourceFiles)) {
+		setStatus(ns, `No singularity access, so you're on your own. You should manually work for factions and install augmentations!`);
+		return false; // Cannot automate augmentations or installs without singularity
+	}
 	// If we previously attempted to reserve money for an augmentation purchase order, do a fresh facman run to ensure it's still available
 	if (reservedPurchase) {
 		log(ns, "INFO: Manually running faction-manager.js to ensure previously reserved purchase is still obtainable.");
@@ -279,7 +281,10 @@ async function maybeInstallAugmentations(ns, player) {
 
 	// Grab the latest output from faction manager to see if it's a good time to reset
 	const facmanOutput = ns.read(factionManagerOutputFile);
-	if (!facmanOutput) return reservedPurchase = false;
+	if (!facmanOutput) {
+		setStatus(ns, `Faction manager output not available. Will try again later.`);
+		return reservedPurchase = false;
+	}
 	const facman = JSON.parse(facmanOutput); // { affordable_nf_count: int, affordable_augs: [string], owned_count: int, unowned_count: int, total_rep_cost: number, total_aug_cost: number }
 	const affordableAugCount = facman.affordable_augs.length;
 	playerInstalledAugCount = facman.owned_count;
@@ -308,7 +313,7 @@ async function maybeInstallAugmentations(ns, player) {
 		return reservedPurchase = false; // TODO: A slick way to not have to reset this flag on every early-return statement.
 	// Ensure the money needed for the above augs doesn't get ripped out from under us by reserving it and waiting one more loop
 	if (!reservedPurchase) {
-		log(ns, `INFO: Reserving ${augSummary}`, true, 'info');
+		setStatus(ns, `Reserving ${augSummary}`);
 		await ns.write("reserve.txt", facman.total_rep_cost + facman.total_aug_cost, "w"); // Should prevent other scripts from spending this money
 		return reservedPurchase = true; // Set a flag so that on our next loop, we actually try to execute the purchase
 	}
@@ -343,7 +348,7 @@ async function shouldDelayInstall(ns, player) {
 			(playerStats.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		if (totalWorth / totalCost > 0.5 || options['wait-for-4s']) {
-			setStatus(`Waiting for scripts to purchase the 4SDataTixApi because ` +
+			setStatus(ns, `Waiting for scripts to purchase the 4SDataTixApi because ` +
 				`${options['wait-for-4s'] ? '--wait-for-4s is true. W' : 'w'}e are ${(100 * totalWorth / totalCost).toFixed(0)}% of the way there.`);
 			return true;
 		}
