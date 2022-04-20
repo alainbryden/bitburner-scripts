@@ -122,7 +122,7 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Launch work-for-factions with different arguments if we're still working towards a gang
 	if (!findScript('work-for-factions.js')) { // Don't bother re-launching if it's already going
-		const workArgs = []; // Default args are good in most cases (NOTE: Will spend hashes on coding contracts by default, which we like)
+		const workArgs = ["--fast-crimes-only"]; // NOTE: Default args will spend hashes on coding contracts by default, which we like
 		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
 		playerInGang = playerInGang || await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
 		if (!playerInGang) workArgs.push("--prioritize-invites", "--crime-focus")
@@ -231,7 +231,7 @@ async function maybeInstallAugmentations(ns, player) {
 	log(ns, `INFO: ${resetLog}`, true, 'info');
 	await persist_log(ns, resetLog);
 	// Kick off ascend.js
-	let pid = launchScriptHelper('ascend.js', ['--install-augmentations', true,
+	let pid = launchScriptHelper(ns, 'ascend.js', ['--install-augmentations', true,
 		'--on-reset-script', ns.getScriptName(), // TODO: Preserve the current script's state / args through the reset		
 		'--bypass-stanek-warning', true]); // Until there's an officially supported way to automate accepting stanek's gift, bypass it.
 	let errLog;
