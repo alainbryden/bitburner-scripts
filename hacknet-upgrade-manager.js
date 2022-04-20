@@ -37,15 +37,21 @@ export async function main(ns) {
         (maxSpend == Number.MAX_VALUE ? 'no spending limit' : `a spend limit of ${formatMoney(maxSpend)}`) +
         `. Current fleet: ${ns.hacknet.numNodes()} nodes...`);
     do {
-        const moneySpent = upgradeHacknet(ns, maxSpend, maxPayoffTime, options);
-        // Using this method, we cannot know for sure that we don't have hacknet servers until we have purchased one
-        if (haveHacknetServers && ns.hacknet.numNodes() > 0 && ns.hacknet.hashCapacity() == 0)
-            haveHacknetServers = false;
-        if (maxSpend && moneySpent === false) {
-            log(ns, `Spending limit reached. Breaking...`);
-            break; // Hack, but we return a non-number (false) when we've bought all we can for the current config
+        try {
+            const moneySpent = upgradeHacknet(ns, maxSpend, maxPayoffTime, options);
+            // Using this method, we cannot know for sure that we don't have hacknet servers until we have purchased one
+            if (haveHacknetServers && ns.hacknet.numNodes() > 0 && ns.hacknet.hashCapacity() == 0)
+                haveHacknetServers = false;
+            if (maxSpend && moneySpent === false) {
+                log(ns, `Spending limit reached. Breaking...`);
+                break; // Hack, but we return a non-number (false) when we've bought all we can for the current config
+            }
+            maxSpend -= moneySpent;
         }
-        maxSpend -= moneySpent;
+        catch (err) {
+            log(ns, `WARNING: hacknet-upgrade-manager.js Caught (and suppressed) an unexpected error in the main loop:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+        }
         if (continuous) await ns.sleep(interval);
     } while (continuous);
 }

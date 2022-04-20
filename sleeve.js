@@ -50,8 +50,9 @@ export async function main(ns) {
     // Start the main loop
     while (true) {
         try { await mainLoop(ns); }
-        catch (error) {
-            log(ns, `WARNING: An error was caught (and suppressed) in the main loop: ${error?.toString() || String(error)}`, false, 'warning');
+        catch (err) {
+            log(ns, `WARNING: sleeve.js Caught (and suppressed) an unexpected error in the main loop:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
         await ns.asleep(interval);
     }

@@ -117,7 +117,7 @@ export async function main(ns) {
                 const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
                 success = await tryGetStockMarketAccess(ns, player = ns.getPlayer(), player.money - reserve);
             } catch (err) {
-                log(ns, `WARNING: Caught (and suppressed) an unexpected error while waiting to buy stock market access:\n` +
+                log(ns, `WARNING: stockmaster.js Caught (and suppressed) an unexpected error while waiting to buy stock market access:\n` +
                     (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
             }
         } while (!success);
@@ -229,7 +229,7 @@ export async function main(ns) {
                 }
             }
         } catch (err) {
-            log(ns, `WARNING: Caught (and suppressed) an unexpected error in the main loop:\n` +
+            log(ns, `WARNING: stockmaster.js Caught (and suppressed) an unexpected error in the main loop:\n` +
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
         await ns.sleep(sleepInterval);

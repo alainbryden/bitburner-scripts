@@ -125,8 +125,9 @@ export async function main(ns) {
                 chargeAttempts[fragment.id] = 1 + (chargeAttempts[fragment.id] || 0);
             }
         }
-        catch (error) {
-            log(ns, `WARNING: Caught (and handled) an error. Continuing execution...\n${String(error)}`, false, 'warning');
+        catch (err) {
+            log(ns, `WARNING: stanek.js Caught (and suppressed) an unexpected error in the main loop:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
         await ns.sleep(100);
     }

@@ -65,7 +65,10 @@ export async function main(ns) {
     // Start the main loop which monitors stats and changes activities as needed
     while (true) {
         try { await mainLoop(ns); }
-        catch (error) { log(ns, `WARNING: Caught an error in the main loop, but will keep going:\n${String(error)}`, true, 'error'); }
+        catch (err) {
+            log(ns, `WARNING: bladeburner.js Caught (and suppressed) an unexpected error in the main loop:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+        }
         const nextTaskComplete = currentTaskEndTime - Date.now();
         await ns.asleep(Math.min(options['update-interval'], nextTaskComplete > 0 ? nextTaskComplete : Number.MAX_VALUE));
     }
@@ -420,7 +423,10 @@ async function beingInBladeburner(ns) {
                 log(ns, 'WARNING: Failed to joined Bladeburner despite physical stats. Will try again...', false, 'warning');
             player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
         }
-        catch (error) { log(ns, `WARNING: Caught an error while waiting to join bladeburner, but will keep going:\n${String(error)}`, true, 'error'); }
+        catch (err) {
+            log(ns, `WARNING: bladeburner.js Caught (and suppressed) an unexpected error while waiting to join bladeburner, but will keep going:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+        }
         await ns.asleep(5000);
     }
     log(ns, "INFO: We are in Bladeburner. Starting main loop...")

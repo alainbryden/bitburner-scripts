@@ -134,7 +134,8 @@ export async function main(ns) {
             await loadStartupData(ns);
             loadingComplete = true;
         } catch (err) {
-            log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' + err, true, 'warning');
+            log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
             await ns.sleep(5000);
         }
     }
@@ -145,7 +146,8 @@ export async function main(ns) {
         try {
             await mainLoop(ns);
         } catch (err) {
-            log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' + err, true, 'warning');
+            log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
             await ns.sleep(5000);
             scope--; // Cancel out work scope increasing on the next iteration.
         }

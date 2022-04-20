@@ -1,4 +1,4 @@
-import { formatNumberShort, formatMoney, instanceCount, getNsDataThroughFile, getActiveSourceFiles, disableLogs } from './helpers.js'
+import { log, formatNumberShort, formatMoney, instanceCount, getNsDataThroughFile, getActiveSourceFiles, disableLogs } from './helpers.js'
 
 const argsSchema = [
     ['hide-stocks', false],
@@ -114,7 +114,8 @@ export async function main(ns) {
             hudData.length = 0; // Clear the hud data for the next iteration
 
         } catch (err) { // Might run out of ram from time to time, since we use it dynamically
-            ns.print("ERROR: Update Skipped: " + String(err));
+            log(ns, `WARNING: stats.js Caught (and suppressed) an unexpected error in the main loop. Update Skipped:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
         await ns.sleep(1000);
     }
