@@ -283,8 +283,12 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
 export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = Number.MAX_SAFE_INTEGER) {
     checkNsInstance(ns, '"log"');
     ns.print(message);
-    if (alsoPrintToTerminal) ns.tprint(message);
     if (toastStyle) ns.toast(message.length <= maxToastLength ? message : message.substring(0, maxToastLength - 3) + "...", toastStyle);
+    if (alsoPrintToTerminal) {
+        ns.tprint(message);
+        // TODO: Find a way write things logged to the terminal to a "permanent" terminal log file, preferably without this becoming an async function.
+        //ns.write("log.terminal.txt", message + '\n', 'a'); // Note: we should get away with not awaiting this promise since it's not a script file
+    }
     return message;
 }
 
