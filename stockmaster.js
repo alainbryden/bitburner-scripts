@@ -45,6 +45,7 @@ const argsSchema = [
     ['sell-threshold', 0], // Sell stocks forecasted to earn less than this return (default 0% - which happens when prob hits 50% or worse)
     ['diversification', 0.34], // Before we have 4S data, we will not hold more than this fraction of our portfolio as a single stock
     ['disableHud', false], // Disable showing stock value in the HUD panel
+    ['disable-purchase-tix-api', false], // Disable purchasing the TIX API if you do not already have it.
     // The following settings are related only to tweaking pre-4s stock-market logic
     ['show-pre-4s-forecast', false], // If set to true, will always generate and display the pre-4s forecast (if false, it's only shown while we hold no stocks)
     ['show-market-summary', false], // Same effect as "show-pre-4s-forecast", this market summary has become so informative, it's valuable even with 4s
@@ -99,8 +100,19 @@ export async function main(ns) {
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
     let myStocks = [], allStocks = [];
 
-    if (!ns.getPlayer().hasTixApiAccess) // You cannot use the stockmaster until you have API access
-        return log(ns, "ERROR: You have to buy stock market access and API access before you can run this script!", true);
+    let player = ns.getPlayer();
+    if (!player.hasTixApiAccess) { // You cannot use the stockmaster until you have API access
+        if (options['disable-purchase-tix-api'])
+            return log(ns, "ERROR: You do not have stock market API access, and --disable-purchase-tix-api is set.", true);
+        let success = false;
+        log(ns, `INFO: You are missing stock market API access. (NOTE: This is granted for free once you have SF8). ` +
+            `Waiting until we can have the 5b needed to buy it. (Run with --disable-purchase-tix-api to disable this feature.)`, true);
+        do {
+            await ns.sleep(sleepInterval);
+            const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
+            success = await tryGetStockMarketAccess(ns, player = ns.getPlayer(), player.money - reserve);
+        } while (!success);
+    }
 
     dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!disableShorts && (!(8 in dictSourceFiles) || dictSourceFiles[8] < 2)) {
@@ -546,6 +558,28 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
             bitnodeMults.FourSigmaMarketDataApiCost *= 2;
         }
     }
+    return false;
+}
+
+/** @param {NS} ns **/
+/** @param {Player} playerStats **/
+async function tryGetStockMarketAccess(ns, playerStats, budget) {
+    if (playerStats.hasTixApiAccess) return true; // Already have access
+    const costWseAccount = 200E6;
+    const costTixApi = 5E9;
+    const totalCost = (playerStats.hasWseAccount ? 0 : costWseAccount) + costTixApi;
+    if (totalCost > budget) return false;
+    if (!playerStats.hasWseAccount) {
+        if (await getNsDataThroughFile(ns, 'ns.stock.purchaseWseAccount()', '/Temp/purchase-wse.txt'))
+            log(ns, `SUCCESS: Purchased a WSE (stockmarket) account for ${formatMoney(costWseAccount)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+        else
+            log(ns, 'ERROR attempting to purchase WSE account!', false, 'error');
+    }
+    if (await getNsDataThroughFile(ns, 'ns.stock.purchaseTixApi()', '/Temp/purchase-tix-api.txt')) {
+        log(ns, `SUCCESS: Purchased Tix (stockmarket) Api access for ${formatMoney(costTixApi)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+        return true;
+    } else
+        log(ns, 'ERROR attempting to purchase Tix Api!', false, 'error');
     return false;
 }
 
