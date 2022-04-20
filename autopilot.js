@@ -32,7 +32,7 @@ let ranCasino; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
 let spendingHashesOnHacking; // Flag to indicate whether we've kicked off spend-hacknet-hashes already
 let lastScriptsCheck; // Last time we got a listing of all running scripts
-let sourceFiles, bitnodeMults; // Info for the current bitnode
+let dictSourceFiles, bitnodeMults; // Info for the current bitnode
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -45,11 +45,12 @@ export async function main(ns) {
 	lastScriptsCheck = 0;
 
 	// Collect and cache some one-time data
-	sourceFiles = await getActiveSourceFiles(ns, false);
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-	if (!(4 in sourceFiles) && player.bitNodeN != 4)
-		return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'error');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
+	dictSourceFiles = await getActiveSourceFiles(ns, true);
+	if (!(4 in dictSourceFiles))
+		log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
+			`Some functionality will be diabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns);
 
@@ -93,7 +94,7 @@ async function checkIfBnIsComplete(ns, player) {
 	if (wdHack == -1) return !(wdUnavailable = true);
 	if (player.hacking < wdHack)
 		return false; // We can't hack it yet, but soon!
-	const text = `BN ${player.bitNodeN}.${sourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
+	const text = `BN ${player.bitNodeN}.${dictSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 	// TODO: Use the new singularity function coming soon to automate entering a new BN
@@ -112,16 +113,16 @@ async function checkOnRunningScripts(ns, player) {
 	// Launch stock-master in a way that emphasizes it as our main source of income early-on
 	if (!findScript('stockmaster.js'))
 		launchScriptHelper(ns, 'stockmaster.js', [
-			"fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
+			"--fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
 			"--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
 		]);
 
 	// Launch sleeves and allow them to also ignore the reserve so they can train up to boost gang unlock speed
-	if (!findScript('sleeve.js'))
+	if ((10 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('sleeve.js'))
 		launchScriptHelper(ns, 'sleeve.js', ["--training-reserve", 300000]); // Only avoid training away our casino seed money
 
 	// Launch work-for-factions with different arguments if we're still working towards a gang
-	if (!findScript('work-for-factions.js')) { // Don't bother re-launching if it's already going
+	if ((4 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('work-for-factions.js')) { // Don't bother re-launching if it's already going
 		const workArgs = ["--fast-crimes-only"]; // NOTE: Default args will spend hashes on coding contracts by default, which we like
 		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
 		playerInGang = playerInGang || await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
@@ -130,7 +131,7 @@ async function checkOnRunningScripts(ns, player) {
 	}
 
 	// Spend hacknet hashes on our boosting best hack-income server once established
-	if (!spendingHashesOnHacking && player.playtimeSinceLastAug >= 20 * 60 * 1000) { // 20 minutes seems about right
+	if ((9 in dictSourceFiles) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= 20 * 60 * 1000) { // 20 minutes seems about right
 		const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
 		if (strServerIncomeInfo) {
 			const incomeByServer = JSON.parse(strServerIncomeInfo);
@@ -169,8 +170,9 @@ async function checkOnRunningScripts(ns, player) {
 /** @param {NS} ns 
  * Logic to steal 10b from the casino **/
 async function maybeDoCasino(ns, player) {
+	const casinoFlagFile = "/Temp/ran-casino.txt";
 	if (ranCasino) return;
-	if (ns.read("/Temp/ran-casino.txt")) return ranCasino = true;
+	if (ns.read(casinoFlagFile)) return ranCasino = true;
 	if (player.playtimeSinceLastAug < 60000) // If it's been less than 1 minute, wait a while to establish income
 		return;
 	if (player.money / player.playtimeSinceLastAug > 5e9 / 60000) // If we're making more than ~5b / minute, no need to run casino.
@@ -181,13 +183,21 @@ async function maybeDoCasino(ns, player) {
 		return; // We need at least 200K (and change) to run casino so we can travel to aevum
 	// Run casino.js and expect ourself to get killed in the process
 	// TODO: Preserve the current script's state / args through the reset
-	if (launchScriptHelper(ns, 'casino.js', ['kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]))
-		await ns.asleep(30000); // Just sleep for 30 seconds. casino.js should kill/restart us before that long.
+	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
+	if (pid) {
+		await waitForProcessToComplete(ns, pid);
+		await ns.asleep(1000); // Give time for this script to be killed if the game is being restarted by casino.js
+		// If we didn't get killed, see if casino.js discovered it was already previously kicked out
+		if (ns.read(casinoFlagFile)) return ranCasino = true;
+		// Otherwise, something went wrong
+		log(ns, `ERROR: Something went wrong. Casino.js ran, but we haven't been killed, and the casino flag file "${casinoFlagFile}" isn't set.`)
+	}
 }
 
 /** @param {NS} ns 
  * Logic to detect if it's a good time to install augmentations, and if so, do so **/
 async function maybeInstallAugmentations(ns, player) {
+	if (!(4 in dictSourceFiles)) return false; // Cannot automate augmentations or installs without singularity
 	// If we previously attempted to reserve money for an augmentation purchase order, do a fresh facman run to ensure it's still available
 	if (reservedPurchase) {
 		log(ns, "INFO: Manually running faction-manager.js to ensure previously reserved purchase is still obtainable.");
@@ -226,6 +236,7 @@ async function maybeInstallAugmentations(ns, player) {
 		await ns.write("reserve.txt", facman.total_rep_cost + facman.total_aug_cost, "w"); // Should prevent other scripts from spending this money
 		return reservedPurchase = true; // Set a flag so that on our next loop, we actually try to execute the purchase
 	}
+
 	// Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
 	const resetLog = `Invoking ascend.js at ${formatDuration(player.playtimeSinceLastAug)} since last aug to install: ${augSummary}`;
 	log(ns, `INFO: ${resetLog}`, true, 'info');
