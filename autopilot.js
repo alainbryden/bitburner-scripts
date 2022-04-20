@@ -187,11 +187,16 @@ async function checkOnRunningScripts(ns, player) {
 	if ((10 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('sleeve.js'))
 		launchScriptHelper(ns, 'sleeve.js', ["--training-reserve", 300000]); // Only avoid training away our casino seed money
 
+	// Check if we've joined a gang yet. Once we have, restart work-for-factions.js so it can run with different arguments
+	if (!playerInGang) {
+		playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+		if (playerInGang && findScript('work-for-factions.js'))
+			await killScript(ns, 'work-for-factions.js');
+	}
 	// Launch work-for-factions with different arguments if we're still working towards a gang
 	if ((4 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('work-for-factions.js')) { // Don't bother re-launching if it's already going
 		const workArgs = ["--fast-crimes-only"]; // NOTE: Default args will spend hashes on coding contracts by default, which we like
 		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
-		playerInGang = playerInGang || await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
 		if (!playerInGang) workArgs.push("--prioritize-invites", "--crime-focus")
 		launchScriptHelper(ns, 'work-for-factions.js', workArgs);
 	}
