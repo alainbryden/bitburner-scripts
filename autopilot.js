@@ -392,10 +392,12 @@ async function manageReservedMoney(ns, player, stocksValue) {
 	const currentReserve = Number(ns.read("reserve.txt") || 0);
 	if (reserveForDaedalus && currentReserve != 100E9)
 		await ns.write("reserve.txt", 100E9, "w"); // Reserve 100b to get the daedalus invite
-	// Otherwise, reserve 8B for stocks, always.
-	const minStockValue = 8E9;
+	// Otherwise, reserve money for stocks, our main source of income for most of the BN.
+	const minStockValue = 8E9; // At a minimum 8 of the 10 billion earned from the casino must be reserved for buying stock
+	const minStockPercent = 0.8; // As we earn more money, reserve 80% of it for further investing in stock
+	const reserveCap = 1E12; // As we start start to earn crazy money, we will hit the stock market cap, so cap the maximum reserve
 	// Dynamically update reserved cash based on how much money is already converted to stocks.
-	const reserve = Math.max(0, minStockValue - stocksValue);
+	const reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));
 	if (currentReserve != reserve)
 		await ns.write("reserve.txt", reserve, "w"); // Reserve 8 of the 10b casino money for stock seed money
 	// NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
