@@ -82,8 +82,9 @@ async function initializeNewBitnode(ns) {
  * @param {NS} ns */
 async function mainLoop(ns) {
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-	await manageReservedMoney(ns, player);
-	await checkOnDaedalusStatus(ns, player);
+	const stocksValue = await getStocksValue(ns, player);
+	await manageReservedMoney(ns, player, stocksValue);
+	await checkOnDaedalusStatus(ns, player, stocksValue);
 	await checkIfBnIsComplete(ns, player);
 	await checkOnRunningScripts(ns, player);
 	await maybeDoCasino(ns, player);
@@ -93,7 +94,7 @@ async function mainLoop(ns) {
 /** Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite
  * @param {NS} ns
  * @param {Player} player **/
-async function checkOnDaedalusStatus(ns, player) {
+async function checkOnDaedalusStatus(ns, player, stocksValue) {
 	// Logic below is for rushing a daedalus invite.
 	// We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
 	if (daedalusUnavailable || wdAvailable == true) return reserveForDaedalus = false;
@@ -116,7 +117,7 @@ async function checkOnDaedalusStatus(ns, player) {
 	if (playerInstalledAugCount !== null && playerInstalledAugCount < reqDaedalusAugs)
 		return daedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
 	// If we have sufficient augs and hacking, all we need is the money (100b)
-	const totalWorth = player.money + await getStocksValue(ns, player);
+	const totalWorth = player.money + stocksValue;
 	if (totalWorth > 100E9 && player.money < 100E9) {
 		reserveForDaedalus = true;
 		log(ns, "INFO: Temporarily liquidating stocks to earn an invite to Daedalus...", true, 'info');
@@ -386,14 +387,17 @@ async function shouldDelayInstall(ns, player) {
 /** Consolidated logic for all the times we want to reserve money
  * @param {NS} ns 
  * @param {Player} player */
-async function manageReservedMoney(ns, player) {
+async function manageReservedMoney(ns, player, stocksValue) {
 	if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
 	const currentReserve = Number(ns.read("reserve.txt") || 0);
 	if (reserveForDaedalus && currentReserve != 100E9)
 		await ns.write("reserve.txt", 100E9, "w"); // Reserve 100b to get the daedalus invite
-	// Otherwise, reserve 8B for stocks, always
-	if (currentReserve != 8E9)
-		await ns.write("reserve.txt", 8E9, "w"); // Reserve 8 of the 10b casino money for stock seed money
+	// Otherwise, reserve 8B for stocks, always.
+	const minStockValue = 8E9;
+	// Dynamically update reserved cash based on how much money is already converted to stocks.
+	const reserve = Math.max(0, minStockValue - stocksValue);
+	if (currentReserve != reserve)
+		await ns.write("reserve.txt", reserve, "w"); // Reserve 8 of the 10b casino money for stock seed money
 	// NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
 	// - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
 	// - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores 
