@@ -33,7 +33,7 @@ let reservedPurchase; // Flag to indicate whether we've reservedPurchase money a
 let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let lastScriptsCheck; // Last time we got a listing of all running scripts
 let killScripts; // A list of scripts flagged to be restarted due to changes in priority
-let dictSourceFiles, bitnodeMults, playerInstalledAugCount; // Info for the current bitnode
+let dictOwnedSourceFiles, unlockedSFs, bitnodeMults, playerInstalledAugCount; // Info for the current bitnode
 let daemonStartTime; // The time we personally launched daemon.
 
 /** @param {NS} ns **/
@@ -51,8 +51,9 @@ export async function main(ns) {
 	// Collect and cache some one-time data
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
-	dictSourceFiles = await getActiveSourceFiles(ns, true);
-	if (!(4 in dictSourceFiles))
+	dictOwnedSourceFiles = await getActiveSourceFiles(ns, false);
+	unlockedSFs = await getActiveSourceFiles(ns, true);
+	if (!(4 in unlockedSFs))
 		log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
 			`Some functionality will be diabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
@@ -106,7 +107,7 @@ async function checkOnDaedalusStatus(ns, player) {
 		return reserveForDaedalus = false;
 	}
 	if (reserveForDaedalus) { // Already waiting for a Daedalus invite, try joining them
-		return (4 in dictSourceFiles) ? await getNsDataThroughFile(ns, 'ns.joinFaction(ns.args[0])', '/Temp/joinFaction.txt', ["Daedalus"]) :
+		return (4 in unlockedSFs) ? await getNsDataThroughFile(ns, 'ns.joinFaction(ns.args[0])', '/Temp/joinFaction.txt', ["Daedalus"]) :
 			log(ns, "INFO: Please manually join the faction 'Daedalus' as soon as possible to proceed", false, 'info');
 	}
 	const bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || { DaedalusAugsRequirement: 1 };
@@ -135,7 +136,7 @@ async function checkIfBnIsComplete(ns, player) {
 	wdAvailable = true; // WD is available this bitnode. Are we ready to hack it yet?
 	if (player.hacking < wdHack)
 		return false; // We can't hack it yet, but soon!
-	const text = `BN ${player.bitNodeN}.${dictSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
+	const text = `BN ${player.bitNodeN}.${dictOwnedSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 	// TODO: Use the new singularity function coming soon to automate entering a new BN
@@ -192,12 +193,12 @@ async function checkOnRunningScripts(ns, player) {
 		]);
 
 	// Launch sleeves and allow them to also ignore the reserve so they can train up to boost gang unlock speed
-	if ((10 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('sleeve.js'))
+	if ((10 in unlockedSFs) && (2 in unlockedSFs) && !findScript('sleeve.js'))
 		launchScriptHelper(ns, 'sleeve.js', ["--training-reserve", 300000]); // Only avoid training away our casino seed money
 
 	// Spend hacknet hashes on our boosting best hack-income server once established
 	const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
-	if ((9 in dictSourceFiles) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= 20 * 60 * 1000) { // 20 minutes seems about right
+	if ((9 in unlockedSFs) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= 20 * 60 * 1000) { // 20 minutes seems about right
 		const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
 		if (strServerIncomeInfo) {
 			const incomeByServer = JSON.parse(strServerIncomeInfo);
@@ -246,7 +247,7 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Launch work-for-factions if it isn't already running (rules for killing unproductive instances are above)
 	// Note: We delay launching our own 'work-for-factions.js' until daemon has warmed up, so we don't steal it's "kickstartHackXp" study focus
-	if ((4 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('work-for-factions.js') && Date.now() - daemonStartTime > 30000) {
+	if ((4 in unlockedSFs) && (2 in unlockedSFs) && !findScript('work-for-factions.js') && Date.now() - daemonStartTime > 30000) {
 		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
 		// NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
 		const workArgs = !playerInGang ? rushGangsArgs : ["--fast-crimes-only"];
@@ -290,7 +291,7 @@ async function maybeDoCasino(ns, player) {
  * @param {NS} ns 
  * @param {Player} player */
 async function maybeInstallAugmentations(ns, player) {
-	if (!(4 in dictSourceFiles)) {
+	if (!(4 in unlockedSFs)) {
 		setStatus(ns, `No singularity access, so you're on your own. You should manually work for factions and install augmentations!`);
 		return false; // Cannot automate augmentations or installs without singularity
 	}
