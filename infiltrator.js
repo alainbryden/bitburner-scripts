@@ -187,6 +187,14 @@ class InfiltrationService {
     self.tickComplete = true
   }
 
+  markSolution () {
+
+  }
+
+  clearSolution() {
+
+  }
+
   async cyberpunk () {
     const getTargetElement = () => [..._doc.querySelectorAll('h5')].filter(e => e.innerText.includes('Targets:'))[0]
     let targetElement = getTargetElement()
@@ -238,7 +246,7 @@ class InfiltrationService {
     }
     // send solution string
     const pathStr = getPathSequential(sizeX, sizeY, mineCoords).join(' ') + ' '
-    console.logConsole(`Mine solution string: ${pathStr}`)
+    logConsole(`Mine solution string: ${pathStr}`)
     this.ws.send(pathStr)
     // wait for end
     while (isMarkPhase()) {
@@ -493,6 +501,7 @@ export async function main (ns) {
   const service = await new InfiltrationService(ns)
   await sleep(2000)
   if (!service.automationEnabled) {
+    // fail silently if the backend wasn't found
     log(ns, 'Could not establish websocket connection. Exiting infiltration service.')
     log(ns, 'The file you need to run locally can be found here: https://pastebin.com/psmzQDEZ')
     log(ns, 'Download as `echo-server.py` and run with Python 3.7 or above: `python echo-server.py`.')
@@ -501,4 +510,5 @@ export async function main (ns) {
   const intervalId = service.start()
   await registerService(ns, serviceName, intervalId)
   log(ns, `Started infiltration service`, false, 'info')
+  log(ns, `Service is running with interval ID ${intervalId}. Script will now exit.`)
 }
