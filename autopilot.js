@@ -34,6 +34,7 @@ let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should
 let lastScriptsCheck; // Last time we got a listing of all running scripts
 let killScripts; // A list of scripts flagged to be restarted due to changes in priority
 let dictSourceFiles, bitnodeMults, playerInstalledAugCount; // Info for the current bitnode
+let daemonStartTime; // The time we personally launched daemon.
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -44,7 +45,7 @@ export async function main(ns) {
 	// Clear reset global state
 	playerInGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = false;
 	playerInstalledAugCount = wdAvailable = null;
-	lastScriptsCheck = 0;
+	daemonStartTime = lastScriptsCheck = 0;
 	killScripts = [];
 
 	// Collect and cache some one-time data
@@ -194,20 +195,6 @@ async function checkOnRunningScripts(ns, player) {
 	if ((10 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('sleeve.js'))
 		launchScriptHelper(ns, 'sleeve.js', ["--training-reserve", 300000]); // Only avoid training away our casino seed money
 
-	// Check if we've joined a gang yet. Once we have, restart work-for-factions.js so it can run with different arguments
-	if (!playerInGang) {
-		playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
-		if (playerInGang && findScript('work-for-factions.js'))
-			await killScript(ns, 'work-for-factions.js');
-	}
-	// Launch work-for-factions with different arguments if we're still working towards a gang
-	if ((4 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('work-for-factions.js')) { // Don't bother re-launching if it's already going
-		const workArgs = ["--fast-crimes-only"]; // NOTE: Default args will spend hashes on coding contracts by default, which we like
-		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
-		if (!playerInGang) workArgs.push("--prioritize-invites", "--crime-focus")
-		launchScriptHelper(ns, 'work-for-factions.js', workArgs);
-	}
-
 	// Spend hacknet hashes on our boosting best hack-income server once established
 	const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
 	if ((9 in dictSourceFiles) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= 20 * 60 * 1000) { // 20 minutes seems about right
@@ -235,6 +222,7 @@ async function checkOnRunningScripts(ns, player) {
 		// Launch daemon in "looping" mode if we have sufficient hack level
 		["--looping-mode", "--recovery-thread-padding", 10, "--cycle-timing-delay", 2000, "--queue-delay", "10",
 			"--stock-manipulation-focus", "--silent-misfires", "--initial-max-targets", "63", "--no-share"];
+	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
 	// By default, disable joining bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
 	if (!options['enable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
 	// Launch or re-launch daemon with the desired arguments
@@ -242,6 +230,27 @@ async function checkOnRunningScripts(ns, player) {
 		if (player.hacking >= hackThreshold)
 			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
+		daemonStartTime = Date.now();
+	}
+
+	// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
+	if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+	// The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
+	const rushGangsArgs = ["--fast-crimes-only", "--prioritize-invites", "--crime-focus"];
+	// Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
+	// (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
+	const wrongWork = findScript('work-for-factions.js', playerInGang ? s => s.args.includes("--crime-focus") :
+		s => !rushGangsArgs.all(a => s.args.includes(a))); // Require all rushGangsArgs if we're not in a gang yet.
+	// If running with the wrong args, kill it so we can start it with the desired args
+	if (wrongWork) await killScript(ns, 'work-for-factions.js', null, wrongWork);
+
+	// Launch work-for-factions if it isn't already running (rules for killing unproductive instances are above)
+	// Note: We delay launching our own 'work-for-factions.js' until daemon has warmed up, so we don't steal it's "kickstartHackXp" study focus
+	if ((4 in dictSourceFiles) && (2 in dictSourceFiles) && !findScript('work-for-factions.js') && Date.now() - daemonStartTime > 30000) {
+		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
+		// NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
+		const workArgs = !playerInGang ? rushGangsArgs : ["--fast-crimes-only"];
+		launchScriptHelper(ns, 'work-for-factions.js', workArgs);
 	}
 }
 
