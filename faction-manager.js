@@ -1,4 +1,7 @@
-import { log, formatNumberShort, formatMoney, instanceCount, getNsDataThroughFile, getActiveSourceFiles, tryGetBitNodeMultipliers } from './helpers.js'
+import {
+    log, formatNumberShort, formatMoney,
+    instanceCount, getNsDataThroughFile, getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue
+} from './helpers.js'
 
 // PLAYER CONFIGURATION CONSTANTS
 // This also acts as a list of default "easy" factions to list and compare, in addition to any other invites you may have
@@ -119,16 +122,7 @@ export async function main(ns) {
     gangFaction = gangInfo ? gangInfo.faction : false;
     favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
     startingPlayerMoney = playerData.money;
-    // Get total stocks value if player has access
-    if (options['ignore-stocks'] || !playerData.hasTixApiAccess) {
-        stockValue = 0
-    } else { // Break this into two requests since there's lot's of RAM involved.
-        const stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
-        stockValue = await getNsDataThroughFile(ns, JSON.stringify(stkSymbols) +
-            `.map(sym => ({ sym, pos: ns.stock.getPosition(sym), ask: ns.stock.getAskPrice(sym), bid: ns.stock.getBidPrice(sym) }))` +
-            `.reduce((total, stk) => total + stk.pos[0] * stk.bid + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) -100000 * (stk.pos[0] + stk.pos[2] > 0 ? 1 : 0), 0)`,
-            '/Temp/stock-portfolio-value.txt');
-    }
+    stockValue = options['ignore-stocks'] ? 0 : await getStocksValue(ns, playerData);
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
     log(ns, 'In factions: ' + joinedFactions);
     // Get owned augmentations (whether they've been installed or not). Ignore strNF because you can always buy more.

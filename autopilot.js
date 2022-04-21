@@ -1,6 +1,6 @@
 import {
 	log, getFilePath, instanceCount, getNsDataThroughFile, waitForProcessToComplete,
-	getActiveSourceFiles, tryGetBitNodeMultipliers,
+	getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue,
 	formatMoney, formatDuration
 } from './helpers.js'
 
@@ -116,7 +116,7 @@ async function checkOnDaedalusStatus(ns, player) {
 	if (playerInstalledAugCount !== null && playerInstalledAugCount < reqDaedalusAugs)
 		return daedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
 	// If we have sufficient augs and hacking, all we need is the money (100b)
-	const totalWorth = getLiquidationValue(ns, player);
+	const totalWorth = player.money + await getStocksValue(ns, player);
 	if (totalWorth > 100E9 && player.money < 100E9) {
 		reserveForDaedalus = true;
 		log(ns, "INFO: Temporarily liquidating stocks to earn an invite to Daedalus...", true, 'info');
@@ -368,7 +368,7 @@ async function maybeInstallAugmentations(ns, player) {
 async function shouldDelayInstall(ns, player) {
 	// Are we close to being able to afford 4S TIX data?
 	if (!player.has4SDataTixApi) {
-		const totalWorth = getLiquidationValue(ns, player);
+		const totalWorth = player.money + await getStocksValue(ns, player);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
 			(player.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
@@ -431,14 +431,6 @@ function setStatus(ns, status, uniquePart = null) {
 	if (lastStatusLog == uniquePart) return;
 	lastStatusLog = uniquePart
 	log(ns, status);
-}
-
-/** Helper to get a user's total money including stocks
- * @param {NS} ns 
- * @param {Player} player */
-function getLiquidationValue(ns, player) {
-	// Hack: stats.js conveniently polls for our stock value. I'm just going to steal it from there.
-	return player.money + Number(ns.read('/Temp/stock-portfolio-value.txt') || 0)
 }
 
 /** Append the specified text (with timestamp) to a persistent log in the home directory

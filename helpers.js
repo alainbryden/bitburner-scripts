@@ -374,6 +374,31 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
     return others.length;
 }
 
+let cachedStockSymbols; // Cache of stock symbols since these never change
+
+/** Helper function to get the total value of stocks using as little RAM as possible.
+ * @param {NS} ns
+ * @param {Player} player - If you have previously retrieve player info, you can provide that here to save some time.
+ * @param {string[]} stockSymbols - If you have previously retrieved a list of all stock symbols, you can provide that here to save some time. */
+export async function getStocksValue(ns, player = null, stockSymbols = null) {
+    if (!(player || await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt')).hasTixApiAccess) return 0;
+    if (!stockSymbols || stockSymbols.length == 0) {
+        if (!cachedStockSymbols)
+            cachedStockSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
+        stockSymbols = cachedStockSymbols;
+    }
+    const helper = async (fn) => await getNsDataThroughFile(ns,
+        `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${fn}(sym)]))`, `/Temp/stock-${fn}.txt`, stockSymbols);
+    const askPrices = await helper('getAskPrice');
+    const bidPrices = await helper('getBidPrice');
+    const positions = await helper('getPosition');
+    return stockSymbols.map(sym => ({ sym, pos: positions[sym], ask: askPrices[sym], bid: bidPrices[sym] }))
+        .reduce((total, stk) => total + (stk.pos[0] * stk.bid) /* Long Value */ + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) /* Short Value */
+            // Subtract commission only if we have one or more shares (this is money we won't get when we sell our position)
+            // If for some crazy reason we have shares both in the short and long position, we'll have to pay the commission twice (two separate sales)
+            - 100000 * (Math.sign(stk.pos[0]) + Math.sign(stk.pos[2])), 0);
+}
+
 /** @param {NS} ns 
  * Returns a helpful error message if we forgot to pass the ns instance to a function */
 export function checkNsInstance(ns, fnName = "this function") { if (!ns.print) throw `The first argument to ${fnName} should be a 'ns' instance.`; return ns; }

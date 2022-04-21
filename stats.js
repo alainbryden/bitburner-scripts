@@ -21,9 +21,7 @@ export async function main(ns) {
     let playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     let inBladeburner = playerInfo.inBladeburner;
     const bitNode = playerInfo.bitNodeN;
-    let stkSymbols = null;
-    if (!options['hide-stocks'] && playerInfo.hasTixApiAccess) // Auto-disabled if we do not have the TIX API
-        stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
+    let inBladeburner = playerInfo.inBladeburner;
     disableLogs(ns, ['sleep']);
 
     // Logic for adding a single custom HUD entry
@@ -48,11 +46,9 @@ export async function main(ns) {
                 }
             }
 
-            if (stkSymbols && !doc.getElementById("stock-display-1")) { // Don't add stocks if unavailable or the stockmaster HUD is active
-                const stkPortfolio = await getNsDataThroughFile(ns, JSON.stringify(stkSymbols) +
-                    `.map(sym => ({ sym, pos: ns.stock.getPosition(sym), ask: ns.stock.getAskPrice(sym), bid: ns.stock.getBidPrice(sym) }))` +
-                    `.reduce((total, stk) => total + stk.pos[0] * stk.bid + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) -100000 * (stk.pos[0] + stk.pos[2] > 0 ? 1 : 0), 0)`,
-                    '/Temp/stock-portfolio-value.txt');
+            // Show Stocks (only if stockmaster.js isn't already doing the same)
+            if (!options['hide-stocks'] && !doc.getElementById("stock-display-1")) {
+                const stkPortfolio = await getStocksValue(ns);
                 if (stkPortfolio > 0) addHud("Stock", formatMoney(stkPortfolio)); // Also, don't bother showing a section for stock if we aren't holding anything
             }
             // Show total instantaneous script income and EXP (values provided directly by the game)
