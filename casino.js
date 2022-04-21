@@ -71,7 +71,8 @@ export async function main(ns) {
 			return ns.tprint("INFO: We've appear to already have been previously kicked out of the casino.");
 		}
 		// Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
-		await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
+		if (options['kill-all-scripts'])
+			await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
 		// Clear the temp folder on home (all transient scripts / outputs)
 		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
 	}
