@@ -436,7 +436,8 @@ let buyStockWrapper = async (ns, sym, numShares) => await transactStock(ns, sym,
 let buyShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'short'); // ns.stock.short(sym, numShares);
 let sellStockWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'sell'); // ns.stock.sell(sym, numShares);
 let sellShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'sellShort'); // ns.stock.sellShort(sym, numShares);
-let transactStock = async (ns, sym, numShares, action) => await getNsDataThroughFile(ns, `ns.stock.${action}('${sym}', ${numShares})`, '/Temp/transact-stock.txt'); // ns.stock.sellShort(sym, numShares);
+let transactStock = async (ns, sym, numShares, action) =>
+    await getNsDataThroughFile(ns, `ns.stock.${action}(ns.args[0], ns.args[1])`, `/Temp/stock-${action}.txt`, [sym, numShares]);
 
 /** @param {NS} ns 
  * Automatically buys either a short or long position depending on the outlook of the stock. */
