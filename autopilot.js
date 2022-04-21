@@ -20,9 +20,14 @@ const argsSchema = [ // The set of all command line arguments
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
 	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
 	['wait-for-4s', true], // If true, will not reset until the 4S Tix API has been acquired (major source of income early on, especially in harder nodes)
+	['on-completion-script', null], // Spawn this script when we defeat the bitnode
+	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
 ];
 export function autocomplete(data, args) {
 	data.flags(argsSchema);
+	const lastFlag = args.length > 1 ? args[args.length - 2] : null;
+	if (["--on-completion-script"].includes(lastFlag))
+		return data.scripts;
 	return [];
 }
 
@@ -140,6 +145,11 @@ async function checkIfBnIsComplete(ns, player) {
 	const text = `BN ${player.bitNodeN}.${dictOwnedSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
+
+	// Run the --on-completion-script if specified
+	if (options['on-completion-script'])
+		launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
+
 	// TODO: Use the new singularity function coming soon to automate entering a new BN
 	wdAvailable = false; // TODO: Temporary: For now, set this so this routine doesn't run again
 	return true;
@@ -418,9 +428,9 @@ async function manageReservedMoney(ns, player, stocksValue) {
 
 /** Helper to launch a script and log whether if it succeeded or failed
  * @param {NS} ns */
-function launchScriptHelper(ns, baseScriptName, args = []) {
+function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
 	ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
-	const pid = ns.run(getFilePath(baseScriptName), 1, ...args);
+	const pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
 	if (!pid)
 		log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
 	else
