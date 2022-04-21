@@ -240,7 +240,7 @@ async function checkOnRunningScripts(ns, player) {
 	// Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
 	// (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
 	const wrongWork = findScript('work-for-factions.js', playerInGang ? s => s.args.includes("--crime-focus") :
-		s => !rushGangsArgs.all(a => s.args.includes(a))); // Require all rushGangsArgs if we're not in a gang yet.
+		s => !rushGangsArgs.every(a => s.args.includes(a))); // Require all rushGangsArgs if we're not in a gang yet.
 	// If running with the wrong args, kill it so we can start it with the desired args
 	if (wrongWork) await killScript(ns, 'work-for-factions.js', null, wrongWork);
 
