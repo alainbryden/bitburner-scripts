@@ -1,4 +1,4 @@
-import { log, formatNumberShort, formatMoney, instanceCount, getNsDataThroughFile, getActiveSourceFiles, disableLogs } from './helpers.js'
+import { log, formatNumberShort, formatMoney, instanceCount, getNsDataThroughFile, getActiveSourceFiles, disableLogs, getStocksValue } from './helpers.js'
 
 const argsSchema = [
     ['hide-stocks', false],
@@ -18,8 +18,7 @@ export async function main(ns) {
     const hook0 = doc.getElementById('overview-extra-hook-0');
     const hook1 = doc.getElementById('overview-extra-hook-1');
     const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
-    let playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
-    let inBladeburner = playerInfo.inBladeburner;
+    let playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
     const bitNode = playerInfo.bitNodeN;
     let inBladeburner = playerInfo.inBladeburner;
     disableLogs(ns, ['sleep']);
@@ -32,9 +31,10 @@ export async function main(ns) {
     // Main stats update loop
     while (true) {
         try {
-            // Show what bitNode we're currently playing
+            // Show what bitNode we're currently playing in
             addHud("BitNode", `${bitNode}.${1 + (dictSourceFiles[bitNode] || 0)}`, "Detected as being one more than your current owned SF level.");
 
+            // Show Hashes
             if (9 in dictSourceFiles || 9 == bitNode) { // Section not relevant if you don't have access to hacknet servers
                 const hashes = await getNsDataThroughFile(ns, '[ns.hacknet.numHashes(), ns.hacknet.hashCapacity()]', '/Temp/hash-stats.txt')
                 if (hashes[1] > 0) {
@@ -51,14 +51,17 @@ export async function main(ns) {
                 const stkPortfolio = await getStocksValue(ns);
                 if (stkPortfolio > 0) addHud("Stock", formatMoney(stkPortfolio)); // Also, don't bother showing a section for stock if we aren't holding anything
             }
-            // Show total instantaneous script income and EXP (values provided directly by the game)
+
+            // Show total instantaneous script income and experience per second (values provided directly by the game)
             addHud("ScrInc", formatMoney(ns.getScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
             addHud("ScrExp", formatNumberShort(ns.getScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
 
+            // Show reserved money
             const reserve = ns.read("reserve.txt") || 0;
             if (reserve > 0) // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing
                 addHud("Reserve", formatNumberShort(reserve, 3, 2), "Most scripts will leave this much money unspent. Remove with `run reserve.js 0`");
 
+            // Show gang income and territory
             let gangInfo = false;
             if (2 in dictSourceFiles || 2 == bitNode) { // Gang income is only relevant once gangs are unlocked
                 gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
@@ -70,6 +73,7 @@ export async function main(ns) {
                 }
             }
 
+            // Show Karma if we're not in a gang yet
             const karma = ns.heart.break();
             if (karma <= -9 // Don't spoiler Karma if they haven't started doing crime yet
                 && !gangInfo) { // If in a gang, you know you have oodles of bad Karma. Save some space
@@ -78,24 +82,27 @@ export async function main(ns) {
                 addHud("Karma", karmaShown, "After Completing BN2, you need -54,000 Karma in other BNs to start a gang. You also need a tiny amount to join some factions. The most is -90 for 'The Syndicate'");
             }
 
+            // Show number of kills if explicitly enabled
             if (options['show-peoplekilled']) {
-                playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+                playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
                 const numPeopleKilled = playerInfo.numPeopleKilled;
                 addHud("Kills", formatSixSigFigs(numPeopleKilled), "Count of successful Homicides. Note: The most kills you need is 30 for 'Speakers for the Dead'");
             }
 
+            // Show Bladeburner Rank and Skill Points
             if (7 in dictSourceFiles || 7 == bitNode) { // Bladeburner API unlocked
-                inBladeburner = inBladeburner || playerInfo.inBladeburner || // Avoid RAM dodge call if we have this info already
-                    (playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).inBladeburner;
+                inBladeburner = inBladeburner || playerInfo?.inBladeburner || // Avoid RAM dodge call if we have this info already
+                    (playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt')).inBladeburner;
                 if (inBladeburner) {
-                    const bbRank = await getNsDataThroughFile(ns, 'ns.bladeburner.getRank()', '/Temp/bladeburner-rank.txt');
-                    const bbSP = await getNsDataThroughFile(ns, 'ns.bladeburner.getSkillPoints()', '/Temp/bladeburner-skill-points.txt');
+                    const bbRank = await getNsDataThroughFile(ns, 'ns.bladeburner.getRank()', '/Temp/bladeburner-getRank.txt');
+                    const bbSP = await getNsDataThroughFile(ns, 'ns.bladeburner.getSkillPoints()', '/Temp/bladeburner-getSkillPoints.txt');
                     addHud("BB Rank", formatSixSigFigs(bbRank), "Your current bladeburner rank");
                     addHud("BB SP", formatSixSigFigs(bbSP), "Your current unspent bladeburner skill points");
                 }
             }
 
-            const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()', '/Temp/share-power.txt');
+            // Show current share power
+            const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()', '/Temp/getSharePower.txt');
             if (sharePower > 1.0001) // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing
                 addHud("Share Pwr", formatNumberShort(sharePower, 3, 2), "Uses RAM to boost faction reputation gain rate while working for factions. Run `daemon.js` with the `--no-share` flag to disable.");
 
