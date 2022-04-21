@@ -68,16 +68,16 @@ export async function main(ns) {
 	}
 }
 
-/** @param {NS} ns 
- * Logic run periodically throughout the BN **/
+/** Logic run once at the beginning of a new BN
+ * @param {NS} ns */
 async function initializeNewBitnode(ns) {
 	// Clean up all temporary scripts, which will include stale temp files
 	// launchScriptHelper(ns, 'cleanup.js'); // No need, ascedd.js and casino.js do this
 	// await ns.sleep(200); // Wait a short while for the dust to settle.
 }
 
-/** @param {NS} ns 
- * Logic run periodically throughout the BN **/
+/** Logic run periodically throughout the BN
+ * @param {NS} ns */
 async function mainLoop(ns) {
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
 	await manageReservedMoney(ns, player);
@@ -88,8 +88,9 @@ async function mainLoop(ns) {
 	await maybeInstallAugmentations(ns, player);
 }
 
-/** @param {NS} ns 
- * Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite **/
+/** Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite
+ * @param {NS} ns
+ * @param {Player} player **/
 async function checkOnDaedalusStatus(ns, player) {
 	// Logic below is for rushing a daedalus invite.
 	// We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
@@ -121,8 +122,9 @@ async function checkOnDaedalusStatus(ns, player) {
 	}
 }
 
-/** @param {NS} ns 
- * Logic run periodically throughout the BN to see if we are ready to complete it. **/
+/** Logic run periodically throughout the BN to see if we are ready to complete it.
+ * @param {NS} ns 
+ * @param {Player} player */
 async function checkIfBnIsComplete(ns, player) {
 	if (wdAvailable === false) return false;
 	const wdHack = await getNsDataThroughFile(ns,
@@ -140,32 +142,37 @@ async function checkIfBnIsComplete(ns, player) {
 	return true;
 }
 
-/** @param {NS} ns 
- * Helper to get a list of all scripts running (on home) **/
+/** Helper to get a list of all scripts running (on home)
+ * @param {NS} ns */
 async function getRunningScripts(ns) {
 	return await getNsDataThroughFile(ns, 'ns.ps()', '/Temp/ps.txt');
 }
 
-/** @param {NS} ns 
- * Helper to get the first instance of a running script by name. **/
+/** Helper to get the first instance of a running script by name.
+ * @param {NS} ns 
+ * @param {ProcessInfo[]} runningScripts - (optional) Cached list of running scripts to avoid repeating this expensive request
+ * @param {(value: ProcessInfo, index: number, array: ProcessInfo[]) => unknown} filter - (optional) Filter the list of processes beyond just matching on the script name */
 function findScriptHelper(baseScriptName, runningScripts, filter = null) {
 	return runningScripts.filter(s => s.filename == getFilePath(baseScriptName) && (!filter || filter(s)))[0];
 }
 
-/** @param {NS} ns 
- * Helper to kill a running script instance by name **/
-async function killScript(ns, baseScriptName, runningScripts = null) {
-	const processInfo = findScriptHelper(baseScriptName, runningScripts || (await getRunningScripts(ns)))
+/** Helper to kill a running script instance by name
+ * @param {NS} ns 
+ * @param {ProcessInfo[]} runningScripts - (optional) Cached list of running scripts to avoid repeating this expensive request
+ * @param {ProcessInfo} processInfo - (optional) The process to kill, if we've already found it in advance */
+async function killScript(ns, baseScriptName, runningScripts = null, processInfo = null) {
+	processInfo = processInfo || findScriptHelper(baseScriptName, runningScripts || (await getRunningScripts(ns)))
 	if (processInfo) {
-		log(ns, `INFO: Killing script ${baseScriptName} as requested.`, false, 'info');
+		log(ns, `INFO: Killing script ${baseScriptName} with pid ${processInfo.pid} and args: [${processInfo.args.join(", ")}].`, false, 'info');
 		return await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', '/Temp/kill.txt', [processInfo.pid]);
 	}
 	log(ns, `WARNING: Skipping request to kill script ${baseScriptName}, no running instance was found...`, false, 'warning');
 	return false;
 }
 
-/** @param {NS} ns 
- * Logic to ensure scripts are running to progress the BN **/
+/** Logic to ensure scripts are running to progress the BN
+ * @param {NS} ns 
+ * @param {Player} player */
 async function checkOnRunningScripts(ns, player) {
 	if (lastScriptsCheck > Date.now() - options['interval-check-scripts']) return;
 	lastScriptsCheck = Date.now();
@@ -238,8 +245,9 @@ async function checkOnRunningScripts(ns, player) {
 	}
 }
 
-/** @param {NS} ns 
- * Logic to steal 10b from the casino **/
+/** Logic to steal 10b from the casino
+ * @param {NS} ns 
+ * @param {Player} player */
 async function maybeDoCasino(ns, player) {
 	const casinoFlagFile = "/Temp/ran-casino.txt";
 	if (ranCasino) return;
@@ -269,8 +277,9 @@ async function maybeDoCasino(ns, player) {
 	}
 }
 
-/** @param {NS} ns 
- * Logic to detect if it's a good time to install augmentations, and if so, do so **/
+/** Logic to detect if it's a good time to install augmentations, and if so, do so
+ * @param {NS} ns 
+ * @param {Player} player */
 async function maybeInstallAugmentations(ns, player) {
 	if (!(4 in dictSourceFiles)) {
 		setStatus(ns, `No singularity access, so you're on your own. You should manually work for factions and install augmentations!`);
@@ -343,8 +352,9 @@ async function maybeInstallAugmentations(ns, player) {
 	await persist_log(ns, errLog);
 }
 
-/** @param {NS} ns 
- * Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit **/
+/** Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit
+ * @param {NS} ns 
+ * @param {Player} player */
 async function shouldDelayInstall(ns, player) {
 	// Are we close to being able to afford 4S TIX data?
 	if (!player.has4SDataTixApi) {
@@ -363,8 +373,9 @@ async function shouldDelayInstall(ns, player) {
 	return false;
 }
 
-/** @param {NS} ns 
- * Consolidated logic for all the times we want to reserve money **/
+/** Consolidated logic for all the times we want to reserve money
+ * @param {NS} ns 
+ * @param {Player} player */
 async function manageReservedMoney(ns, player) {
 	if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
 	const currentReserve = Number(ns.read("reserve.txt") || 0);
@@ -389,8 +400,8 @@ async function manageReservedMoney(ns, player) {
 	*/
 }
 
-/** @param {NS} ns 
- * Helper to launch a script and log whether if it succeeded or failed **/
+/** Helper to launch a script and log whether if it succeeded or failed
+ * @param {NS} ns */
 function launchScriptHelper(ns, baseScriptName, args = []) {
 	ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
 	const pid = ns.run(getFilePath(baseScriptName), 1, ...args);
@@ -403,8 +414,8 @@ function launchScriptHelper(ns, baseScriptName, args = []) {
 
 let lastStatusLog = ""; // The current or last-assigned long-term status (what this script is waiting to happen)
 
-/** @param {NS} ns 
- * Helper to set a global status and print it if it changes. **/
+/** Helper to set a global status and print it if it changes
+ * @param {NS} ns */
 function setStatus(ns, status, uniquePart = null) {
 	uniquePart = uniquePart || status; // Can be used to consider a logs "the same" (not worth re-printing) even if they have some different text
 	if (lastStatusLog == uniquePart) return;
@@ -412,15 +423,16 @@ function setStatus(ns, status, uniquePart = null) {
 	log(ns, status);
 }
 
-/** @param {NS} ns 
- * Helper to get a user's total money including stocks **/
+/** Helper to get a user's total money including stocks
+ * @param {NS} ns 
+ * @param {Player} player */
 function getLiquidationValue(ns, player) {
 	// Hack: stats.js conveniently polls for our stock value. I'm just going to steal it from there.
 	return player.money + Number(ns.read('/Temp/stock-portfolio-value.txt') || 0)
 }
 
-/** @param {NS} ns 
- * Append the specified text (with timestamp) to a persistent log in the home directory **/
+/** Append the specified text (with timestamp) to a persistent log in the home directory
+ * @param {NS} ns */
 async function persist_log(ns, text) {
 	await ns.write(persistentLog, `${(new Date()).toISOString().substring(0, 19)} ${text}\n`, "a")
 }
