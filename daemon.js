@@ -155,12 +155,13 @@ const argsSchema = [
     ['initial-study-time', 10], // Seconds. Set to 0 to not do any studying at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
     ['initial-hack-xp-time', 10], // Seconds. Set to 0 to not do any hack-xp grinding at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
     ['disable-script', []], // The names of scripts that you do not want run by our scheduler
+    ['run-script', []], // The names of additional scripts that you want daemon to run on home
 ];
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
-    if (lastFlag == "--disable-script")
+    if (lastFlag == "--disable-script" || lastFlag == "--run-script")
         return data.scripts;
     return [];
 }
@@ -248,6 +249,8 @@ export async function main(ns) {
         { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && playerStats.bitNodeN != 8 }, // Script to create manage bladeburner for us
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
+    // Add any additional scripts to be run provided by --run-script arguments
+    options['run-script'].forEach(s => asynchronousHelpers.push({ name: s }));
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
     asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
