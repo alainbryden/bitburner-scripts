@@ -9,7 +9,7 @@
  * TODO: separate out services logic into a `services.js` so more can be easily added (e.g. terminal monitor)
  */
 
-import { runCommand, log } from './helpers.js'
+import { runCommand, log, formatMoney, formatNumberShort, tryGetBitNodeMultipliers, getNsDataThroughFile } from './helpers.js'
 
 // delays for setTimeout and setInterval above this threshold are not modified
 // (helps prevent issues with hacking scripts)
@@ -59,14 +59,14 @@ function addCss () {
     animation-iteration-count: infinite;
     animation-direction: alternate
   }
+  .rewardTooltip {
+    color: #0d0;
+    font-family: Consolas;
+    margin: auto;
+  }
   </style>`
   _doc.getElementById('infilCss')?.remove()
   _doc.head.insertAdjacentHTML('beforeend', css);
-}
-
-function infilButtonUpdate() {
-  const node = [..._doc.getElementsByTagName('BUTTON')].find(e => e.innerText === 'Infiltrate Company')
-  node?.classList.add('infiltrationEnabled')
 }
 
 // compress/stretch setInterval and setTimeout, to make infiltrations easier
@@ -170,7 +170,7 @@ function getGridY (node) {
 }
 
 class InfiltrationService {
-  constructor (ns) {
+  constructor (ns, rewardInfo = []) {
     const self = this
     /* eslint-disable no-undef */
     self.ws = new WebSocket(socketUrl)
@@ -184,15 +184,34 @@ class InfiltrationService {
       logConsole(`Warning: websocket is not connected: ${JSON.stringify(event)}`)
     }
     addCss()
+    self.rewardInfo = rewardInfo
     self.tickComplete = true
   }
 
-  markSolution () {
+  infilButtonUpdate() {
+    const self = this
+    const buttonNode = [..._doc.getElementsByTagName('BUTTON')].find(e => e.innerText === 'Infiltrate Company')
+    if (buttonNode === undefined) {
+      return
+    }
+    buttonNode.classList.add('infiltrationEnabled')
+    // if we've already added a tooltip, return
+    if (_doc.getElementsByClassName('rewardTooltip')[0]) return
+    // get the name of the company we're at
+    // check tooltip first, in case we've backdoored and text is wonky
+    const titleSpan = buttonNode.parentNode.parentNode.firstChild.nextSibling
+    const companyName = titleSpan.ariaLabel ? titleSpan.ariaLabel.slice(22,-1) : titleSpan.textContent
+    var companyInfo = self.rewardInfo.find(c => c.name === companyName)
+    const rewardStr = `${formatMoney(companyInfo.moneyGain)}, ${formatNumberShort(companyInfo.repGain)} rep`
+    buttonNode.insertAdjacentHTML('afterend', `<span class='rewardTooltip'>${rewardStr}</span>`)
+  }
 
+  markSolution () {
+    // TODO
   }
 
   clearSolution() {
-
+    // TODO
   }
 
   async cyberpunk () {
@@ -420,7 +439,7 @@ class InfiltrationService {
     if (!self.tickComplete) return
     self.tickComplete = false
     // Add visual indicator to infiltration screen
-    infilButtonUpdate()
+    self.infilButtonUpdate()
     // Adjust time speed if we're infiltrating
     autoSetTimeFactor()
     // Match the symbols!
@@ -452,6 +471,203 @@ class InfiltrationService {
     return self.intId
   }
 }
+
+// calculation stuff
+
+const locationInfo = [{
+  name: 'AeroCorp',
+  maxClearanceLevel: 12,
+  startingSecurityLevel: 8.18
+}, {
+  name: 'Bachman & Associates',
+  maxClearanceLevel: 15,
+  startingSecurityLevel: 8.19
+}, {
+  name: 'Clarke Incorporated',
+  maxClearanceLevel: 18,
+  startingSecurityLevel: 9.55
+}, {
+  name: 'ECorp',
+  maxClearanceLevel: 37,
+  startingSecurityLevel: 17.02
+}, {
+  name: 'Fulcrum Technologies',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 15.54
+}, {
+  name: 'Galactic Cybersystems',
+  maxClearanceLevel: 12,
+  startingSecurityLevel: 7.89
+}, {
+  name: 'NetLink Technologies',
+  maxClearanceLevel: 6,
+  startingSecurityLevel: 3.29
+}, {
+  name: 'Aevum Police Headquarters',
+  maxClearanceLevel: 6,
+  startingSecurityLevel: 5.35
+}, {
+  name: 'Rho Construction',
+  maxClearanceLevel: 5,
+  startingSecurityLevel: 5.02
+}, {
+  name: 'Watchdog Security',
+  maxClearanceLevel: 7,
+  startingSecurityLevel: 5.85
+}, {
+  name: 'KuaiGong International',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 16.25
+}, {
+  name: 'Solaris Space Systems',
+  maxClearanceLevel: 18,
+  startingSecurityLevel: 12.59
+}, {
+  name: 'Nova Medical',
+  maxClearanceLevel: 12,
+  startingSecurityLevel: 5.02
+}, {
+  name: 'Omega Software',
+  maxClearanceLevel: 10,
+  startingSecurityLevel: 3.2
+}, {
+  name: 'Storm Technologies',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 5.38
+}, {
+  name: 'DefComm',
+  maxClearanceLevel: 17,
+  startingSecurityLevel: 7.18
+}, {
+  name: 'Global Pharmaceuticals',
+  maxClearanceLevel: 20,
+  startingSecurityLevel: 5.9
+}, {
+  name: 'Noodle Bar',
+  maxClearanceLevel: 5,
+  startingSecurityLevel: 2.5
+}, {
+  name: 'VitaLife',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 5.52
+}, {
+  name: 'Alpha Enterprises',
+  maxClearanceLevel: 10,
+  startingSecurityLevel: 3.62
+}, {
+  name: 'Blade Industries',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 10.59
+}, {
+  name: 'Carmichael Security',
+  maxClearanceLevel: 15,
+  startingSecurityLevel: 4.66
+}, {
+  name: 'DeltaOne',
+  maxClearanceLevel: 12,
+  startingSecurityLevel: 5.9
+}, {
+  name: 'Four Sigma',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 8.18
+}, {
+  name: 'Icarus Microsystems',
+  maxClearanceLevel: 17,
+  startingSecurityLevel: 6.02
+}, {
+  name: 'Joe\'s Guns',
+  maxClearanceLevel: 5,
+  startingSecurityLevel: 3.13
+}, {
+  name: 'MegaCorp',
+  maxClearanceLevel: 31,
+  startingSecurityLevel: 16.36
+}, {
+  name: 'Universal Energy',
+  maxClearanceLevel: 12,
+  startingSecurityLevel: 5.9
+}, {
+  name: 'CompuTek',
+  maxClearanceLevel: 15,
+  startingSecurityLevel: 3.59
+}, {
+  name: 'Helios Labs',
+  maxClearanceLevel: 18,
+  startingSecurityLevel: 7.28
+}, {
+  name: 'LexoCorp',
+  maxClearanceLevel: 15,
+  startingSecurityLevel: 4.35
+}, {
+  name: 'NWO',
+  maxClearanceLevel: 50,
+  startingSecurityLevel: 8.53
+}, {
+  name: 'OmniTek Incorporated',
+  maxClearanceLevel: 25,
+  startingSecurityLevel: 7.74
+}, {
+  name: 'Omnia Cybersystems',
+  maxClearanceLevel: 22,
+  startingSecurityLevel: 6
+}, {
+  name: 'SysCore Securities',
+  maxClearanceLevel: 18,
+  startingSecurityLevel: 4.77
+}]
+
+export function calculateSkill (exp, mult = 1) {
+  return Math.max(Math.floor(mult * (32 * Math.log(exp + 534.5) - 200)), 1)
+}
+
+function calcReward (player, startingDifficulty) {
+  const xpMult = 10 * 60 * 15
+  const stats =
+    calculateSkill(player.strength_exp_mult * xpMult, player.strength_mult) +
+    calculateSkill(player.defense_exp_mult * xpMult, player.defense_mult) +
+    calculateSkill(player.agility_exp_mult * xpMult, player.agility_mult) +
+    calculateSkill(player.dexterity_exp_mult * xpMult, player.dexterity_mult) +
+    calculateSkill(player.charisma_exp_mult * xpMult, player.charisma_mult)
+  let difficulty = startingDifficulty - Math.pow(stats, 0.9) / 250 - player.intelligence / 1600
+  if (difficulty < 0) difficulty = 0
+  if (difficulty > 3) difficulty = 3
+  return difficulty
+}
+
+function getAllRewards (ns, bnMults, player, display=false) {
+  const locations = [...locationInfo]
+  for (const location of locations) {
+    const levelBonus = location.maxClearanceLevel * Math.pow(1.01, location.maxClearanceLevel)
+    const reward = calcReward(player, location.startingSecurityLevel)
+    location.repGain =
+      Math.pow(reward + 1, 1.1) *
+      Math.pow(location.startingSecurityLevel, 1.2) *
+      30 *
+      levelBonus *
+      bnMults?.InfiltrationRep ?? 1
+    location.moneyGain =
+      Math.pow(reward + 1, 2) *
+      Math.pow(location.startingSecurityLevel, 3) *
+      3e3 *
+      levelBonus *
+      bnMults?.InfiltrationMoney ?? 1
+    location.repScore = location.repGain / location.maxClearanceLevel
+    location.moneyScore = location.moneyGain / location.maxClearanceLevel
+  }
+  // sort and display
+  locations.sort((a, b) => a.repScore - b.repScore)
+  if (display) {
+    for (const location of locations) {
+      log(ns, location.name, true)
+      log(ns, `  ${Math.round(location.repGain)} rep, ${formatMoney(location.moneyGain)}, ${location.maxClearanceLevel} levels`, true)
+      log(ns, `  ${formatMoney(location.moneyScore.toPrecision(4))} / lvl`, true)
+      log(ns, `  ${(location.repScore.toPrecision(4))} rep / lvl`, true)
+    }
+  }
+  return locations
+}
+
+// service stuff
 
 export async function killPrevService (ns, serviceName, writeback=true) {
   const contents = ns.read('services.txt')
@@ -498,7 +714,12 @@ export async function main (ns) {
     await killPrevService(ns, serviceName)
     return
   }
-  const service = await new InfiltrationService(ns)
+  // get BN multipliers first to feed reward info to infiltration service
+  const bnMults = await tryGetBitNodeMultipliers(ns)
+  const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
+  const locations = getAllRewards(ns, bnMults, player)
+  // launch service and see if it connects
+  const service = new InfiltrationService(ns, locations)
   await sleep(2000)
   if (!service.automationEnabled) {
     // fail silently if the backend wasn't found
@@ -509,6 +730,6 @@ export async function main (ns) {
   }
   const intervalId = service.start()
   await registerService(ns, serviceName, intervalId)
-  log(ns, `Started infiltration service`, false, 'info')
+  log(ns, `Started infiltration service`, false, 'success')
   log(ns, `Service is running with interval ID ${intervalId}. Script will now exit.`)
 }
