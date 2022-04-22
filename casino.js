@@ -12,8 +12,11 @@ const argsSchema = [
 	['on-completion-script', null], // Spawn this script when max-charges is reached
 	['on-completion-script-args', []], // Optional args to pass to the script when launched
 ];
-export function autocomplete(data, _) {
+export function autocomplete(data, args) {
 	data.flags(argsSchema);
+	const lastFlag = args.length > 1 ? args[args.length - 2] : null;
+	if (["--on-completion-script"].includes(lastFlag))
+		return data.scripts;
 	return [];
 }
 

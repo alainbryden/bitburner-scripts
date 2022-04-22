@@ -6,6 +6,8 @@ import {
 
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
+// The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
+const rushGangsArgs = ["--fast-crimes-only", "--prioritize-invites", "--crime-focus"];
 
 let options = null; // The options used at construction time
 // TODO: Currently these may as well be hard-coded, args are lost when various other scripts kill and restart us.
@@ -20,13 +22,18 @@ const argsSchema = [ // The set of all command line arguments
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
 	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
 	['wait-for-4s', true], // If true, will not reset until the 4S Tix API has been acquired (major source of income early on, especially in harder nodes)
+	['on-completion-script', null], // Spawn this script when we defeat the bitnode
+	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
 ];
 export function autocomplete(data, args) {
 	data.flags(argsSchema);
+	const lastFlag = args.length > 1 ? args[args.length - 2] : null;
+	if (["--on-completion-script"].includes(lastFlag))
+		return data.scripts;
 	return [];
 }
 
-let playerInGang; // Tells us whether we're in a gang or not
+let playerInGang, rushGang; // Tells us whether we're should be trying to work towards getting into a gang
 let wdAvailable; // A flag indicating whether the BN is completable on this reset
 let ranCasino; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
@@ -43,7 +50,7 @@ export async function main(ns) {
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
 
 	// Clear reset global state
-	playerInGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = false;
+	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = reservedPurchase = false;
 	playerInstalledAugCount = wdAvailable = null;
 	daemonStartTime = lastScriptsCheck = 0;
 	killScripts = [];
@@ -140,6 +147,11 @@ async function checkIfBnIsComplete(ns, player) {
 	const text = `BN ${player.bitNodeN}.${dictOwnedSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
+
+	// Run the --on-completion-script if specified
+	if (options['on-completion-script'])
+		launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
+
 	// TODO: Use the new singularity function coming soon to automate entering a new BN
 	wdAvailable = false; // TODO: Temporary: For now, set this so this routine doesn't run again
 	return true;
@@ -235,23 +247,25 @@ async function checkOnRunningScripts(ns, player) {
 		daemonStartTime = Date.now();
 	}
 
-	// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
-	if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
-	// The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
-	const rushGangsArgs = ["--fast-crimes-only", "--prioritize-invites", "--crime-focus"];
-	// Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
-	// (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
-	const wrongWork = findScript('work-for-factions.js', playerInGang ? s => s.args.includes("--crime-focus") :
-		s => !rushGangsArgs.every(a => s.args.includes(a))); // Require all rushGangsArgs if we're not in a gang yet.
-	// If running with the wrong args, kill it so we can start it with the desired args
-	if (wrongWork) await killScript(ns, 'work-for-factions.js', null, wrongWork);
+	// If gangs are unlocked, micro-manage how 'work-for-factions.js' is running by killing off unwanted instances
+	if ((2 in unlockedSFs)) {
+		// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
+		if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+		rushGang = !playerInGang;
+		// Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
+		// (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
+		const wrongWork = findScript('work-for-factions.js', !rushGang ? s => s.args.includes("--crime-focus") :
+			s => !rushGangsArgs.every(a => s.args.includes(a))); // Require all rushGangsArgs if we're not in a gang yet.
+		// If running with the wrong args, kill it so we can start it with the desired args
+		if (wrongWork) await killScript(ns, 'work-for-factions.js', null, wrongWork);
+	}
 
-	// Launch work-for-factions if it isn't already running (rules for killing unproductive instances are above)
+	// Launch work-for-factions if it isn't already running (rules for maybe killing unproductive instances are above)
 	// Note: We delay launching our own 'work-for-factions.js' until daemon has warmed up, so we don't steal it's "kickstartHackXp" study focus
-	if ((4 in unlockedSFs) && (2 in unlockedSFs) && !findScript('work-for-factions.js') && Date.now() - daemonStartTime > 30000) {
-		// If we're not yet in a gang, run in such a way that we will spend most of our time doing crime, improving Karma (also is good early income)
+	if ((4 in unlockedSFs) && !findScript('work-for-factions.js') && Date.now() - daemonStartTime > 30000) {
+		// If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also is good early income)
 		// NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
-		const workArgs = !playerInGang ? rushGangsArgs : ["--fast-crimes-only"];
+		const workArgs = rushGang ? rushGangsArgs : ["--fast-crimes-only"];
 		launchScriptHelper(ns, 'work-for-factions.js', workArgs);
 	}
 }
@@ -418,9 +432,9 @@ async function manageReservedMoney(ns, player, stocksValue) {
 
 /** Helper to launch a script and log whether if it succeeded or failed
  * @param {NS} ns */
-function launchScriptHelper(ns, baseScriptName, args = []) {
+function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
 	ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
-	const pid = ns.run(getFilePath(baseScriptName), 1, ...args);
+	const pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
 	if (!pid)
 		log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
 	else
