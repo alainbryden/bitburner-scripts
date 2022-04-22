@@ -201,8 +201,8 @@ class InfiltrationService {
     // check tooltip first, in case we've backdoored and text is wonky
     const titleSpan = buttonNode.parentNode.parentNode.firstChild.nextSibling
     const companyName = titleSpan.ariaLabel ? titleSpan.ariaLabel.slice(22,-1) : titleSpan.textContent
-    var companyInfo = self.rewardInfo.find(c => c.name === companyName)
-    const rewardStr = `${formatMoney(companyInfo.moneyGain)}, ${formatNumberShort(companyInfo.repGain)} rep`
+    var info = self.rewardInfo.find(c => c.name === companyName)
+    const rewardStr = `${formatMoney(info.moneyGain)}, ${formatNumberShort(info.repGain)} rep (${info.maxClearanceLevel})`
     buttonNode.insertAdjacentHTML('afterend', `<span class='rewardTooltip'>${rewardStr}</span>`)
   }
 
