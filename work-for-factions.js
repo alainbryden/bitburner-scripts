@@ -67,7 +67,7 @@ const preferredCompanyFactionOrder = [
     "Four Sigma", // No unique augs, but note that if accessible early on, Fulcrum + Four Sigma is a one-two punch to get all company rep boosting augs in just 2 factions
 ]
 // Order in which to focus on crime factions. Start with the hardest-to-earn invites, assume we will skip to next best if not achievable.
-const preferredCrimeFactionOrder = ["Slum Snakes", "Tetrads", "Speakers for the Dead", "The Dark Army", "The Syndicate", "The Covenant", "Daedalus", "Netburners", "NiteSec", "The Black Hand"];
+const preferredCrimeFactionOrder = ["Slum Snakes", "Tetrads", "Speakers for the Dead", "The Syndicate", "The Dark Army", "The Covenant", "Daedalus", "Netburners", "NiteSec", "The Black Hand"];
 // Gang factions in order of ease-of-invite. If gangs are available, as we near 54K Karma to unlock gangs (as per --karma-threshold-for-gang-invites), we will attempt to get into any/all of these.
 const desiredGangFactions = ["Slum Snakes", "The Syndicate", "The Dark Army", "Speakers for the Dead"];
 const allGangFactions = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Tetrads", "Slum Snakes", "The Black Hand", "NiteSec"];
@@ -80,7 +80,7 @@ const checkForNewPrioritiesInterval = 10 * 60 * 1000; // 10 minutes. Interrupt w
 let shouldFocusAtWork; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
 let hasFocusPenaly, hasSimulacrum, repToDonate, fulcrummHackReq;
-let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastActionRestart, crimeCount;
+let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastActionRestart, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 
 export function autocomplete(data, args) {
@@ -100,7 +100,7 @@ export async function main(ns) {
     disableLogs(ns, ['sleep']);
 
     // Reset globals whose value can persist between script restarts in weird situations
-    lastActionRestart = crimeCount = 0;
+    lastTravel = lastActionRestart = crimeCount = 0;
 
     // Parse options
     options = ns.flags(argsSchema);
@@ -173,31 +173,31 @@ async function loadStartupData(ns) {
     shouldFocusAtWork = !options['no-focus'] && hasFocusPenaly; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
     hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
 
-    mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
-        .filter(aug => !ownedAugmentations.includes(aug))
-        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+    mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+        dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug))
+            .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
     //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
     // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-    mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f, dictFactionAugs[f]
-        .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || options['desired-stats'].length == 0 ||
-            Object.keys(dictAugStats[aug]).some(key => options['desired-stats'].some(stat => key.includes(stat)))))
-        .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
+    mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+        dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug) && (
+            Object.keys(dictAugStats[aug]).length == 0 || options['desired-stats'].length == 0 ||
+            Object.keys(dictAugStats[aug]).some(key => options['desired-stats'].some(stat => key.includes(stat)))
+        )).reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
     //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
 
-    if (options['get-invited-to-every-faction']) {
-        softCompletedFactions = completedFactions = [];
-        // Prioritize joining these 3 city factions, since it is the largest non-precluding group of city factions
-        firstFactions = firstFactions.concat(["Chongqing", "New Tokyo", "Ishima"]);
-        skipFactions = ["Aevum", "Sector-12", "Volhaven"];
-    } else {
-        completedFactions = Object.keys(mostExpensiveAugByFaction).filter(fac => mostExpensiveAugByFaction[fac] == -1);
-        softCompletedFactions = Object.keys(mostExpensiveDesiredAugByFaction).filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
-        skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
-        if (completedFactions.length > 0)
-            ns.print(`${completedFactions.length} factions are completed (all augs purchased): ${completedFactions.join(", ")}`);
-        if (softCompletedFactions.length > 0)
-            ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
-    }
+    // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
+    // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
+    const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
+    // Unless otherwise configured, we will skip factions with no remaining augmentations
+    completedFactions = filterableFactions.filter(fac => mostExpensiveAugByFaction[fac] == -1);
+    softCompletedFactions = filterableFactions.filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
+    skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
+    if (completedFactions.length > 0)
+        ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
+    if (softCompletedFactions.length > 0)
+        ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
+
+    // TODO: If --prioritize-invites is set, we should have a preferred faction order that puts easiest-invites-to-earn at the front (e.g. all city factions)
 
     numJoinedFactions = playerInfo.factions.length;
     fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
@@ -218,7 +218,16 @@ async function mainLoop(ns) {
         scope = 1; // Back to basics until we've satisfied all highest-priority work
         numJoinedFactions = player.factions.length;
     }
-    if (2 in dictSourceFiles) { // Get some information about gangs (if unlocked)
+    // Immediately accept any outstanding faction invitations for factions we want to earn rep with soon
+    // TODO: If check if we would qualify for an invite to any factions just by travelling, and do so to start earning passive rep
+    const invites = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/player-faction-invites.txt');
+    const invitesToAccept = options['get-invited-to-every-faction'] || options['prioritize-invites'] ?
+        invites.filter(f => !skipFactions.includes(f)) :
+        invites.filter(f => !skipFactions.includes(f) && !softCompletedFactions.includes(f));
+    for (const invite of invitesToAccept)
+        await tryJoinFaction(ns, invite);
+    // Get some information about gangs (if unlocked)
+    if (2 in dictSourceFiles) {
         if (!playerGang) { // Check if we've joined a gang since our last iteration
             const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
             playerGang = gangInfo ? gangInfo.faction : null;
@@ -336,8 +345,8 @@ const requiredMoneyByFaction = {
     "Slum Snakes": 1E6, "Silhouette": 15E6, "The Syndicate": 10E6, "The Covenant": 75E9, "Daedalus": 100E9, "Illuminati": 150E9
 };
 const requiredBackdoorByFaction = { "CyberSec": "CSEC", "NiteSec": "avmnite-02h", "The Black Hand": "I.I.I.I", "BitRunners": "run4theh111z", "Fulcrum Secret Technologies": "fulcrumassets" };
-const requiredHackByFaction = { "Tian Di Hui": 50, "Netburners": 80, "Speakers for the Dead": 100, "The Dark Army": 300, "The Syndicate": 200, "The Covenant": 850, "Daedalus": 2500, "Illuminati": 1500 };
-const requiredCombatByFaction = { "Slum Snakes": 30, "Tetrads": 75, "Speakers for the Dead": 300, "The Dark Army": 300, "The Syndicate": 200, "The Covenant": 850, "Daedalus": 1500, "Illuminati": 1200 };
+const requiredHackByFaction = { "Tian Di Hui": 50, "Netburners": 80, "Speakers for the Dead": 100, "The Syndicate": 200, "The Dark Army": 300, "The Covenant": 850, "Daedalus": 2500, "Illuminati": 1500 };
+const requiredCombatByFaction = { "Slum Snakes": 30, "Tetrads": 75, "Speakers for the Dead": 300, "The Syndicate": 200, "The Dark Army": 300, "The Covenant": 850, "Daedalus": 1500, "Illuminati": 1200 };
 const requiredKarmaByFaction = { "Slum Snakes": 9, "Tetrads": 18, "Silhouette": 22, "Speakers for the Dead": 45, "The Dark Army": 45, "The Syndicate": 90 };
 const requiredKillsByFaction = { "Speakers for the Dead": 30, "The Dark Army": 5 };
 const reqHackingOrCombat = ["Daedalus"]; // Special case factions that require only hacking or combat stats, not both
@@ -438,12 +447,14 @@ async function earnFactionInvite(ns, factionName) {
     // If travelling can help us join a faction - we can do that too
     player = await getPlayerInfo(ns);
     let travelledForInvite = false;
-    if (['Tian Di Hui', 'Tetrads', 'The Dark Army'].includes(factionName) && player.city != 'Chongqing')
-        workedForInvite = await goToCity(ns, 'Chongqing');
-    else if (['The Syndicate'].includes(factionName) && player.city != 'Sector-12')
-        workedForInvite = await goToCity(ns, 'Sector-12');
-    else if (["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"].includes(factionName) && player.city != factionName)
-        workedForInvite = await goToCity(ns, factionName);
+    let travelToCityOrDidRecently = async city => // Helper to consider us as having travelled for an invite if we did just now, or recently
+        player.city != city && await goToCity(ns, city) || player.city == city && (Date.now() - lastTravel < 60000)
+    if (['Tian Di Hui', 'Tetrads', 'The Dark Army'].includes(factionName))
+        travelledForInvite = await travelToCityOrDidRecently('Chongqing');
+    else if (['The Syndicate'].includes(factionName))
+        travelledForInvite = await travelToCityOrDidRecently('Sector-12');
+    else if (["Aevum", "Chongqing", "Sector-12", "New Tokyo", "Ishima", "Volhaven"].includes(factionName))
+        travelledForInvite = await travelToCityOrDidRecently(factionName);
     if (travelledForInvite) {
         workedForInvite = true;
         player = await getPlayerInfo(ns);
@@ -478,6 +489,7 @@ async function goToCity(ns, cityName) {
     }
     if (await getNsDataThroughFile(ns, `ns.travelToCity('${cityName}')`, '/Temp/travel.txt')) {
         lastActionRestart = Date.now();
+        lastTravel = Date.now()
         announce(ns, `Travelled from ${player.city} to ${cityName}`, 'info');
         return true;
     }
