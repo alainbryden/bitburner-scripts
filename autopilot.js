@@ -343,7 +343,7 @@ async function maybeInstallAugmentations(ns, player) {
 	const shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
 	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
-		`NeuroFlux and ${affordableAugCount - 1} of ${facman.unowned_count - 1} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
+		`NeuroFlux and ${affordableAugCount - Math.sign(facman.affordable_nf_count)} of ${facman.unowned_count - 1} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
 
 	// TODO: If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
 	//       but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
