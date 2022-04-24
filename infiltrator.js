@@ -88,16 +88,16 @@ function setTimeFactor (factor = 1) {
   // wrap setTimeout and setInterval
   _win.setTimeout = function (fn, delay, ...args) {
     if (delay < maxDelayCutoff) {
-      _win._setTimeout(fn, Math.round(delay * factor), ...args)
+      return _win._setTimeout(fn, Math.round(delay * factor), ...args)
     } else {
-      _win._setTimeout(fn, delay, ...args)
+      return _win._setTimeout(fn, delay, ...args)
     }
   }
   _win.setInterval = function (fn, delay, ...args) {
     if (delay < maxDelayCutoff) {
-      _win._setInterval(fn, Math.round(delay * factor), ...args)
+      return _win._setInterval(fn, Math.round(delay * factor), ...args)
     } else {
-      _win._setInterval(fn, delay, ...args)
+      return _win._setInterval(fn, delay, ...args)
     }
   }
   lastFactor = factor
