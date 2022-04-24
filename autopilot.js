@@ -6,15 +6,13 @@ import {
 
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
-// The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
-const rushGangsArgs = ["--fast-crimes-only", "--prioritize-invites", "--crime-focus"];
 
 let options = null; // The options used at construction time
 // TODO: Currently these may as well be hard-coded, args are lost when various other scripts kill and restart us.
 const argsSchema = [ // The set of all command line arguments
 	//TODO: Not yet possible ['next-bn', 12], // If we destroy the current BN, the next BN to start
-	['install-at-aug-count', 13], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
-	['install-at-aug-plus-nf-count', 18], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
+	['install-at-aug-count', 15], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
+	['install-at-aug-plus-nf-count', 20], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
 	['install-for-augs', ["The Red Pill"]], // or... automatically install as soon as we can afford one of these augmentations
 	['reduced-aug-requirement-per-hour', 1], // For every hour since the last reset, require this many fewer augs to install.
 	['interval', 2000], // Wake up this often (milliseconds) to check on things
@@ -247,6 +245,17 @@ async function checkOnRunningScripts(ns, player) {
 		daemonStartTime = Date.now();
 	}
 
+	// Default work for faction args we think are ideal for speed-running BNs
+	const workForFactionsArgs = [
+		"--fast-crimes-only", // Essentially means we do mug until we can do homicide, then stick to homicide
+		"--get-invited-to-every-faction" // Join factions even we have all their augs. Good for having NeuroFlux providers
+	];
+	if (!options['enable-bladeburner']) workForFactionsArgs.push("--no-bladeburner-check")
+	// The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
+	const rushGangsArgs = workForFactionsArgs.concat(...[ // Everything above, plus...
+		"--crime-focus", // Start off by trying to work for each of the crime factions (generally have combat reqs)
+		"--training-stat-per-multi-threshold", 200, // Be willing to spend more time grinding for stats rather than skipping a faction
+		"--prioritize-invites"]); // Don't actually start working for factions until we've earned as many invites as we think we can
 	// If gangs are unlocked, micro-manage how 'work-for-factions.js' is running by killing off unwanted instances
 	if ((2 in unlockedSFs)) {
 		// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
@@ -263,10 +272,9 @@ async function checkOnRunningScripts(ns, player) {
 	// Launch work-for-factions if it isn't already running (rules for maybe killing unproductive instances are above)
 	// Note: We delay launching our own 'work-for-factions.js' until daemon has warmed up, so we don't steal it's "kickstartHackXp" study focus
 	if ((4 in unlockedSFs) && !findScript('work-for-factions.js') && Date.now() - daemonStartTime > 30000) {
-		// If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also is good early income)
+		// If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also okay early income)
 		// NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
-		const workArgs = rushGang ? rushGangsArgs : ["--fast-crimes-only"];
-		launchScriptHelper(ns, 'work-for-factions.js', workArgs);
+		launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
 	}
 }
 
@@ -335,7 +343,7 @@ async function maybeInstallAugmentations(ns, player) {
 	const shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
 	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
-		`NeuroFlux and ${affordableAugCount} of ${facman.unowned_count} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
+		`NeuroFlux and ${affordableAugCount - Math.sign(facman.affordable_nf_count)} of ${facman.unowned_count - 1} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
 
 	// TODO: If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
 	//       but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
@@ -358,7 +366,7 @@ async function maybeInstallAugmentations(ns, player) {
 	}
 
 	// Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
-	const resetLog = `Invoking ascend.js at ${formatDuration(player.playtimeSinceLastAug)} since last aug to install: ${augSummary}`;
+	const resetLog = `Invoking ascend.js at ${formatDuration(player.playtimeSinceLastAug).padEnd(11)} since last aug to install: ${augSummary}`;
 	log(ns, `INFO: ${resetLog}`, true, 'info');
 	await persist_log(ns, resetLog);
 	// Kick off ascend.js
@@ -404,16 +412,17 @@ async function shouldDelayInstall(ns, player) {
 async function manageReservedMoney(ns, player, stocksValue) {
 	if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
 	const currentReserve = Number(ns.read("reserve.txt") || 0);
-	if (reserveForDaedalus && currentReserve != 100E9)
-		await ns.write("reserve.txt", 100E9, "w"); // Reserve 100b to get the daedalus invite
-	// Otherwise, reserve money for stocks, our main source of income for most of the BN.
+	if (reserveForDaedalus) // Reserve 100b to get the daedalus invite
+		return currentReserve == 100E9 ? true : await ns.write("reserve.txt", 100E9, "w");
+	// Otherwise, reserve money for stocks for a whilen, as it's our main source of income early in the BN
+	// It also acts as a decent way to save up for augmentations
 	const minStockValue = 8E9; // At a minimum 8 of the 10 billion earned from the casino must be reserved for buying stock
-	const minStockPercent = 0.8; // As we earn more money, reserve 80% of it for further investing in stock
+	// As we earn more money, reserve a percentage of it for further investing in stock. Decrease this as the BN progresses.
+	const minStockPercent = Math.max(0, 0.8 - 0.1 * player.playtimeSinceLastBitnode / 3.6E6); // Reduce by 10% per hour in the BN
 	const reserveCap = 1E12; // As we start start to earn crazy money, we will hit the stock market cap, so cap the maximum reserve
 	// Dynamically update reserved cash based on how much money is already converted to stocks.
 	const reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));
-	if (currentReserve != reserve)
-		await ns.write("reserve.txt", reserve, "w"); // Reserve 8 of the 10b casino money for stock seed money
+	return currentReserve == reserve ? true : await ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
 	// NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
 	// - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
 	// - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores 

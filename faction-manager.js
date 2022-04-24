@@ -26,7 +26,7 @@ let startingPlayerMoney, stockValue = 0; // If the player holds stocks, their li
 let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
 let ownedAugmentations = [], simulatedOwnedAugmentations = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
 let factionData = {}, augmentationData = {};
-let printToTerminal;
+let printToTerminal, ignorePlayerData;
 let _ns; // Used to avoid passing ns to functions that don't need it except for some logs.
 
 let options = null; // A copy of the options used at construction time
@@ -102,7 +102,7 @@ export async function main(ns) {
     priorityAugs = options['priority-aug']?.map(f => f.replaceAll("_", " "));
     if (priorityAugs.length == 0) priorityAugs = default_priority_augs;
     let desiredAugs = priorityAugs.concat(options['aug-desired'].map(f => f.replaceAll("_", " ")));
-    const ignorePlayerData = options.i || options['ignore-player-data'];
+    ignorePlayerData = options.i || options['ignore-player-data'];
 
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
     playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
@@ -135,7 +135,7 @@ export async function main(ns) {
     // Determine the set of desired augmentation stats. If not specified by the user, it's based on our situation
     desiredStatsFilters = options['stat-desired'];
     if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
-        desiredStatsFilters = ownedAugmentations.length > 30 ? ['_'] : // Once we have more than 30 augs, switch to buying up anything and everything
+        desiredStatsFilters = ownedAugmentations.length > 40 ? ['_'] : // Once we have more than N augs, switch to buying up anything and everything
             playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || playerData.factions.includes("Bladeburners") ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
                 ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
 
@@ -426,7 +426,8 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
     let firstListPrinted = unavailableAugs.length > 0;
     if (firstListPrinted) await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, true);
     // We use the return value to "lock in" the new sort order. Going forward, the routine will only re-print the aug list if the sort order changes (or forcePrint == true)
-    let availableAugs = await manageFilteredSubset(ns, outputRows, 'Available', unownedAugs.filter(aug => aug.getFromJoined() != null), firstListPrinted ? undefined : true);
+    let availableAugs = ignorePlayerData ? unavailableAugs :
+        await manageFilteredSubset(ns, outputRows, 'Available', unownedAugs.filter(aug => aug.getFromJoined() != null), firstListPrinted ? undefined : true);
     if (availableAugs?.length > 0) {
         let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
         let desiredAugs = availableAugs.filter(aug => aug.desired);
