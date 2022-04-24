@@ -11,8 +11,8 @@ let options = null; // The options used at construction time
 // TODO: Currently these may as well be hard-coded, args are lost when various other scripts kill and restart us.
 const argsSchema = [ // The set of all command line arguments
 	//TODO: Not yet possible ['next-bn', 12], // If we destroy the current BN, the next BN to start
-	['install-at-aug-count', 11], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
-	['install-at-aug-plus-nf-count', 15], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
+	['install-at-aug-count', 15], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
+	['install-at-aug-plus-nf-count', 20], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
 	['install-for-augs', ["The Red Pill"]], // or... automatically install as soon as we can afford one of these augmentations
 	['reduced-aug-requirement-per-hour', 1], // For every hour since the last reset, require this many fewer augs to install.
 	['interval', 2000], // Wake up this often (milliseconds) to check on things
@@ -412,8 +412,8 @@ async function shouldDelayInstall(ns, player) {
 async function manageReservedMoney(ns, player, stocksValue) {
 	if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
 	const currentReserve = Number(ns.read("reserve.txt") || 0);
-	if (reserveForDaedalus && currentReserve != 100E9)
-		await ns.write("reserve.txt", 100E9, "w"); // Reserve 100b to get the daedalus invite
+	if (reserveForDaedalus) // Reserve 100b to get the daedalus invite
+		return currentReserve == 100E9 ? true : await ns.write("reserve.txt", 100E9, "w");
 	// Otherwise, reserve money for stocks for a whilen, as it's our main source of income early in the BN
 	// It also acts as a decent way to save up for augmentations
 	const minStockValue = 8E9; // At a minimum 8 of the 10 billion earned from the casino must be reserved for buying stock
@@ -422,8 +422,7 @@ async function manageReservedMoney(ns, player, stocksValue) {
 	const reserveCap = 1E12; // As we start start to earn crazy money, we will hit the stock market cap, so cap the maximum reserve
 	// Dynamically update reserved cash based on how much money is already converted to stocks.
 	const reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));
-	if (currentReserve != reserve)
-		await ns.write("reserve.txt", reserve, "w"); // Reserve 8 of the 10b casino money for stock seed money
+	return currentReserve == reserve ? true : await ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
 	// NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
 	// - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
 	// - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores 
