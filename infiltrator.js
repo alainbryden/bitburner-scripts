@@ -333,7 +333,7 @@ class InfiltrationService {
 
   infilButtonUpdate () {
     const self = this
-    const buttonNode = [..._doc.getElementsByTagName('button')].find(e => e.innerText === 'Infiltrate Company')
+    const buttonNode = queryFilter('button', 'Infiltrate Company')
     if (buttonNode === undefined) {
       return
     }
@@ -757,11 +757,11 @@ export function calculateSkill (exp, mult = 1) {
 function calcReward (player, startingDifficulty) {
   const xpMult = 10 * 60 * 15
   const stats =
-    calculateSkill(player?.strength_exp_mult ?? 1 * xpMult, player?.strength_mult ?? 1) +
-    calculateSkill(player?.defense_exp_mult ?? 1 * xpMult, player?.defense_mult ?? 1) +
-    calculateSkill(player?.agility_exp_mult ?? 1 * xpMult, player?.agility_mult ?? 1) +
-    calculateSkill(player?.dexterity_exp_mult ?? 1 * xpMult, player?.dexterity_mult ?? 1) +
-    calculateSkill(player?.charisma_exp_mult ?? 1 * xpMult, player?.charisma_mult ?? 1)
+    calculateSkill((player?.strength_exp_mult ?? 1) * xpMult, (player?.strength_mult ?? 1)) +
+    calculateSkill((player?.defense_exp_mult ?? 1) * xpMult, (player?.defense_mult ?? 1)) +
+    calculateSkill((player?.agility_exp_mult ?? 1) * xpMult, (player?.agility_mult ?? 1)) +
+    calculateSkill((player?.dexterity_exp_mult ?? 1) * xpMult, (player?.dexterity_mult ?? 1)) +
+    calculateSkill((player?.charisma_exp_mult ?? 1) * xpMult, (player?.charisma_mult ?? 1))
   let difficulty = startingDifficulty - Math.pow(stats, 0.9) / 250 - player.intelligence / 1600
   if (difficulty < 0) difficulty = 0
   if (difficulty > 3) difficulty = 3
@@ -778,13 +778,13 @@ function getAllRewards (ns, bnMults, player, display=false) {
       Math.pow(location.startingSecurityLevel, 1.2) *
       30 *
       levelBonus *
-      bnMults?.InfiltrationRep ?? 1
+      (bnMults?.InfiltrationRep ?? 1)
     location.moneyGain =
       Math.pow(reward + 1, 2) *
       Math.pow(location.startingSecurityLevel, 3) *
       3e3 *
       levelBonus *
-      bnMults?.InfiltrationMoney ?? 1
+      (bnMults?.InfiltrationMoney ?? 1)
     location.repScore = location.repGain / location.maxClearanceLevel
     location.moneyScore = location.moneyGain / location.maxClearanceLevel
   }
