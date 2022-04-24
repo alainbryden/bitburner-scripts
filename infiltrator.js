@@ -105,10 +105,10 @@ function setTimeFactor (factor = 1) {
 }
 
 function autoSetTimeFactor () {
-  const levelElement = [..._doc.querySelectorAll('p')].filter(el => el.innerText.trim()
-    .match(/^Level:\s+\d+\s*\/\s*\d+$/))
+  const lvlReg = /^Level:\s+\d+\s*\/\s*\d+$/
+  const levelElement = queryFilter('p', lvlReg)
 
-  if (levelElement.length === 0) {
+  if (levelElement === undefined) {
     if (setTimeFactor(1)) {
       logConsole('Infiltration not detected: removing injection')
     }
@@ -121,32 +121,15 @@ function autoSetTimeFactor () {
 
 // event listener stuff, stolen from https://github.com/stracker-phil/bitburner/blob/main/daemon/infiltrate.js
 
-function pressKey (keyOrCode) {
-  let keyCode = 0;
-  let key = "";
+function pressKey (key) {
+  let keyCode = key.charCodeAt(0);
 
-  if ("string" === typeof keyOrCode && keyOrCode.length > 0) {
-    key = keyOrCode.toLowerCase().substr(0, 1);
-    keyCode = key.charCodeAt(0);
-  } else if ("number" === typeof keyOrCode) {
-    keyCode = keyOrCode;
-    key = String.fromCharCode(keyCode);
-  }
+  const keyboardEvent = new KeyboardEvent('keydown', {
+    key,
+    keyCode,
+  });
 
-  if (!keyCode || key.length !== 1) {
-    return;
-  }
-
-  function sendEvent (event) {
-    const keyboardEvent = new KeyboardEvent(event, {
-      key,
-      keyCode,
-    });
-
-    _doc.dispatchEvent(keyboardEvent);
-  }
-
-  sendEvent("keydown");
+  _doc.dispatchEvent(keyboardEvent);
 }
 
 /**
@@ -325,6 +308,10 @@ function pressStart () {
   [..._doc.getElementsByTagName('button')].find(e => e.innerText.includes('Start'))?.click()
 }
 
+function queryFilter (query, filter) {
+  return [..._doc.querySelectorAll(query)].find(e => e.innerText.trim().match(filter))
+}
+
 class InfiltrationService {
   constructor (ns, rewardInfo = []) {
     const self = this
@@ -335,7 +322,7 @@ class InfiltrationService {
     self.automationEnabled = true // leaving this in to support a possible future human-assist mode with no keypresses
   }
 
-  async sendKeyString(str) {
+  async sendKeyString (str) {
     const self = this
     // self.ws.send(str)
     for (let c of str) {
@@ -344,7 +331,7 @@ class InfiltrationService {
     }
   }
 
-  infilButtonUpdate() {
+  infilButtonUpdate () {
     const self = this
     const buttonNode = [..._doc.getElementsByTagName('button')].find(e => e.innerText === 'Infiltrate Company')
     if (buttonNode === undefined) {
@@ -371,8 +358,7 @@ class InfiltrationService {
   }
 
   async cyberpunk () {
-    const getTargetElement = () => [..._doc.querySelectorAll('h5')].filter(e => e.innerText.includes('Targets:'))[0]
-    let targetElement = getTargetElement()
+    let targetElement = queryFilter('h5', 'Targets:')
     if (!targetElement) return
     logConsole('Game active: Cyberpunk2077 game')
     const targetValues = targetElement.innerText.split('Targets: ')[1].trim().split(/\s+/)
@@ -389,24 +375,14 @@ class InfiltrationService {
     await this.sendKeyString(pathStr)
     while (targetElement !== undefined) {
       await sleep(50)
-      targetElement = getTargetElement()
+      targetElement = queryFilter('h5', 'Targets:')
     }
   }
-
-  async oldMines () {
-    const minePlots = [..._doc.querySelectorAll('span')].filter(el => el.innerText.trim().match(/^\[[X.\s?]\]$/))
-    if (minePlots.length === 0) return
-    logConsole('Game active: Minesweeper game')
-    // outline mines
-    minePlots.filter(el => el.innerText.trim().match(/^\[\?\]$/)).forEach(function (el) { el.style.outline = '2px red solid' })
-    // remove outline from marked mines
-    minePlots.filter(el => el.innerText.trim().match(/^\[\.\]$/)).forEach(function (el) { el.style.outline = '' })
-  }
-
   async mines () {
-    const isMemoryPhase = () => [..._doc.querySelectorAll('h4')].some(e => e.innerText === 'Remember all the mines!')
-    const isMarkPhase = () => [..._doc.querySelectorAll('h4')].some(e => e.innerText === 'Mark all the mines!')
-    if (!isMemoryPhase()) return
+    const memoryPhaseText = 'Remember all the mines!'
+    const markPhaseText = 'Mark all the mines!'
+
+    if (!queryFilter('h4', memoryPhaseText)) return
     logConsole('Game active: Minesweeper game')
     const gridElements = [..._doc.querySelectorAll('span')].filter(el => el.innerText.trim().match(/^\[[X.\s?]\]$/))
     if (gridElements.length === 0) return
@@ -416,7 +392,7 @@ class InfiltrationService {
     // get coordinates for each mine
     const mineCoords = gridElements.filter(el => el.innerText.trim().match(/^\[\?\]$/)).map(el => [getGridX(el), getGridY(el)])
     // wait for mark phase
-    while (isMemoryPhase()) {
+    while (queryFilter('h4', memoryPhaseText)) {
       await sleep(50)
     }
     // send solution string
@@ -424,7 +400,7 @@ class InfiltrationService {
     logConsole(`Mine solution string: ${pathStr}`)
     await this.sendKeyString(pathStr)
     // wait for end
-    while (isMarkPhase()) {
+    while (queryFilter('h4', markPhaseText)) {
       await sleep(50)
     }
   }
@@ -432,8 +408,8 @@ class InfiltrationService {
   async slash () {
     const self = this
     if (!self.automationEnabled) return
-    const getActiveElement = () => [..._doc.querySelectorAll('h4')].filter(e => e.innerText === 'Slash when his guard is down!')[0]
-    let activeElement = getActiveElement()
+    const activeText = 'Slash when his guard is down!'
+    let activeElement = queryFilter('h4', activeText)
     while (activeElement !== undefined) {
       logConsole('Game active: Slash game')
       if (activeElement.nextSibling.innerText === 'ATTACKING!') {
@@ -441,15 +417,15 @@ class InfiltrationService {
         await self.sendKeyString(' ')
       }
       await sleep(1)
-      activeElement = getActiveElement()
+      activeElement = queryFilter('h4', activeText)
     }
   }
 
   async brackets () {
     const self = this
     if (!self.automationEnabled) return
-    const getActiveElement = () => [..._doc.querySelectorAll('h4')].filter(e => e.innerText === 'Close the brackets')[0]
-    let activeElement = getActiveElement()
+    const activeText = 'Close the brackets'
+    let activeElement = queryFilter('h4', activeText)
     if (activeElement === undefined) return
     logConsole('Game active: Bracket game')
     const bracketText = activeElement.nextSibling.innerText
@@ -460,7 +436,7 @@ class InfiltrationService {
       .replaceAll('{', '}')
     await self.sendKeyString(closeText)
     while (activeElement !== undefined) {
-      activeElement = getActiveElement()
+      activeElement = queryFilter('h4', activeText)
       await sleep(50)
     }
   }
@@ -469,8 +445,8 @@ class InfiltrationService {
     const self = this
     if (!self.automationEnabled) return
     const arrowsMap = { '↑': 'w', '→': 'd', '↓': 's', '←': 'a' }
-    const getActiveElement = () => [..._doc.querySelectorAll('h4')].filter(e => e.innerText === 'Enter the Code!')[0]
-    let activeElement = getActiveElement()
+    const activeText = 'Enter the Code!'
+    let activeElement = queryFilter('h4', activeText)
     let lastArrow
     while (activeElement !== undefined) {
       logConsole('Game active: Cheat Code game')
@@ -484,7 +460,7 @@ class InfiltrationService {
           return
         }
       }
-      activeElement = getActiveElement()
+      activeElement = queryFilter('h4', activeText)
       await sleep(10)
     }
   }
@@ -492,14 +468,14 @@ class InfiltrationService {
   async backwardGame () {
     const self = this
     if (!self.automationEnabled) return
-    const getActiveElement = () => [..._doc.querySelectorAll('h4')].filter(e => e.innerText === 'Type it backward')[0]
-    let activeElement = getActiveElement()
+    const activeText = 'Type it backward'
+    let activeElement = queryFilter('h4', activeText)
     if (activeElement === undefined) return
     logConsole('Game active: Backward game')
     const text = activeElement.parentNode.nextSibling.children[0].innerText
     await self.sendKeyString(text.toLowerCase())
     while (activeElement !== undefined) {
-      activeElement = getActiveElement()
+      activeElement = queryFilter('h4', activeText)
       await sleep(50)
     }
   }
@@ -507,9 +483,8 @@ class InfiltrationService {
   async bribeGame () {
     const self = this
     if (!self.automationEnabled) return
-    const getActiveElement = () => [..._doc.querySelectorAll('h4')].filter(e => e.innerText === 'Say something nice about the guard.')[0]
-    let activeElement = getActiveElement()
-    // if (activeElement === undefined) return
+    const activeText = 'Say something nice about the guard.'
+    let activeElement = queryFilter('h4', activeText)
     let lastWord
     const positive = [
       'affectionate',
@@ -542,16 +517,16 @@ class InfiltrationService {
         await self.sendKeyString('w')
         lastWord = currentWord
       }
-      activeElement = getActiveElement()
-      await sleep(10)
+      activeElement = queryFilter('h4', activeText)
+      await sleep(5)
     }
   }
 
   async wireCuttingGame () {
     const self = this
     if (!self.automationEnabled) return
-    const getActiveElement = () => [..._doc.querySelectorAll('h4')].filter(e => e.innerText.includes('Cut the wires'))[0]
-    const activeElement = getActiveElement()
+    const activeText = 'Cut the wires'
+    const activeElement = queryFilter('h4', activeText)
     if (activeElement === undefined) return
     logConsole('Game active: Wire Cutting game')
     // extract hints
@@ -585,8 +560,8 @@ class InfiltrationService {
     logConsole(`Sending solution: ${solutionStr}`)
     await this.sendKeyString(solutionStr)
     // wait for end
-    while (getActiveElement() !== undefined) {
-      await sleep(100 / infiltrationTimeFactor)
+    while (queryFilter('h4', activeText) !== undefined) {
+      await sleep(50)
     }
   }
 
