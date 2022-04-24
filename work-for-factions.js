@@ -12,7 +12,7 @@ const argsSchema = [
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
-    ['training-stat-per-multi-threshold', 100], // Heuristic: Only bother training stats if our mult*exp_mult for that stat are more than 1 per this many (50) stat levels we need.
+    ['training-stat-per-multi-threshold', 100], // Heuristic: Only bother training stats if our mult+exp_mult for that stat are more than 1 per this many (50) stat levels we need.
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
     ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
@@ -43,9 +43,9 @@ const cannotWorkForFactions = ["Church of the Machine God", "Bladeburners"]
 const preferredEarlyFactionOrder = [
     "Netburners", // Improve hash income, which is useful or critical for almost all BNs
     "Tian Di Hui", "Aevum", // These give all the company_rep and faction_rep bonuses early game    
+    "Daedalus", // Once we have all faction_rep boosting augs, there's no reason not to work towards Daedalus as soon as it's available/feasible so we can buy Red Pill
     "CyberSec", /* Quick, and NightSec aug depends on an aug from here */ "NiteSec", "Tetrads", // Cha augs to speed up earning company promotions
     "Bachman & Associates", // Boost company/faction rep for future augs
-    "Daedalus", // Once we have all faction_rep boosting augs, there's no reason not to work towards Daedalus as soon as it's available/feasible so we can buy Red Pill
     "Fulcrum Secret Technologies", // Will be removed if hack level is too low to backdoor their server
     "ECorp", // More cmp_rep augs, and some strong hack ones as well
     "BitRunners", "The Black Hand", // Fastest sources of hacking augs after the above companies
@@ -187,6 +187,7 @@ async function loadStartupData(ns) {
 
     // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
     // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
+    // TODO: Think this over morr. need to filter e.g. chonquing if volhaven is incomplete...
     const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
     // Unless otherwise configured, we will skip factions with no remaining augmentations
     completedFactions = filterableFactions.filter(fac => mostExpensiveAugByFaction[fac] == -1);
@@ -380,17 +381,24 @@ async function earnFactionInvite(ns, factionName) {
         ns.print(`${reasonPrefix} you have insufficient kills. Need: ${requirement}, Have: ${player.numPeopleKilled}`);
         doCrime = true;
     }
-    let deficientStats; // TODO: Not doing anything with this info yet. Maybe do some targeted training if there's only one?
-    if ((requirement = requiredCombatByFaction[factionName]) &&
-        (deficientStats = [{ name: "str", value: player.strength }, { name: "str", value: player.defense }, { name: "str", value: player.dexterity }, { name: "str", value: player.agility }]
-            .filter(stat => stat.value < requirement)).length > 0
-        && !(reqHackingOrCombat.includes(factionName) && player.hacking >= requiredHackByFaction[factionName])) { // Some special-case factions (just 'Daedalus' for now) require *either* hacking *or* combat
-        ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, ` +
-            `Have Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility}`);
-        const em = requirement / options['training-stat-per-multi-threshold']; // Hack: A rough heuristic suggesting we need an additional x1 multi for every ~50 pysical stat points we wish to grind out in a reasonable amount of time. TODO: Be smarter
-        if (player.strength_exp_mult * player.strength_mult < em || player.defense_exp_mult * player.defense_mult < em ||
-            player.dexterity_exp_mult * player.dexterity_mult < em || player.agility_exp_mult * player.agility_mult < em)
-            return ns.print("Physical mults / exp_mults are too low to increase stats in a reasonable amount of time");
+    // Check on physical stat requirements
+    const physicalStats = ["strength", "defense", "dexterity", "agility"];
+    requirement = requiredCombatByFaction[factionName];
+    let deficientStats = !requirement ? null : physicalStats.map(stat => ({ stat, value: player[stat] })).filter(stat => stat.value < requirement);
+    // Hash for special-case factions (just 'Daedalus' for now) requiring *either* hacking *or* combat
+    if (reqHackingOrCombat.includes(factionName) && (
+        requiredHackByFaction[factionName] / Math.sqrt(player.hacking_exp * player.hacking_exp_mult) <
+        requiredCombatByFaction[factionName] / Math.sqrt(player.agility_exp * player.agility_exp_mult)))
+        ns.print(`Ignoring combat requirement for ${factionName} as we are more likely to unlock them via hacking stats.`);
+    else if (deficientStats.length > 0) {
+        ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, Have ` +
+            physicalStats.map(s => `${s.slice(0, 3)}: ${player[s]}`).join(", "));
+        const em = requirement / options['training-stat-per-multi-threshold'];
+        // Hack: Create a rough heuristic suggesting how much multi we need to train physical stats in a reasonable amount of time. TODO: Be smarter
+        if (physicalStats.some(s => Math.sqrt(player[`${s}_mult`] * player[`${s}_exp_mult`]) < em))
+            return ns.print("Some mults + exp_mults appear to be too low to increase stats in a reasonable amount of time. " +
+                `You can control this with --training-stat-per-multi-threshold. Current mult/exp avg should be ~${formatNumberShort(em, 2)}, have ` +
+                physicalStats.map(s => `${s.slice(0, 3)}: ${formatNumberShort(player[`${s}_mult`], 2)}/${formatNumberShort(player[`${s}_exp_mult`], 2)}`).join(", "));
         doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
     if (doCrime && options['no-crime'])
