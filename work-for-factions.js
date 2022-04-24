@@ -384,7 +384,7 @@ async function earnFactionInvite(ns, factionName) {
     // Check on physical stat requirements
     const physicalStats = ["strength", "defense", "dexterity", "agility"];
     requirement = requiredCombatByFaction[factionName];
-    let deficientStats = !requirement ? null : physicalStats.map(stat => ({ stat, value: player[stat] })).filter(stat => stat.value < requirement);
+    let deficientStats = !requirement ? [] : physicalStats.map(stat => ({ stat, value: player[stat] })).filter(stat => stat.value < requirement);
     // Hash for special-case factions (just 'Daedalus' for now) requiring *either* hacking *or* combat
     if (reqHackingOrCombat.includes(factionName) && (
         requiredHackByFaction[factionName] / Math.sqrt(player.hacking_exp * player.hacking_exp_mult) <
