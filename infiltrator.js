@@ -30,7 +30,7 @@ let _doc = [].map.constructor('return this.document')()
 const argsSchema = [
   ['kill', false],     // set to stop the old service and not start a new one
   ['timeFactor', 0.5], // interval multiplier to apply during infiltrations (set to 1 to disable)
-  ['keyDelay', 1]      // delay between keystrokes
+  ['keyDelay', 1]      // delay in ms between keystrokes
 ]
 
 // log to console with prefix and no spamming
@@ -757,11 +757,11 @@ export function calculateSkill (exp, mult = 1) {
 function calcReward (player, startingDifficulty) {
   const xpMult = 10 * 60 * 15
   const stats =
-    calculateSkill(player.strength_exp_mult * xpMult, player.strength_mult) +
-    calculateSkill(player.defense_exp_mult * xpMult, player.defense_mult) +
-    calculateSkill(player.agility_exp_mult * xpMult, player.agility_mult) +
-    calculateSkill(player.dexterity_exp_mult * xpMult, player.dexterity_mult) +
-    calculateSkill(player.charisma_exp_mult * xpMult, player.charisma_mult)
+    calculateSkill(player?.strength_exp_mult ?? 1 * xpMult, player?.strength_mult ?? 1) +
+    calculateSkill(player?.defense_exp_mult ?? 1 * xpMult, player?.defense_mult ?? 1) +
+    calculateSkill(player?.agility_exp_mult ?? 1 * xpMult, player?.agility_mult ?? 1) +
+    calculateSkill(player?.dexterity_exp_mult ?? 1 * xpMult, player?.dexterity_mult ?? 1) +
+    calculateSkill(player?.charisma_exp_mult ?? 1 * xpMult, player?.charisma_mult ?? 1)
   let difficulty = startingDifficulty - Math.pow(stats, 0.9) / 250 - player.intelligence / 1600
   if (difficulty < 0) difficulty = 0
   if (difficulty > 3) difficulty = 3
