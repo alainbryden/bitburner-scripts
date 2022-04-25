@@ -414,7 +414,7 @@ async function manageReservedMoney(ns, player, stocksValue) {
 	const currentReserve = Number(ns.read("reserve.txt") || 0);
 	if (reserveForDaedalus) // Reserve 100b to get the daedalus invite
 		return currentReserve == 100E9 ? true : await ns.write("reserve.txt", 100E9, "w");
-	// Otherwise, reserve money for stocks for a whilen, as it's our main source of income early in the BN
+	// Otherwise, reserve money for stocks for a while, as it's our main source of income early in the BN
 	// It also acts as a decent way to save up for augmentations
 	const minStockValue = 8E9; // At a minimum 8 of the 10 billion earned from the casino must be reserved for buying stock
 	// As we earn more money, reserve a percentage of it for further investing in stock. Decrease this as the BN progresses.
