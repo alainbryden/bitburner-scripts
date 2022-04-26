@@ -1,11 +1,10 @@
 /* infiltrator.js
  * Fully-automated infiltrator
- * This uses a simple paradigm I like to call "services": zero-RAM tasks running almost-invisibly via setInterval.
+ * This file uses a service paradigm, or a zero-RAM task running almost-invisibly via setInterval.
  * Information on running services is stored in the local file `services.txt`.
  * Running this file will launch the service (killing any previous instances), store its info, and quickly exit.
- * Running this file with --kill will just kill the old one.
- * TODO: Add support for starting/finishing infiltrations automatically
- * TODO: restore partial functionality for when key server is disconnected (human assistance mode)
+ * TODO: Add support for cycling infiltrations automatically
+ * TODO: add support for time-stretched human assistance mode, maybe
  * TODO: separate out services logic into a `services.js` so more can be easily added (e.g. terminal monitor)
  */
 
@@ -845,6 +844,7 @@ export async function main (ns) {
   ns.disableLog('ALL')
   const options = ns.flags(argsSchema)
   if (options['kill']) {
+    setTimeFactor(1)
     await killPrevService(ns, serviceName)
     return
   }
