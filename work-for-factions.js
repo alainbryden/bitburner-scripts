@@ -423,7 +423,7 @@ async function earnFactionInvite(ns, factionName) {
         const em = requirement / options['training-stat-per-multi-threshold'];
         if (options['no-studying'])
             return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
-        else if (player.hacking_exp_mult * player.hacking_mult < em)
+        else if (Math.sqrt(player.hacking_exp * player.hacking_exp_mult) < em)
             return ns.print(`Hacking mult ${formatNumberShort(player.hacking_mult)} and exp_mult ${formatNumberShort(player.hacking_exp_mult)} ` +
                 `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time.`);
         let studying = false;
