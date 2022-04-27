@@ -421,11 +421,13 @@ async function earnFactionInvite(ns, factionName) {
         !(reqHackingOrCombat.includes(factionName) && workedForInvite)) {
         ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
         const em = requirement / options['training-stat-per-multi-threshold'];
+        const heuristic = Math.sqrt(player.hacking_mult * player.hacking_exp_mult);
         if (options['no-studying'])
             return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
-        else if (Math.sqrt(player.hacking_exp * player.hacking_exp_mult) < em)
+        else if (heuristic < em)
             return ns.print(`Hacking mult ${formatNumberShort(player.hacking_mult)} and exp_mult ${formatNumberShort(player.hacking_exp_mult)} ` +
-                `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time.`);
+                `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time ` +
+                `(${formatNumberShort(heuristic)} < ${formatNumberShort(em)} - configure with --training-stat-per-multi-threshold)`);
         let studying = false;
         if (player.money > options['pay-for-studies-threshold']) { // If we have sufficient money, pay for the best studies
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
