@@ -11,15 +11,16 @@ let options = null; // The options used at construction time
 // TODO: Currently these may as well be hard-coded, args are lost when various other scripts kill and restart us.
 const argsSchema = [ // The set of all command line arguments
 	//TODO: Not yet possible ['next-bn', 12], // If we destroy the current BN, the next BN to start
-	['install-at-aug-count', 15], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
-	['install-at-aug-plus-nf-count', 20], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
+	['install-at-aug-count', 14], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
+	['install-at-aug-plus-nf-count', 18], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
 	['install-for-augs', ["The Red Pill"]], // or... automatically install as soon as we can afford one of these augmentations
 	['reduced-aug-requirement-per-hour', 1], // For every hour since the last reset, require this many fewer augs to install.
 	['interval', 2000], // Wake up this often (milliseconds) to check on things
 	['interval-check-scripts', 10000], // Get a listing of all running processes on home this frequently
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
 	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
-	['wait-for-4s', true], // If true, will not reset until the 4S Tix API has been acquired (major source of income early on, especially in harder nodes)
+	['wait-for-4s-threshold', 0.5], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
+	['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
 	['on-completion-script', null], // Spawn this script when we defeat the bitnode
 	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
 ];
@@ -43,6 +44,7 @@ let daemonStartTime; // The time we personally launched daemon.
 
 /** @param {NS} ns **/
 export async function main(ns) {
+	log(ns, "Options: " + JSON.stringify(ns.flags(argsSchema)));
 	if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
 	options = ns.flags(argsSchema);
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
@@ -390,14 +392,14 @@ async function maybeInstallAugmentations(ns, player) {
  * @param {Player} player */
 async function shouldDelayInstall(ns, player) {
 	// Are we close to being able to afford 4S TIX data?
-	if (!player.has4SDataTixApi) {
+	if (!options['disable-wait-for-4s'] && !player.has4SDataTixApi) {
 		const totalWorth = player.money + await getStocksValue(ns, player);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
 			(player.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
-		if (totalWorth / totalCost > 0.5 || options['wait-for-4s']) {
-			setStatus(ns, `Waiting for scripts to purchase the 4SDataTixApi because ` +
-				`${options['wait-for-4s'] ? '--wait-for-4s is true. W' : 'w'}e are ${(100 * totalWorth / totalCost).toFixed(0)}% of the way there.`);
+		if (totalWorth / totalCost >= options['wait-for-4s-threshold']) {
+			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have 
+				${(100 * totalWorth / totalCost).toFixed(0)}% of the cost (controlled by --wait-for-4s-threshold)`);
 			return true;
 		}
 	}
