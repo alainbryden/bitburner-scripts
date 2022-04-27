@@ -187,7 +187,7 @@ async function loadStartupData(ns) {
 
     // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
     // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
-    // TODO: Think this over morr. need to filter e.g. chonquing if volhaven is incomplete...
+    // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
     const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
     // Unless otherwise configured, we will skip factions with no remaining augmentations
     completedFactions = filterableFactions.filter(fac => mostExpensiveAugByFaction[fac] == -1);
@@ -423,7 +423,7 @@ async function earnFactionInvite(ns, factionName) {
         const em = requirement / options['training-stat-per-multi-threshold'];
         if (options['no-studying'])
             return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
-        else if (player.hacking_exp_mult * player.hacking_mult < em)
+        else if (Math.sqrt(player.hacking_exp * player.hacking_exp_mult) < em)
             return ns.print(`Hacking mult ${formatNumberShort(player.hacking_mult)} and exp_mult ${formatNumberShort(player.hacking_exp_mult)} ` +
                 `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time.`);
         let studying = false;

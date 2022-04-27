@@ -8,7 +8,7 @@ const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
 
 let cachedCrimeStats, workByFaction; // Cache of crime statistics and which factions support which work
 let task, lastStatusUpdateTime, lastPurchaseTime, lastPurchaseStatusUpdate, availableAugs, cacheExpiry, lastReassignTime; // State by sleeve
-let playerInfo, numSleeves, ownedSourceFiles;
+let numSleeves, ownedSourceFiles, playerInGang;
 let options;
 
 const argsSchema = [
@@ -94,7 +94,8 @@ async function manageSleeveAugs(ns, i, budget) {
 async function mainLoop(ns) {
     // Update info
     numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
-    playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
     // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
@@ -125,13 +126,13 @@ async function mainLoop(ns) {
         if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
 
         // Decide what we think the sleeve should be doing for the next little while
-        let [designatedTask, command, args, statusUpdate] = await pickSleeveTask(ns, i, sleeve, canTrain);
+        let [designatedTask, command, args, statusUpdate] = await pickSleeveTask(ns, playerInfo, i, sleeve, canTrain);
 
         // Start the clock, this sleeve should stick to this task for minTaskWorkTime
         lastReassignTime[i] = Date.now();
         // Set the sleeve's new task if it's not the same as what they're already doing.
         if (task[i] != designatedTask)
-            await setSleeveTask(ns, i, designatedTask, command, args);
+            await setSleeveTask(ns, playerInfo, i, designatedTask, command, args);
 
         // For certain tasks, log a periodic status update.
         if (statusUpdate && Date.now() - (lastStatusUpdateTime[i] ?? 0) > minTaskWorkTime) {
@@ -142,9 +143,11 @@ async function mainLoop(ns) {
 }
 
 
-/** @param {NS} ns 
- * Picks the best task for a sleeve, and returns the information to assign and give status updates for that task. */
-async function pickSleeveTask(ns, i, sleeve, canTrain) {
+/** Picks the best task for a sleeve, and returns the information to assign and give status updates for that task.
+ * @param {NS} ns 
+ * @param {Player} playerInfo
+ * @param {SleeveSkills | SleeveInformation} sleeve */
+async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
     // Must synchronize first iif you haven't maxed memory on every sleeve.
     if (sleeve.sync < 100)
         return ["synchronize", `ns.sleeve.setToSynchronize(ns.args[0])`, [i], `syncing... ${sleeve.sync.toFixed(2)}%`];
@@ -180,6 +183,12 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
         return [`work for company '${playerInfo.companyName}'`, `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`, [i, playerInfo.companyName],
         /*   */ `helping earn rep with company ${playerInfo.companyName}.`];
     }
+    // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
+    if (playerInfo.inBladeburner && playerInGang) {
+        // TODO: Temporary, pretend like we set the task, currently there is no API to do so
+        //task[i] = "Bladeburner";
+        //return [`Bladeburner`, `false`, [i], `doing bladeburner things`];
+    }
     // Finally, do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
     // TODO: This is less useful after gangs are unlocked, can we think of better things to do afterwards?
     var crime = options.crime || (await calculateCrimeChance(ns, sleeve, "homicide")) >= options['homicide-chance-threshold'] ? 'homicide' : 'mug';
@@ -189,9 +198,10 @@ async function pickSleeveTask(ns, i, sleeve, canTrain) {
     /*   */     ` (Note: Homicide chance would be ${((await calculateCrimeChance(ns, sleeve, "homicide")) * 100).toFixed(2)}% `)];
 }
 
-/** @param {NS} ns 
- * Sets a sleeve to its designated task, with some extra error handling logic for working for factions. */
-async function setSleeveTask(ns, i, designatedTask, command, args) {
+/** Sets a sleeve to its designated task, with some extra error handling logic for working for factions. 
+ * @param {NS} ns 
+ * @param {Player} playerInfo */
+async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
     let strAction = `Set sleeve ${i} to ${designatedTask} `;
     if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
         task[i] = designatedTask;
