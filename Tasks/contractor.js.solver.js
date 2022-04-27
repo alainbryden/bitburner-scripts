@@ -658,7 +658,7 @@ const codingContractTypesMetadata = [{
         }
         // repeat run for as long as undefined nodes are found, in case graph isn't fully connected
         while (!oddCycleFound && solution.some(e => e === undefined)) {
-        traverse(solution.indexOf(undefined), 0)
+            traverse(solution.indexOf(undefined), 0)
         }
         if (oddCycleFound) return []
         return solution
