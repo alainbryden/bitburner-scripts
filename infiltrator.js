@@ -467,7 +467,7 @@ class InfiltrationService {
   async backwardGame () {
     const self = this
     if (!self.automationEnabled) return
-    const activeText = 'Type it backward'
+    const activeText = 'Type it'
     let activeElement = queryFilter('h4', activeText)
     if (activeElement === undefined) return
     logConsole('Game active: Backward game')
