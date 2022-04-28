@@ -79,7 +79,7 @@ const checkForNewPrioritiesInterval = 10 * 60 * 1000; // 10 minutes. Interrupt w
 
 let shouldFocusAtWork; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
-let hasFocusPenaly, hasSimulacrum, repToDonate, fulcrummHackReq;
+let hasFocusPenaly, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus;
 let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastActionRestart, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 
@@ -101,6 +101,7 @@ export async function main(ns) {
 
     // Reset globals whose value can persist between script restarts in weird situations
     lastTravel = lastActionRestart = crimeCount = 0;
+    notifiedAboutDaedalus = false;
 
     // Parse options
     options = ns.flags(argsSchema);
@@ -592,7 +593,6 @@ async function monitorStudies(ns, stat, requirement) {
     }
 }
 
-
 /** @param {NS} ns */
 export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000) {
     ns.print(`Waiting for invite from faction "${factionName}"...`);
@@ -650,6 +650,16 @@ async function getServerRequiredHackLevel(ns, serverName) {
     return await getNsDataThroughFile(ns, `ns.getServerRequiredHackingLevel('${serverName}')`, '/Temp/server-required-hacking-level.txt');
 }
 
+/** A special check for when we unlock donations with Daedalus, this is usually a good time to reset. 
+ * @param {NS} ns */
+async function daedalusSpecialCheck(ns, favorRepRequired, currentReputation) {
+    if (favorRepRequired == 0 || currentReputation < favorRepRequired) return false;
+    log(ns, `INFO: You have enough reputation with Daedalus (have ${formatNumberShort(currentReputation)}) that you will ` +
+        `unlock donations (needed ${formatNumberShort(favorRepRequired)}) with them on your next reset.`, !notifiedAboutDaedalus, "info");
+    await ns.write("/Temp/Daedalus-donation-rep-attained.txt", true, "w"); // HACK: To notify autopilot that we can reset for rep now.
+    notifiedAboutDaedalus = true;
+}
+
 let lastFactionWorkStatus = "";
 /** @param {NS} ns 
  * Checks how much reputation we need with this faction to either buy all augmentations or get 150 favour, then works to that amount.
@@ -685,7 +695,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         // forceBestAug = true; //TODO: I'm almost positive we don't want to set this flag.
         factionRepRequired = Math.max(highestRepAug, factionRepRequired);
     }
-
+    if (factionName == "Daedalus") await daedalusSpecialCheck(ns, favorRepRequired, currentReputation);
     if (currentReputation >= factionRepRequired)
         return ns.print(`Faction "${factionName}" required rep of ${Math.round(factionRepRequired).toLocaleString()} has already been attained ` +
             `(Current rep: ${Math.round(currentReputation).toLocaleString()}). Skipping working for faction...`)
@@ -744,6 +754,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     }
     if (currentReputation >= factionRepRequired)
         ns.print(`Attained ${Math.round(currentReputation).toLocaleString()} rep with "${factionName}" (needed ${factionRepRequired.toLocaleString()}).`);
+    if (factionName == "Daedalus") await daedalusSpecialCheck(ns, favorRepRequired, currentReputation);
     return currentReputation >= factionRepRequired;
 }
 
