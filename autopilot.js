@@ -1,5 +1,5 @@
 import {
-	log, getFilePath, instanceCount, getNsDataThroughFile, waitForProcessToComplete,
+	log, getFilePath, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
 	getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue,
 	formatMoney, formatDuration
 } from './helpers.js'
