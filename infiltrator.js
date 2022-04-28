@@ -8,7 +8,7 @@
  * TODO: separate out services logic into a `services.js` so more can be easily added (e.g. terminal monitor)
  */
 
-import { runCommand, log, formatMoney, formatNumberShort, tryGetBitNodeMultipliers, getNsDataThroughFile } from './helpers.js'
+import { log, formatMoney, formatNumberShort, tryGetBitNodeMultipliers, getNsDataThroughFile } from './helpers.js'
 
 // delays for setTimeout and setInterval above this threshold are not modified
 // (helps prevent issues with hacking scripts)
@@ -31,6 +31,11 @@ const argsSchema = [
   ['timeFactor', 0.5], // interval multiplier to apply during infiltrations (set to 1 to disable)
   ['keyDelay', 1]      // delay in ms between keystrokes
 ]
+
+export function autocomplete(data) {
+  data.flags(argsSchema)
+  return []
+}
 
 // log to console with prefix and no spamming
 let lastLog
@@ -411,7 +416,7 @@ class InfiltrationService {
     let activeElement = queryFilter('h4', activeText)
     while (activeElement !== undefined) {
       logConsole('Game active: Slash game')
-      if (activeElement.nextSibling.innerText === 'ATTACKING!') {
+      if (queryFilter('h4','ATTACKING!')) {
         await sleep(1)
         await self.sendKeyString(' ')
       }
