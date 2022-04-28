@@ -10,11 +10,12 @@ const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produ
 let options = null; // The options used at construction time
 // TODO: Currently these may as well be hard-coded, args are lost when various other scripts kill and restart us.
 const argsSchema = [ // The set of all command line arguments
-	//TODO: Not yet possible ['next-bn', 12], // If we destroy the current BN, the next BN to start
-	['install-at-aug-count', 14], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
-	['install-at-aug-plus-nf-count', 18], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
+	['next-bn', 12], // If we destroy the current BN, the next BN to start
+	['disable-auto-destroy-bn', false], // Set to true if you do not want to auto destroy this BN when done
+	['install-at-aug-count', 11], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
+	['install-at-aug-plus-nf-count', 14], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
 	['install-for-augs', ["The Red Pill"]], // or... automatically install as soon as we can afford one of these augmentations
-	['reduced-aug-requirement-per-hour', 1], // For every hour since the last reset, require this many fewer augs to install.
+	['reduced-aug-requirement-per-hour', 0.5], // For every hour since the last reset, require this many fewer augs to install.
 	['interval', 2000], // Wake up this often (milliseconds) to check on things
 	['interval-check-scripts', 10000], // Get a listing of all running processes on home this frequently
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
@@ -81,7 +82,7 @@ export async function main(ns) {
  * @param {NS} ns */
 async function initializeNewBitnode(ns) {
 	// Clean up all temporary scripts, which will include stale temp files
-	// launchScriptHelper(ns, 'cleanup.js'); // No need, ascedd.js and casino.js do this
+	// launchScriptHelper(ns, 'cleanup.js'); // No need, ascend.js and casino.js do this
 	// await ns.sleep(200); // Wait a short while for the dust to settle.
 }
 
@@ -149,11 +150,23 @@ async function checkIfBnIsComplete(ns, player) {
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 
 	// Run the --on-completion-script if specified
-	if (options['on-completion-script'])
-		launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
+	if (options['on-completion-script']) {
+		const pid = launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
+		if (pid) await waitForProcessToComplete(ns, pid);
+	}
 
-	// TODO: Use the new singularity function coming soon to automate entering a new BN
-	wdAvailable = false; // TODO: Temporary: For now, set this so this routine doesn't run again
+	if (options['disable-auto-destroy-bn']) {
+		log(ns, `--disable-auto-destroy-bn is set, you can manually exit the bitnode when ready.`, true)
+		wdAvailable = false
+	}
+	// Use the new special singularity function to automate entering a new BN
+	const pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
+		'/Temp/singularity-destroyW0r1dD43m0n.js', [options['next-bn'], ns.getScriptName()]);
+	if (pid) {
+		await waitForProcessToComplete(ns, pid);
+		await ns.sleep(10000);
+	}
+	log(ns, `ERROR: Tried destroy the bitnode, but we're still here...`, true, 'ERROR')
 	return true;
 }
 
@@ -347,8 +360,12 @@ async function maybeInstallAugmentations(ns, player) {
 	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
 		`NeuroFlux and ${affordableAugCount - Math.sign(facman.affordable_nf_count)} of ${facman.unowned_count - 1} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
 
-	// TODO: If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
-	//       but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
+	// If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
+	// but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
+	if (affordableAugCount > 0 && player.factions.includes("Daedalus") && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
+		shouldReset = true;
+		log(ns, `SUCCESS: We have enough reputation with Daedalus to unlock donations on our next reset. Resetting now...`, true, 'success');
+	}
 
 	// If not ready to reset, set a status with our progress and return
 	if (!shouldReset) {
