@@ -5,6 +5,7 @@ let doc = eval("document");
 let options;
 const argsSchema = [
 	['save-sleep-time', 10], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
+	['click-sleep-time', 1], // Time to sleep in milliseconds after clicking any button (or setting text). Increase if your are getting errors on click.
 	['use-basic-strategy', false], // Set to true to use the basic strategy (Stay on 17+)
 	['enable-logging', false], // Set to true to pop up a tail window and generate logs.
 	['kill-all-scripts', false], // Set to true to kill all running scripts before running.
@@ -176,8 +177,14 @@ async function onCompletion(ns) {
 }
 
 // Some DOM helpers (partial credit to @ShamesBond)
-async function click(elem) { await elem[Object.keys(elem)[1]].onClick({ isTrusted: true }); }
-async function setText(input, text) { await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } }); }
+async function click(elem) {
+	await elem[Object.keys(elem)[1]].onClick({ isTrusted: true });
+	if (options['click-sleep-time']) await ns.asleep(options['click-sleep-time']);
+}
+async function setText(input, text) {
+	await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } });
+	if (options['click-sleep-time']) await ns.asleep(options['click-sleep-time']);
+}
 function find(xpath) { return doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; }
 
 // Better logic for when to HIT / STAY (Partial credit @drider)
