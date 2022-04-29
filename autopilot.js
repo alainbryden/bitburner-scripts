@@ -359,14 +359,16 @@ async function maybeInstallAugmentations(ns, player) {
 	const augsNeededInclNf = Math.max(1, options['install-at-aug-plus-nf-count'] - reducedAugReq);
 	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
 		`NeuroFlux and ${affordableAugCount - Math.sign(facman.affordable_nf_count)} of ${facman.unowned_count - 1} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
+	let reserveNeeded = facman.total_rep_cost + facman.total_aug_cost;
 	let resetStatus = `Reserving ${augSummary}`
 	let shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
 	// If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
 	// but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
-	if (affordableAugCount > 0 && player.factions.includes("Daedalus") && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
+	if (player.factions.includes("Daedalus") && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
 		shouldReset = true;
 		resetStatus = `We have enough reputation with Daedalus to unlock donations on our next reset.\n${resetStatus}`;
+		if (reserveNeeded == 0) reserveNeeded = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
 	}
 
 	// If not ready to reset, set a status with our progress and return
@@ -381,10 +383,10 @@ async function maybeInstallAugmentations(ns, player) {
 		return reservedPurchase = 0; // TODO: A slick way to not have to reset this flag on every early-return statement.
 
 	// Ensure the money needed for the above augs doesn't get ripped out from under us by reserving it and waiting one more loop
-	const reserveNeeded = facman.total_rep_cost + facman.total_aug_cost;
 	if (reservedPurchase < reserveNeeded) {
-		log(ns, `INFO: The augmentation purchase we can afford has increased from ${formatMoney(reservedPurchase)} ` +
-			`to ${formatMoney(reserveNeeded)}. Resetting the timer before we install augmentations.`);
+		if (reservedPurchase != 0) // If we were already reserving for a purchase and the nubmer went up, log a notice of the timer being reset.
+			log(ns, `INFO: The augmentation purchase we can afford has increased from ${formatMoney(reservedPurchase)} ` +
+				`to ${formatMoney(reserveNeeded)}. Resetting the timer before we install augmentations.`);
 		installCountdown = Date.now() + options['install-countdown']; // Each time we can afford more augs, reset the install delay timer
 		await ns.write("reserve.txt", reserveNeeded, "w"); // Should prevent other scripts from spending this money
 	}
@@ -401,11 +403,15 @@ async function maybeInstallAugmentations(ns, player) {
 	const resetLog = `Invoking ascend.js at ${formatDuration(player.playtimeSinceLastAug).padEnd(11)} since last aug to install: ${augSummary}`;
 	log(ns, `INFO: ${resetLog}`, true, 'info');
 	await persist_log(ns, resetLog);
+
 	// Kick off ascend.js
-	let pid = launchScriptHelper(ns, 'ascend.js', ['--install-augmentations', true,
-		'--on-reset-script', ns.getScriptName(), // TODO: Preserve the current script's state / args through the reset		
-		'--bypass-stanek-warning', true]); // Until there's an officially supported way to automate accepting stanek's gift, bypass it.
 	let errLog;
+	const ascendArgs = ['--install-augmentations', true,
+		'--on-reset-script', ns.getScriptName(), // TODO: Preserve the current script's state / args through the reset		
+		'--bypass-stanek-warning', true] // TODO: Automate accepting stanek's gift now that we can
+	if (affordableAugCount == 0) // If we know we have 0 augs, but still wish to reset, we must enable soft resetting
+		ascendArgs.push("--allow-soft-reset")
+	let pid = launchScriptHelper(ns, 'ascend.js', ascendArgs);
 	if (pid) {
 		await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down (Ascend should get killed as it does, since the BN will be rebooting)
 		await ns.asleep(1000); // If we've been scheduled to be killed, awaiting an NS function should trigger it?
