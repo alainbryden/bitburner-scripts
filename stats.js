@@ -15,9 +15,8 @@ export function autocomplete(data, args) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const runOptions = getConfiguration(ns, argsSchema);
-    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
-    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    const options = getConfiguration(ns, argsSchema);
+    if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     const doc = eval('document');
     const hook0 = doc.getElementById('overview-extra-hook-0');
     const hook1 = doc.getElementById('overview-extra-hook-1');
