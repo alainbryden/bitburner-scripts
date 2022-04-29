@@ -1,15 +1,11 @@
 import { getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
 
-const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeve.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']
-    .map(s => getFilePath(s));
-
 const argsSchema = [
     ['prioritize-augmentations', false], // If set to true, will spend as much money as possible on augmentations before upgrading home RAM
     ['install-augmentations', false], // By default, augs will only be purchased. Set this flag to install (a.k.a reset)
     /* OR */['reset', false], // An alias for the above flag, does the same thing.
     ['allow-soft-reset', false], // If set to true, allows ascend.js to invoke a **soft** reset (installs no augs) when no augs are affordable. This is useful e.g. when ascending rapidly to grind hacknet hash upgrades.
     ['bypass-stanek-warning', false], // If set to true, and this will bypass the warning before purchasing augmentations if you haven't gotten stanek yet.
-    ['scripts-to-kill', []], // Kill these money-spending scripts at launch (if not specified, defaults to all scripts in defaultScriptsToKill above)
     // Spawn this script after installing augmentations (Note: Args not supported by the game)
     ['on-reset-script', null], // By default, will start with `stanek.js` if you have stanek's gift, otherwise `daemon.js`.
 ];
@@ -17,7 +13,7 @@ const argsSchema = [
 export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
-    if (["--scripts-to-kill", "--on-reset-script"].includes(lastFlag))
+    if (["--on-reset-script"].includes(lastFlag))
         return data.scripts;
     return [];
 }
@@ -26,8 +22,6 @@ export function autocomplete(data, args) {
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
     const options = ns.flags(argsSchema);
-    let scriptsToKill = options['scripts-to-kill'];
-    if (scriptsToKill.length == 0) scriptsToKill = defaultScriptsToKill;
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');
@@ -36,8 +30,9 @@ export async function main(ns) {
     // - We should be able to install ~10 augs or so after maxing home ram purchases?
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
-    // Kill any other scripts that may interfere with our spending
-    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(scriptsToKill)}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
+    // Kill every script except this one, since it can interfere with out spending
+    let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != "${ns.getScriptName()}").forEach(s => ns.kill(s.pid));`,
+        '/Temp/kill-everything-but-ascend.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
     // Stop the current action so that we're no longer spending money (if training) and can collect rep earned (if working)
