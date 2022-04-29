@@ -6,6 +6,8 @@ If you manually `nano git-pull.js` from the terminal and copy the [contents of t
 
 Scripts can mostly be run on their own, but are primarily designed to be orchestrated by `daemon.js`. If you `run daemon.js` from the terminal, it will start several other scripts.
 
+Note that a new "master orchestrator" script named `autopilot.js` is also in the works. On top of running `daemon.js` and its suite of scripts, it will monitor your progress throughout the game and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
+
 ## Manually run scripts
 
 Some scripts are meant to be manually run as needed, or at least are not yet fully automated. Note that daemon will run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the daemon's version or simply run with your desired arguments before starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
@@ -14,20 +16,21 @@ Here are scripts that you may want to manually run, roughly in the order in whic
 
 - `git-pull.js` - Hopefully you used this to download the scripts. Run it whenever you want to update.
 - `scan.js` - Shows you the entire server network and important information about each server. A nice replacement for the built-in `scan` and/or `scan-analyze` commands, with support for unlimited depth.
+- `autopilot.js` - Plays the game for you (more or less), but is a work in progress.
+- `daemon.js` - Automates hacking and infrastructure, and kicking off various scripts to take advantage of other mechanics in the game as you unlock them.
 - `casino.js` - The first time you run this may come as a surprise, it will play blackjack and reload the game if it loses (automated save-scumming). Once you win 10b, you cannot enter the casino any more. Great way to boost your progress once you make the initial 200k needed to travel to Aevum and use the casino. For best performance, run `kill-all-scripts.js` before you run this, since other running scripts slow down the game's load time.
 - `reserve.js` - A simple way to reserve money across all scripts, in case you wanted to be certain to save up for something. e.g. `run reserve.js 200k` will reserve the $200,000 needed to get `casino.js` going.
+- `kill-all-scripts.js` - Kills all scripts running on home and remote servers, and also removes files that were copied to remote servers.
 - `faction-manager.js` - (Requires SF4) Run this periodically to find out how many augmentations you can currently afford. There are many command line options available to tweak the sort of augmentations you wish to prioritize. Run with `--purchase` to pull the trigger if you're ready to ascend.
-- `ascend.js` - (Requires SF4) A nearly-fully-automated way to ascend. Takes care of all the things you may or may not have known you wanted to do before installing augmentations and resetting.
 - `work-for-factions.js` - (Requires SF4) Daemon.js will start a version of this to make sure your "focus" work goes to good use, but often you'll want to run with your own arguments to specify what kind of work you want to be doing, depending on your goals for the current BitNode.
 - `crime.js` - (Requires SF4) While `work-for-factions.js` will do crime as-needed, you can use this instead to do nothing but crime.
-- `farm-intelligence.js` - (Requires SF4) Contains a script that can execute one or more of the best known methods to farm intelligence experience.
-  - Note that the current best method (soft reset loop) is most effective if you delete all scripts except this one (and helpers.js which it relies on) before running. You can do this quickly by modifying cleanup.js to run on all files instead of just /Temp/. You then would have to restore scripts by nano'ing git-pull as when you started out.
+- `ascend.js` - (Requires SF4) A nearly-fully-automated way to ascend. Takes care of all the things you may or may not have known you wanted to do before installing augmentations and resetting.
 - `spend-hacknet-hashes.js` - (Requires SF9) Many scripts will launch this automatically, but you can start your own instances to focus on purchasing the hash upgrades you want in your current situation. Many aliases for this exist below.
-- `kill-all-scripts.js` - Kills all scripts running on home and remote servers, and also removes files that were copied to remote servers.
+- `farm-intelligence.js` - (Requires SF4, SF5) Contains a script that can execute one or more of the best known methods to farm intelligence experience.
+  - Note that the current best method (soft reset loop) is most effective if you delete all scripts except this one (and helpers.js which it relies on) before running. You can do this quickly by modifying cleanup.js to run on all files instead of just /Temp/. You then would have to restore scripts by nano'ing git-pull as when you started out.
 - `cleanup.js` - Use this to clear out your temp folder (which contains hundreds of miniature scripts generated by the main scripts). Useful to reduce your save file size before exporting.
 - `grep.js` - Use this to search one or all files for certain text. Handy if you are trying to figure out e.g. what script spend hashes, or care about the TIX api.
 - `run-command.js` - Useful for testing a bit of code from the terminal without having to create a new script. Creating the alias `alias do="run run-command.js"` makes this extra useful. e.g. `do ns.getPlayer()` will print all the player's info to the terminal. `do ns.getServer('joesguns')` will print all info about that server to the terminal.
-- `autopilot.js` - (SF4 Strongly Suggested) Launches some of the other scripts, including `casino.js`, `daemon.js`, `stockmaster.js`, and `ascend.js` with options approriate to your progress within the current BitNode.
 
 # Customizing Script Behaviour (Basic)
 Most scripts are designed to be configured via command line arguments. (Such as using `run host-manager.js --min-ram-exponent 8` to ensure no servers are purchased with less than 2^8 GB of RAM)
