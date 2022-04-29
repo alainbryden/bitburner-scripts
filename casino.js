@@ -21,10 +21,13 @@ export function autocomplete(data, args) {
 	return [];
 }
 
+let _ns; // Lazy global copy of ns so we can sleep in the click handler
+
 /** @param {NS} ns 
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
 	options = ns.flags(argsSchema);
+	_ns = ns;
 	const saveSleepTime = options['save-sleep-time'];
 	if (options['enable-logging'])
 		ns.tail()
@@ -179,11 +182,11 @@ async function onCompletion(ns) {
 // Some DOM helpers (partial credit to @ShamesBond)
 async function click(elem) {
 	await elem[Object.keys(elem)[1]].onClick({ isTrusted: true });
-	if (options['click-sleep-time']) await ns.asleep(options['click-sleep-time']);
+	if (options['click-sleep-time']) await _ns.asleep(options['click-sleep-time']);
 }
 async function setText(input, text) {
 	await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } });
-	if (options['click-sleep-time']) await ns.asleep(options['click-sleep-time']);
+	if (options['click-sleep-time']) await _ns.asleep(options['click-sleep-time']);
 }
 function find(xpath) { return doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; }
 
