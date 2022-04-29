@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, getNsDataThroughFile, log } from './helpers.js'
+import { formatMoney, formatRam, getConfiguration, getNsDataThroughFile, log } from './helpers.js'
 
 const max_ram = 2 ** 30;
 const argsSchema = [
@@ -13,7 +13,8 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const options = ns.flags(argsSchema);
+    const options = getConfiguration(ns, argsSchema);
+    if (!options) return; // Invalid options, or ran in --help mode.
     const reserve = (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
     const money = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, `/Temp/getServerMoneyAvailable.txt`, ["home"]);
     let spendable = Math.min(money - reserve, money * options.budget);

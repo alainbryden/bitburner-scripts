@@ -1,4 +1,4 @@
-import { log, disableLogs, getFilePath, instanceCount, getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, formatNumberShort } from './helpers.js'
+import { log, disableLogs, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, formatNumberShort } from './helpers.js'
 
 // Default sripts called at startup and shutdown of stanek
 const defaultStartupScript = getFilePath('daemon.js');
@@ -16,11 +16,12 @@ const argsSchema = [
     ['reserved-ram-ideal', 32], // Leave this amount of RAM free if it represents less than 5% of available RAM
     ['max-charges', 120], // Stop charging when all fragments have this many charges (diminishing returns - num charges is ^0.07 )
     // By default, starting an augmentation with stanek.js will still spawn daemon.js, but will instruct it not to schedule any hack cycles against home by 'reserving' all its RAM
-    ['on-startup-script', null], // (Default above) Spawn this script when stanek is launched (HACK: to support running stanek as the installAugmentations startup script)
-    ['on-startup-script-args', []], // (Default above) 
+    // TODO: Set these defaults in some way that the user can explicitly specify that they want to run **no** startup script and **no** completion script
+    ['on-startup-script', null], // (Defaults in code) Spawn this script when stanek is launched WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek
+    ['on-startup-script-args', []], // Args for the above (Defaults in code) WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek 
     // When stanek completes, it will run daemon.js again (which will terminate the initial ram-starved daemon that is running)
-    ['on-completion-script', null], // (Default above) Spawn this script when max-charges is reached
-    ['on-completion-script-args', []], // (Default above) Optional args to pass to the script when launched
+    ['on-completion-script', null], // (Default in code) Spawn this script when max-charges is reached
+    ['on-completion-script-args', []], // (Default in code) Optional args to pass to the script when launched
     ['no-tail', false], // By default, keeps a tail window open, because it's pretty important to know when this script is running (can't use home for anything else)
     ['reputation-threshold', 0.2], // By default, if we are this close to the 100m rep needed for an unowned aug (e.g. "Stanek's Gift - Serenity"), we will keep charging despite the 'max-charges' setting
 ];
@@ -35,9 +36,10 @@ export function autocomplete(data, args) {
  * IMPORTANT: You should have no other scripts running on home while you do this.
  * NOTE: Stanek stats benefit more from fewer charges with a high avg RAM used per charge, rather than just more charges. **/
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['sleep', 'run', 'getServerMaxRam', 'getServerUsedRam'])
-    options = ns.flags(argsSchema);
     let currentServer = ns.getHostname();
     const maxCharges = options['max-charges']; // Don't bother adding charges beyond this amount
     const idealReservedRam = 32; // Reserve this much RAM, if it wouldnt make a big difference anyway. Leaves room for other temp-scripts to spawn.

@@ -1,4 +1,4 @@
-import { getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
+import { log, getConfiguration, getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles } from './helpers.js'
 
 const argsSchema = [
     ['prioritize-augmentations', false], // If set to true, will spend as much money as possible on augmentations before upgrading home RAM
@@ -21,7 +21,8 @@ export function autocomplete(data, args) {
 /** @param {NS} ns 
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
-    const options = ns.flags(argsSchema);
+    const options = getConfiguration(ns, argsSchema);
+    if (!options) return; // Invalid options, or ran in --help mode.
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');

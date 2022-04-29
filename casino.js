@@ -1,4 +1,4 @@
-import { log, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
+import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
 
 const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
@@ -26,7 +26,8 @@ let _ns; // Lazy global copy of ns so we can sleep in the click handler
 /** @param {NS} ns 
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
-	options = ns.flags(argsSchema);
+	options = getConfiguration(ns, argsSchema);
+	if (!options) return; // Invalid options, or ran in --help mode.
 	_ns = ns;
 	const saveSleepTime = options['save-sleep-time'];
 	if (options['enable-logging'])

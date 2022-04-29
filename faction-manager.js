@@ -1,6 +1,6 @@
 import {
-    log, formatNumberShort, formatMoney,
-    instanceCount, getNsDataThroughFile, getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue
+    log, getConfiguration, instanceCount, formatNumberShort, formatMoney,
+    getNsDataThroughFile, getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue
 } from './helpers.js'
 
 // PLAYER CONFIGURATION CONSTANTS
@@ -31,30 +31,30 @@ let _ns; // Used to avoid passing ns to functions that don't need it except for 
 
 let options = null; // A copy of the options used at construction time
 const argsSchema = [ // The set of all command line arguments
-    ['a', false], // Display all factions (spoilers), not just unlocked and early-game factions
-    ['all', false], // Same as above
+    ['all', false], // Display all factions (spoilers), not just unlocked and early-game factions
+    ['a', false], // Flag alias for --all
+    ['verbose', null], // Print the terminal as well as the script logs. If left null, this defaults to true in code now, but can be disabled with an explicit `--verbose false`
+    ['v', false], // (Kept for backwards compatilily) this was an alias flag for setting --verbose to true when it previously defaulted to false.
+    ['ignore-player-data', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
+    ['i', false], // Flag alias for --ignore-player-data
+    ['ignore-faction', []], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
     ['after-faction', []], // Pretend we were to buy all augs offered by these factions. Show us only what remains.
     ['force-join', null], // Always join these factions if we have an invite (useful to force join a gang faction)
-    // Display-related options - controls what information is displayed and how
-    ['v', false], // Print the terminal as well as the script logs
-    ['verbose', null], // Same as above, defaults to true in code now, but can be disabled with an explicit `--verbose false`
-    ['i', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
-    ['ignore-player-data', false], // Same as above
-    ['ignore-stocks', false], // Set to true to ignore the liquidation value of stocks currently held when running
-    ['ignore-stanek', false], // Set to true to ignore the fact that stanek is not yet taken before purchasing your first augs
-    ['ignore-faction', []], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
-    ['u', false], // When displaying total aug stats for a faction, only include augs not given by a faction further up the list
-    ['unique', false], // Same as above
-    ['sort', null], // What stat is the table of total faction stats sorted by
-    ['hide-stat', []], // Stats to exclude from the final table (partial matching works)
     // Augmentation purchasing-related options. Controls what augmentations are included in cost calculations, and optionally purchased
-    ['aug-desired', []], // These augs will be marked as "desired" whether or not they match desired-stats
     ['priority-aug', []], // If accessible, every effort is made not to drop these from the sort purchase order.
-    ['omit-aug', []], // Augmentations to exclude from the augmentation summary because we do not wish to purchase this round
-    ['stat-desired', []], // Augs that give these will be starred (marked as desired and staged for purchase)
+    ['omit-aug', []], // Augmentations to exclude from the augmentation list (e.g. because we do not wish to purchase it yet)
+    ['aug-desired', []], // These augs will be marked as "desired" whether or not they match desired-stats
+    ['stat-desired', []], // Augs that give these will be starred (marked as desired and staged for purchase). If empty, defaults are picked based on your situation.
+    ['neuroflux-disabled', false], // Set to true to skip including as many neuroflux upgrades as we can afford
     ['disable-donations', false], // When displaying "obtainable" augs and prices, don't include augs that require a donation to meet their rep requirements
     ['purchase', false], // Set to true to pull the trigger on purchasing all desired augs in the order specified
-    ['neuroflux-disabled', false], // Set to true to skip including as many neuroflux upgrades as we can afford
+    ['ignore-stocks', false], // Set to true to ignore the liquidation value of stocks currently held when running
+    ['ignore-stanek', false], // Set to true to ignore the fact that stanek is not yet taken before purchasing your first augs
+    // Display-related options - controls what information is displayed in the final "cumulative stats by faction" table
+    ['sort', null], // What stat is the table of total faction stats sorted by. Defaults to your first --stat-desired
+    ['hide-stat', []], // Stats to exclude from the final table (partial matching works)
+    ['unique', false], // When displaying cumulative stats by faction, only include augs not given by a faction further up the list
+    ['u', false], // Flag alias for --unique
 ];
 
 // For convenience, these lists provide command-line <tab> auto-complete values
@@ -84,9 +84,10 @@ export function autocomplete(data, args) {
 // Flags -a for all factions, -v to print to terminal
 /** @param {NS} ns **/
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     _ns = ns;
-    options = ns.flags(argsSchema);
 
     // Ensure all globals are reset before we proceed with the script, in case we've done things out of order
     augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;

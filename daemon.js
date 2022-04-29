@@ -1,6 +1,6 @@
 import {
     formatMoney, formatRam, formatDuration, formatDateTime, formatNumber,
-    scanAllServers, hashCode, disableLogs, log, getFilePath,
+    scanAllServers, hashCode, disableLogs, log, getFilePath, getConfiguration,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
     getFnRunViaNsExec, getFnIsAliveViaNsPs, autoRetry
@@ -144,9 +144,9 @@ const argsSchema = [
     ['queue-delay', 1000], // Delay before the first script begins, to give time for all scripts to be scheduled
     ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule more
     ['i', false], // Farm intelligence with manual hack.
-    ['reserved-ram', 32],
+    ['reserved-ram', 32], // Keep this much home RAM free when scheduling hack/grow/weaken cycles on home.
     ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
-    ['recovery-thread-padding', 1],
+    ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
     ['share', false], // Enable sharing free ram to increase faction rep gain (enabled automatically once RAM is sufficient)
     ['no-share', false], // Disable sharing free ram to increase faction rep gain
     ['share-cooldown', 5000], // Wait before attempting to schedule more share threads (e.g. to free RAM to be freed for hack batch scheduling first)
@@ -170,6 +170,8 @@ export function autocomplete(data, args) {
 /** @param {NS} ns **/
 export async function main(ns) {
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions) return;
 
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
@@ -201,8 +203,8 @@ export async function main(ns) {
     dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     log(ns, "The following source files are active: " + JSON.stringify(dictSourceFiles));
 
-    // Process command line args (if any)
-    options = ns.flags(argsSchema);
+    // Process configuration
+    options = runOptions;
     hackOnly = options.h || options['hack-only'];
     xpOnly = options.x || options['xp-only'];
     stockMode = options.s || options['stock-manipulation'] || options['stock-manipulation-focus'];

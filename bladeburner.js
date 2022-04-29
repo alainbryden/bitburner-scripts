@@ -1,4 +1,4 @@
-import { log, disableLogs, instanceCount, getNsDataThroughFile, getFilePath, getActiveSourceFiles, formatNumberShort, formatDuration } from './helpers.js'
+import { log, disableLogs, getConfiguration, instanceCount, getNsDataThroughFile, getFilePath, getActiveSourceFiles, formatNumberShort, formatDuration } from './helpers.js'
 
 const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
@@ -46,9 +46,10 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns */
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['asleep'])
-    options = ns.flags(argsSchema);
     player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     // Ensure we have access to bladeburner
     ownedSourceFiles = await getActiveSourceFiles(ns);
