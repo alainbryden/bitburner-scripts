@@ -274,7 +274,7 @@ async function checkOnRunningScripts(ns, player) {
 		"--training-stat-per-multi-threshold", 200, // Be willing to spend more time grinding for stats rather than skipping a faction
 		"--prioritize-invites"]); // Don't actually start working for factions until we've earned as many invites as we think we can
 	// If gangs are unlocked, micro-manage how 'work-for-factions.js' is running by killing off unwanted instances
-	if ((2 in unlockedSFs)) {
+	if (2 in unlockedSFs) {
 		// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
 		if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
 		rushGang = !playerInGang;
@@ -284,6 +284,11 @@ async function checkOnRunningScripts(ns, player) {
 			s => !rushGangsArgs.every(a => s.args.includes(a))); // Require all rushGangsArgs if we're not in a gang yet.
 		// If running with the wrong args, kill it so we can start it with the desired args
 		if (wrongWork) await killScript(ns, 'work-for-factions.js', null, wrongWork);
+
+		// Start gangs immediately (even though daemon would eventually start it) since we want any income they provide right away after an ascend
+		// TODO: Consider monitoring gangs territory progress and increasing their budget / decreasing their reserve to help kick-start them
+		if (playerInGang && !findScript('gangs.js'))
+			launchScriptHelper(ns, 'gangs.js');
 	}
 
 	// Launch work-for-factions if it isn't already running (rules for maybe killing unproductive instances are above)
@@ -312,7 +317,7 @@ async function maybeDoCasino(ns, player) {
 		return; // We need at least 200K (and change) to run casino so we can travel to aevum
 
 	// Run casino.js (and expect ourself to get killed in the process)
-	// Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts. 
+	// Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
 	await killScript(ns, 'work-for-factions.js');
 
 	// TODO: Preserve the current script's state / args through the reset
