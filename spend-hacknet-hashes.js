@@ -1,4 +1,4 @@
-import { log, disableLogs, formatMoney, formatDuration, formatNumberShort } from './helpers.js'
+import { log, getConfiguration, disableLogs, formatMoney, formatDuration, formatNumberShort } from './helpers.js'
 
 const sellForMoney = 'Sell for Money';
 
@@ -6,9 +6,9 @@ const argsSchema = [
     ['l', false], // Spend hashes as soon as we can afford any --spend-on purchase item. Otherwise, only spends when nearing capacity.
     ['liquidate', false], // Long-form of above flag
     ['interval', 1000], // Rate at which the program runs and spends hashes
-    ['spend-on', [sellForMoney]],
-    ['spend-on-server', undefined],
-    ['no-capacity-upgrades', false],
+    ['spend-on', [sellForMoney]], // One or more actions to spend hashes on.
+    ['spend-on-server', null], // The server to boost, for spend options that take a server argument: 'Reduce Minimum Security' and 'Increase Maximum Money'
+    ['no-capacity-upgrades', false], // By default, we will attempt to upgrade the hacknet node capacity if we cannot afford any purchases. Set to true to disable this.
     ['reserve-buffer', 1], // To avoid wasting hashes, spend if would be within this many hashes of our max capacity on the next tick.
 ];
 
@@ -30,7 +30,8 @@ export function autocomplete(data, args) {
  * Executes instructions to spend hacknet hashes continuously.
  * NOTE: This script is written to support multiple concurrent instances running with different arguments. **/
 export async function main(ns) {
-    const options = ns.flags(argsSchema);
+    const options = getConfiguration(ns, argsSchema);
+    if (!options) return; // Invalid options, or ran in --help mode.
     const liquidate = options.l || options.liquidate;
     const interval = options.interval;
     const toBuy = options['spend-on'].map(s => s.replaceAll("_", " "));

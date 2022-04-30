@@ -1,10 +1,11 @@
-import { log, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
+import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
 
 const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
 let options;
 const argsSchema = [
 	['save-sleep-time', 10], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
+	['click-sleep-time', 1], // Time to sleep in milliseconds after clicking any button (or setting text). Increase if your are getting errors on click.
 	['use-basic-strategy', false], // Set to true to use the basic strategy (Stay on 17+)
 	['enable-logging', false], // Set to true to pop up a tail window and generate logs.
 	['kill-all-scripts', false], // Set to true to kill all running scripts before running.
@@ -20,10 +21,14 @@ export function autocomplete(data, args) {
 	return [];
 }
 
+let _ns; // Lazy global copy of ns so we can sleep in the click handler
+
 /** @param {NS} ns 
  *  Super recommend you kill all other scripts before starting this up. **/
 export async function main(ns) {
-	options = ns.flags(argsSchema);
+	options = getConfiguration(ns, argsSchema);
+	if (!options) return; // Invalid options, or ran in --help mode.
+	_ns = ns;
 	const saveSleepTime = options['save-sleep-time'];
 	if (options['enable-logging'])
 		ns.tail()
@@ -176,8 +181,14 @@ async function onCompletion(ns) {
 }
 
 // Some DOM helpers (partial credit to @ShamesBond)
-async function click(elem) { await elem[Object.keys(elem)[1]].onClick({ isTrusted: true }); }
-async function setText(input, text) { await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } }); }
+async function click(elem) {
+	await elem[Object.keys(elem)[1]].onClick({ isTrusted: true });
+	if (options['click-sleep-time']) await _ns.asleep(options['click-sleep-time']);
+}
+async function setText(input, text) {
+	await input[Object.keys(input)[1]].onChange({ isTrusted: true, target: { value: text } });
+	if (options['click-sleep-time']) await _ns.asleep(options['click-sleep-time']);
+}
 function find(xpath) { return doc.evaluate(xpath, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; }
 
 // Better logic for when to HIT / STAY (Partial credit @drider)

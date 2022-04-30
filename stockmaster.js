@@ -1,6 +1,6 @@
 import {
-    formatMoney, formatNumberShort, formatDuration,
-    instanceCount, getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers
+    instanceCount, getConfiguration, getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers,
+    formatMoney, formatNumberShort, formatDuration
 } from './helpers.js'
 
 let disableShorts = false;
@@ -34,7 +34,7 @@ let sleepInterval = 1000;
 let options;
 const argsSchema = [
     ['l', false], // Stop any other running stockmaster.js instances and sell all stocks
-    ['liquidate', false],
+    ['liquidate', false], // Long-form alias for the above flag.
     ['mock', false], // If set to true, will "mock" buy/sell but not actually buy/sell anything
     ['noisy', false], // If set to true, tprints and announces each time stocks are bought/soldgetHostnames
     ['disable-shorts', false], // If set to true, will not short any stocks. Will be set depending on having SF8.2 by default.
@@ -68,12 +68,13 @@ export function autocomplete(data, args) {
 /** Requires access to the TIX API. Purchases access to the 4S Mkt Data API as soon as it can 
  * @param {NS} ns */
 export async function main(ns) {
-    const localOptions = ns.flags(argsSchema); // Don't set the global "options" until we're sure we aren't conflicting with another instance.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions) return; // Invalid options, or ran in --help mode.
 
     // If given the "liquidate" command, try to kill any versions of this script trading in stocks
     // NOTE: We must do this immediately before we start resetting / overwriting global state below (which is shared between script instances)
     let player = ns.getPlayer();
-    if (localOptions.l || localOptions.liquidate) {
+    if (runOptions.l || runOptions.liquidate) {
         if (!player.hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
         log(ns, 'INFO: Killing any other stockmaster processes...', false, 'info');
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
@@ -86,7 +87,7 @@ export async function main(ns) {
 
     ns.disableLog("ALL");
     // Extract various options from the args (globals, purchasing decision factors, pre-4s factors)
-    options = localOptions;
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     mock = options.mock;
     noisy = options.noisy;
     const fracB = options.fracB;

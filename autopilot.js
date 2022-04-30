@@ -1,5 +1,5 @@
 import {
-	log, getFilePath, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
+	log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
 	getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue,
 	formatMoney, formatDuration
 } from './helpers.js'
@@ -47,10 +47,22 @@ let installCountdown; // Start of a countdown before we install augmentations.
 
 /** @param {NS} ns **/
 export async function main(ns) {
-	log(ns, "Options: " + JSON.stringify(ns.flags(argsSchema)));
-	if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
-	options = ns.flags(argsSchema);
+	const runOptions = getConfiguration(ns, argsSchema);
+	if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+	options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
+
+	// Because we cannot pass args to "install" and "destroy" functions, we write them to disk to override defaults
+	const changedArgs = JSON.stringify(argsSchema
+		.filter(a => JSON.stringify(runOptions[a[0]]) != JSON.stringify(a[1]))
+		.map(a => [a[0], runOptions[a[0]]]));
+	// Only update the config file if it doesn't match the most resent set of run args
+	const configPath = `${ns.getScriptName()}.config.txt`
+	const currentConfig = ns.read(configPath);
+	if ((changedArgs.length > 2 || currentConfig) && changedArgs != currentConfig) {
+		await ns.write(configPath, changedArgs, "w");
+		log(ns, `INFO: Updated "${configPath}" to persist the most recent run args through resets: ${changedArgs}`, true, 'info');
+	}
 
 	// Clear reset global state
 	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = false;

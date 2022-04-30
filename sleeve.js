@@ -1,4 +1,4 @@
-import { instanceCount, getActiveSourceFiles, getNsDataThroughFile, runCommand, formatMoney, formatDuration, disableLogs, log } from './helpers.js'
+import { log, getConfiguration, instanceCount, disableLogs, getActiveSourceFiles, getNsDataThroughFile, runCommand, formatMoney, formatDuration } from './helpers.js'
 
 const interval = 5000; // Uodate (tick) this often
 const minTaskWorkTime = 29000; // Sleeves assigned a new task should stick to it for at least this many milliseconds
@@ -37,8 +37,9 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
-    options = ns.flags(argsSchema);
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['getServerMoneyAvailable']);
     // Ensure the global state is reset (e.g. after entering a new bitnode)
     task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [], cacheExpiry = [], lastReassignTime = [];

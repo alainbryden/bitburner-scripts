@@ -1,5 +1,5 @@
 import {
-    instanceCount, getNsDataThroughFile, getFilePath, getActiveSourceFiles, tryGetBitNodeMultipliers,
+    instanceCount, getConfiguration, getNsDataThroughFile, getFilePath, getActiveSourceFiles, tryGetBitNodeMultipliers,
     formatDuration, formatMoney, formatNumberShort, disableLogs, log
 } from './helpers.js'
 
@@ -12,7 +12,7 @@ const argsSchema = [
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
-    ['training-stat-per-multi-threshold', 100], // Heuristic: Only bother training stats if our mult+exp_mult for that stat are more than 1 per this many (50) stat levels we need.
+    ['training-stat-per-multi-threshold', 100], // Heuristic: Estimate that we can train this many levels for every mult / exp_mult we have in a reasonable amount of time.
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
     ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
@@ -96,15 +96,16 @@ const breakToMainLoop = () => Date.now() > mainLoopStart + checkForNewPriorities
 
 /** @param {NS} ns */
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['sleep']);
 
     // Reset globals whose value can persist between script restarts in weird situations
     lastTravel = lastActionRestart = crimeCount = 0;
     notifiedAboutDaedalus = false;
 
-    // Parse options
-    options = ns.flags(argsSchema);
+    // Process configuration options
     firstFactions = (options['first'] || []).map(f => f.replaceAll('_', ' ')); // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
     options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
     options['no-crime'] = options['no-crime'] || options['no-focus']; // Can't crime if we aren't allowed to steal focus

@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, instanceCount, getNsDataThroughFile, scanAllServers, log } from './helpers.js'
+import { log, getConfiguration, instanceCount, getNsDataThroughFile, scanAllServers, formatMoney, formatRam } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -36,9 +36,10 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     ns.disableLog('ALL')
-    options = ns.flags(argsSchema);
 
     // Get the maximum number of purchased servers in this bitnode
     maxPurchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServerLimit()', '/Temp/host-limit.txt');
