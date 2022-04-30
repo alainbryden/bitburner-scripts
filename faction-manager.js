@@ -608,7 +608,8 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             `Costs ${getCostString(nextNfCost, nextNfRepCost)} for a ` +
             `Total of ${getCostString(totalAugCost + nextNfCost, totalRepCost + nextNfRepCost)}`);
         if (totalCostWithNextNf > budget || nextNfRep > augNfFaction.reputation && !augNfFaction.donationsUnlocked) {
-            outputRows.push(`NF ${nfPurchased + 1} will be available at Money:     ${getCostString(totalAugCost + nextNfCost, totalRepCost + nextNfRepCost)} ` +
+            outputRows.push(`NF ${nfPurchased + 1} will be available at Money:`.padEnd(37) +
+                ` ${getCostString(totalAugCost + nextNfCost, totalRepCost + nextNfRepCost)} ` +
                 `${(totalCostWithNextNf > budget ? '✗' : '✓')} and "${augNfFaction.name}" reputation: ${formatNumberShort(nextNfRep)} ` +
                 (nextNfRep > augNfFaction.reputation && !augNfFaction.donationsUnlocked ? '✗' : '✓') +
                 ` (have ${formatNumberShort(augNfFaction.reputation)}` + (nextNfRep > augNfFaction.reputation ? '' :
