@@ -10,7 +10,16 @@ Note that a new "master orchestrator" script named `autopilot.js` is also in the
 
 ## Manually run scripts
 
-Some scripts are meant to be manually run as needed, or at least are not yet fully automated. Note that daemon will run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the daemon's version or simply run with your desired arguments before starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
+Some scripts are meant to be manually run as needed. Most scripts take arguments to tweak or customize their behaviour based on your preferences or special circumstance. More on this in [below](#customizing-script-behaviour-basic).
+Run scripts with the `--help` flag to get a list of their arguments, default values, and a brief description of each:
+![image](https://user-images.githubusercontent.com/2285037/166085058-952b0805-cf4e-4548-8829-1e1ebeb5428b.png)
+You will also see an error-version of this dialog if you make a mistake in how you run the script.
+
+If you have personal preference and wish to "permanently" change the configuration of one of my scripts, you can do so without sacrificing your ability to "git-pull.js" the latest - simply [create a custom `config.txt`](https://github.com/alainbryden/bitburner-scripts/edit/main/README.md#config-files) file for the script.
+
+_Note:_ `daemon.js` will already run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the daemon's version or simply run with your desired arguments before starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
+
+## Brief description of Scripts
 
 Here are scripts that you may want to manually run, roughly in the order in which you'll want to experiment with them:
 
@@ -32,7 +41,9 @@ Here are scripts that you may want to manually run, roughly in the order in whic
 - `grep.js` - Use this to search one or all files for certain text. Handy if you are trying to figure out e.g. what script spend hashes, or care about the TIX api.
 - `run-command.js` - Useful for testing a bit of code from the terminal without having to create a new script. Creating the alias `alias do="run run-command.js"` makes this extra useful. e.g. `do ns.getPlayer()` will print all the player's info to the terminal. `do ns.getServer('joesguns')` will print all info about that server to the terminal.
 
-# Customizing Script Behaviour (Basic)
+If you want more information about any script, try reading the source. I do my best to document things clearly. If it's not clear, feel free to raise an issue.
+
+## Customizing Script Behaviour (Basic)
 Most scripts are designed to be configured via command line arguments. (Such as using `run host-manager.js --min-ram-exponent 8` to ensure no servers are purchased with less than 2^8 GB of RAM)
 
 Default behaviours are to try to "balance" priorities and give most things an equal share of budget / RAM, but this isn't always ideal, especially in bitnodes that cripple one aspect of the game or the other. You can `nano` to view the script and see what the command line options are, or type e.g. `daemon.js --` (dash dash) and hit `<tab>` to get a pop-up auto-completion list. (Make sure your mouse cursor is over the terminal for the auto-complete to appear.)
@@ -86,6 +97,25 @@ You may find it useful to set up one or more aliases with the default options yo
   - Let this be a hint as to how customizable some of these scripts are (without editing the source code). The above alias is powerful when you are end-of-bn and your hacking skill is very high (8000+), so hack/grow/weaken times are very fast (milliseconds). You can greatly increase productivity and reduce lag by switching to this `--looping-mode` which creates long-lived hack/grow/weaken scripts that run in a loop. This, in addition to the tighter cycle-timing makes them more vulnerable to misfiring (completing out-of-order), but adding recovery thread padding (a multiple on the number of grow/weaken threads to use) can quickly recover from misfires. Note that if you don't yet have enough home-ram to support such a high recovery-thread multiple, you can start lower (5 or 10) then buy more home ram and work your way up.
 - `alias ascend="run ascend.js --prioritize-augmentations --reset"`
   - A good way to finish your node. I personally `--prioritize-augmentations` when resetting, because I have all SF bonuses unlocked, but until you have SF11.3 for aug cost reduction, you may want to leave the default which prioritizes upgrading home RAM as much as possible first.
+
+## Config Files
+
+Persistent Custom Configurations (script.js.config.txt files) can be specified to override the default args specified by the "args schema" in each script.
+
+The order in which argument values are determined are:
+1. Arguments provided at the command line (or in the alias) take priority
+2. If no override is provided at the command line, any value in the config file is used.
+3. If no config file value is present, the default in the source (argsSchema) is used.
+   - Note that some defaults are set to `null` in the args schema to be overridden with more complex defaulting behaviour elsewhere in the script.
+
+### Format Specifications
+The file should have the name `some-script-name.js.config.txt` (i.e. append `.config.txt` to the name of the script you are configuring)
+
+Your config file should either of the following two formats
+1. A dictionary e.g.: `{ "string-opt": "value", "num-opt": 123, "array-opt": ["one", "two"] }`
+2. An array of dict entries (2-element arrays) e.g.: `[ ["string-opt", "value"], ["num-opt", 123], ["array-opt", ["one", "two"]] ]` +
+
+You are welcome to use line breaks and spacing to make things more human readable, so long as it is able to be parsed by JSON.parse (when in doubt, built it in code and generate it with JSON.stringify).
 
 ## Customizing Script Code (Advanced)
 
