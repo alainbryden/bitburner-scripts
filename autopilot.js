@@ -173,8 +173,8 @@ async function checkIfBnIsComplete(ns, player) {
 	}
 
 	if (options['disable-auto-destroy-bn']) {
-		log(ns, `--disable-auto-destroy-bn is set, you can manually exit the bitnode when ready.`, true)
-		wdAvailable = false
+		log(ns, `--disable-auto-destroy-bn is set, you can manually exit the bitnode when ready.`, true);
+		return wdAvailable = false;
 	}
 	// Use the new special singularity function to automate entering a new BN
 	const pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
