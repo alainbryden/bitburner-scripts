@@ -1,4 +1,4 @@
-import { getNsDataThroughFile, runCommand, formatRam } from './helpers.js'
+import { getFilePath, getNsDataThroughFile, runCommand, formatRam } from './helpers.js'
 
 /** @param {NS} ns
  * Remove the worst owned server respective of RAM */
@@ -16,7 +16,7 @@ export async function main(ns) {
         return ns.tprint(`Nothing to delete - all ${purchasedServers.length} servers have the maximum RAM (2^20 or ${formatRam(2 ** 20)})`);
 
     // Flag the server for deletion with a file - daemon should check for this and stop scheduling against it.
-    await runCommand(ns, `await ns.scp("/Flags/deleting.txt", ns.args[0])`, '/Temp/flag-server-for-deletion.js', [minServer.name]);
+    await runCommand(ns, `await ns.scp("${getFilePath('/Flags/deleting.txt')}", ns.args[0])`, '/Temp/flag-server-for-deletion.js', [minServer.name]);
     const success = await getNsDataThroughFile(ns, `ns.deleteServer(ns.args[0])`, '/Temp/deleteServer.txt', [minServer.name]);
     if (success)
         ns.tprint(`Deleted ${minServer.name} which had ${formatRam(minServer.ram)} of RAM (${purchasedServers.length - 1} servers remaining).`);
