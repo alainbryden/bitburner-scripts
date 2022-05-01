@@ -274,8 +274,8 @@ async function checkOnRunningScripts(ns, player) {
 		["--looping-mode", "--recovery-thread-padding", 10, "--cycle-timing-delay", 2000, "--queue-delay", "10",
 			"--stock-manipulation-focus", "--silent-misfires", "--initial-max-targets", "63", "--no-share"];
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
-	// By default, disable joining bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
-	if (!options['enable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
+	// By default, don't join bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
+	if (options['enable-bladeburner']) daemonArgs.push('--run-script', getFilePath('bladeburner.js'));
 	// Launch or re-launch daemon with the desired arguments
 	if (!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) {
 		if (player.hacking >= hackThreshold)

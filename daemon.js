@@ -248,7 +248,7 @@ export async function main(ns) {
             name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
             shouldRun: () => 4 in dictSourceFiles && (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Higher SF4 levels result in lower RAM requirements
         },
-        { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && playerStats.bitNodeN != 8 }, // Script to create manage bladeburner for us
+        { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && playerStats.bitNodeN == 6 || playerStats.bitNodeN == 7 }, // Script to create manage bladeburner for us
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
     // Add any additional scripts to be run provided by --run-script arguments
