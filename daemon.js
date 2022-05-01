@@ -1640,7 +1640,7 @@ function removeServerByName(ns, deletedHostName) {
 let getServerByName = hostname => serverListByFreeRam.find(s => s.name == hostname);
 
 // Indication that a server has been flagged for deletion (by the host manager). Doesn't count for home of course, as this is where the flag file is stored for copying.
-let isFlaggedForDeletion = (hostName) => hostName != "home" && doesFileExist("/Flags/deleting.txt", hostName);
+let isFlaggedForDeletion = (hostName) => hostName != "home" && doesFileExist(getFilePath("/Flags/deleting.txt"), hostName);
 
 // Helper to construct our server lists from a list of all host names
 function buildServerList(ns, verbose = false) {
