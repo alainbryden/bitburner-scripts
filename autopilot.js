@@ -261,7 +261,7 @@ async function checkOnRunningScripts(ns, player) {
 	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched) {
 		stanekLaunched = true;
 		if (!findScript('stanek.js'))
-			launchScriptHelper(ns, 'stanek.js', daemonArgs);
+			launchScriptHelper(ns, 'stanek.js');
 		await ns.asleep(2000); // Stanek will launch a version of daemon that works with charging. Give it time so we detect it as started below.
 	}
 
