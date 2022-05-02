@@ -22,9 +22,11 @@ const tickInterval = 50
 // unique name to prevent overlaps
 const serviceName = 'infiltrator'
 
+// boost given by WKSharmonizer aug
+const WKSharmonizerMult = 1.5
 
 let _win = [].map.constructor('return this')()
-let _doc = [].map.constructor('return this.document')()
+let _doc = _win['document']
 
 const argsSchema = [
   ['kill', false],     // set to stop the old service and not start a new one
@@ -772,7 +774,7 @@ function calcReward (player, startingDifficulty) {
   return difficulty
 }
 
-function getAllRewards (ns, bnMults, player, display=false) {
+function getAllRewards (ns, bnMults, player, wks=false, display=false) {
   const locations = [...locationInfo]
   for (const location of locations) {
     const levelBonus = location.maxClearanceLevel * Math.pow(1.01, location.maxClearanceLevel)
@@ -782,12 +784,14 @@ function getAllRewards (ns, bnMults, player, display=false) {
       Math.pow(location.startingSecurityLevel, 1.2) *
       30 *
       levelBonus *
+      (wks ? WKSharmonizerMult : 1) *
       (bnMults?.InfiltrationRep ?? 1)
     location.moneyGain =
       Math.pow(reward + 1, 2) *
       Math.pow(location.startingSecurityLevel, 3) *
       3e3 *
       levelBonus *
+      (wks ? WKSharmonizerMult : 1) *
       (bnMults?.InfiltrationMoney ?? 1)
     location.repScore = location.repGain / location.maxClearanceLevel
     location.moneyScore = location.moneyGain / location.maxClearanceLevel
@@ -803,6 +807,20 @@ function getAllRewards (ns, bnMults, player, display=false) {
     }
   }
   return locations
+}
+
+// SoA aug check
+
+async function hasSoaAug (ns) {
+  try {
+    const augs = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt')
+    return augs.some(aug => aug.toLowerCase().includes('wks harmonizer'))
+  }
+  catch (err) {
+    log(ns, `WARN: Could not get list of owned augs: ${err.toString()}`)
+    log(ns, 'WARN: Assuming no WKS harmonizer aug is installed.')
+  }
+  return false
 }
 
 // service stuff
@@ -835,10 +853,10 @@ export async function killPrevService (ns, serviceName, writeback=true) {
   }
 }
 
-export async function registerService (ns, serviceName, intervalId) {
+export async function registerService (ns, serviceName, intervalId, params = {}) {
   // kill previous service with this name, if any
   const services = await killPrevService(ns, serviceName, false)
-  const newService = { name: serviceName, started: Date.now(), intervalId: intervalId }
+  const newService = { name: serviceName, started: Date.now(), intervalId: intervalId, params: params }
   services.push(newService)
   // write info to services file
   await ns.write('services.txt', JSON.stringify(services, null, 2), 'w')
@@ -858,11 +876,15 @@ export async function main (ns) {
   // get BN multipliers first to feed reward info to infiltration service
   const bnMults = await tryGetBitNodeMultipliers(ns)
   const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
-  const locations = getAllRewards(ns, bnMults, player)
+  const wks = await hasSoaAug(ns)
+  log(ns, `Time factor: ${infiltrationTimeFactor}`)
+  log(ns, `Infiltration multipliers: ${bnMults?.InfiltrationRep}× rep, ${bnMults?.InfiltrationMoney}× money`)
+  log(ns, `WKS harmonizer aug: ${wks ? 'yes' : 'no'}`)
+  const locations = getAllRewards(ns, bnMults, player, wks)
   // launch service and see if it connects
   const service = new InfiltrationService(ns, locations)
   const intervalId = service.start()
-  await registerService(ns, serviceName, intervalId)
+  await registerService(ns, serviceName, intervalId, options)
   log(ns, `Started infiltration service`, false, 'success')
   log(ns, `Service is running with interval ID ${intervalId}. Script will now exit.`)
 }
