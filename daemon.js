@@ -248,7 +248,7 @@ export async function main(ns) {
             name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
             shouldRun: () => 4 in dictSourceFiles && (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Higher SF4 levels result in lower RAM requirements
         },
-        { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && playerStats.bitNodeN != 8 }, // Script to create manage bladeburner for us
+        { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && playerStats.bitNodeN == 6 || playerStats.bitNodeN == 7 }, // Script to create manage bladeburner for us
         { name: "infiltrator.js", tail: false }, // Service to automate infiltrations
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
@@ -1641,7 +1641,7 @@ function removeServerByName(ns, deletedHostName) {
 let getServerByName = hostname => serverListByFreeRam.find(s => s.name == hostname);
 
 // Indication that a server has been flagged for deletion (by the host manager). Doesn't count for home of course, as this is where the flag file is stored for copying.
-let isFlaggedForDeletion = (hostName) => hostName != "home" && doesFileExist("/Flags/deleting.txt", hostName);
+let isFlaggedForDeletion = (hostName) => hostName != "home" && doesFileExist(getFilePath("/Flags/deleting.txt"), hostName);
 
 // Helper to construct our server lists from a list of all host names
 function buildServerList(ns, verbose = false) {
