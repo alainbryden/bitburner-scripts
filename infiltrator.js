@@ -8,7 +8,7 @@
  * TODO: separate out services logic into a `services.js` so more can be easily added (e.g. terminal monitor)
  */
 
-import { log, formatMoney, formatNumberShort, tryGetBitNodeMultipliers, getNsDataThroughFile } from './helpers.js'
+import { log, formatMoney, formatNumberShort, tryGetBitNodeMultipliers, getNsDataThroughFile } from './helpers'
 
 // delays for setTimeout and setInterval above this threshold are not modified
 // (helps prevent issues with hacking scripts)
@@ -25,16 +25,16 @@ const serviceName = 'infiltrator'
 // boost given by WKSharmonizer aug
 const WKSharmonizerMult = 1.5
 
-let _win = [].map.constructor('return this')()
-let _doc = _win['document']
+const _win = [].map.constructor('return this')()
+const _doc = _win.document
 
 const argsSchema = [
-  ['kill', false],     // set to stop the old service and not start a new one
-  ['timeFactor', 0.5], // interval multiplier to apply during infiltrations (set to 1 to disable)
-  ['keyDelay', 1]      // delay in ms between keystrokes
+  ['stop', false], // set to stop the old service and not start a new one
+  ['timeFactor', 1], // interval multiplier to apply during infiltrations (set to 1 to disable)
+  ['keyDelay', 1] // delay in ms between keystrokes
 ]
 
-export function autocomplete(data) {
+export function autocomplete (data) {
   data.flags(argsSchema)
   return []
 }
@@ -50,6 +50,11 @@ function logConsole (str) {
 // straight replacement for ns.asleep
 function sleep (time) {
   return new Promise(resolve => setTimeout(() => resolve(true), time))
+}
+
+// shorthand function for finding an element by querySelector and filtering by text
+export function queryFilter (query, filter) {
+  return [..._doc.querySelectorAll(query)].find(e => e.innerText.trim().match(filter))
 }
 
 function addCss () {
@@ -71,7 +76,7 @@ function addCss () {
   }
   </style>`
   _doc.getElementById('infilCss')?.remove()
-  _doc.head.insertAdjacentHTML('beforeend', css);
+  _doc.head.insertAdjacentHTML('beforeend', css)
 }
 
 // compress/stretch setInterval and setTimeout, to make infiltrations easier
@@ -128,14 +133,15 @@ function autoSetTimeFactor () {
 // event listener stuff, stolen from https://github.com/stracker-phil/bitburner/blob/main/daemon/infiltrate.js
 
 function pressKey (key) {
-  let keyCode = key.charCodeAt(0);
+  const keyCode = key.charCodeAt(0)
 
+  /* eslint-disable-next-line no-undef */
   const keyboardEvent = new KeyboardEvent('keydown', {
     key,
-    keyCode,
-  });
+    keyCode
+  })
 
-  _doc.dispatchEvent(keyboardEvent);
+  _doc.dispatchEvent(keyboardEvent)
 }
 
 /**
@@ -145,80 +151,80 @@ function pressKey (key) {
  * Is this cheating? Or is it real hacking? Don't care, as long
  * as it's working :)
  */
-function wrapEventListeners () {
+export function wrapEventListeners () {
   if (!_doc._addEventListener) {
-    _doc._addEventListener = _doc.addEventListener;
+    _doc._addEventListener = _doc.addEventListener
 
     _doc.addEventListener = function (type, callback, options) {
-      if ("undefined" === typeof options) {
-        options = false;
+      if (typeof options === 'undefined') {
+        options = false
       }
-      let handler = false;
+      let handler = false
 
       // For this script, we only want to modify "keydown" events.
-      if ("keydown" === type) {
+      if (type === 'keydown') {
         handler = function (...args) {
           if (!args[0].isTrusted) {
-            const hackedEv = {};
+            const hackedEv = {}
 
             for (const key in args[0]) {
-              if ("isTrusted" === key) {
-                hackedEv.isTrusted = true;
-              } else if ("function" === typeof args[0][key]) {
-                hackedEv[key] = args[0][key].bind(args[0]);
+              if (key === 'isTrusted') {
+                hackedEv.isTrusted = true
+              } else if (typeof args[0][key] === 'function') {
+                hackedEv[key] = args[0][key].bind(args[0])
               } else {
-                hackedEv[key] = args[0][key];
+                hackedEv[key] = args[0][key]
               }
             }
 
-            args[0] = hackedEv;
+            args[0] = hackedEv
           }
 
-          return callback.apply(callback, args);
-        };
+          return callback.apply(callback, args)
+        }
 
         for (const prop in callback) {
-          if ("function" === typeof callback[prop]) {
-            handler[prop] = callback[prop].bind(callback);
+          if (typeof callback[prop] === 'function') {
+            handler[prop] = callback[prop].bind(callback)
           } else {
-            handler[prop] = callback[prop];
+            handler[prop] = callback[prop]
           }
         }
       }
 
       if (!this.eventListeners) {
-        this.eventListeners = {};
+        this.eventListeners = {}
       }
       if (!this.eventListeners[type]) {
-        this.eventListeners[type] = [];
+        this.eventListeners[type] = []
       }
       this.eventListeners[type].push({
         listener: callback,
         useCapture: options,
-        wrapped: handler,
-      });
+        wrapped: handler
+      })
 
       return this._addEventListener(
         type,
-        handler ? handler : callback,
+        handler || callback,
         options
-      );
-    };
+      )
+    }
   }
 
   if (!_doc._removeEventListener) {
-    _doc._removeEventListener = _doc.removeEventListener;
+    _doc._removeEventListener = _doc.removeEventListener
 
     _doc.removeEventListener = function (type, callback, options) {
-      if ("undefined" === typeof options) {
-        options = false;
+      if (typeof options === 'undefined') {
+        options = false
       }
 
       if (!this.eventListeners) {
-        this.eventListeners = {};
+        this.eventListeners = {}
       }
       if (!this.eventListeners[type]) {
-        this.eventListeners[type] = [];
+        this.eventListeners[type] = []
       }
 
       for (let i = 0; i < this.eventListeners[type].length; i++) {
@@ -227,36 +233,36 @@ function wrapEventListeners () {
           this.eventListeners[type][i].useCapture === options
         ) {
           if (this.eventListeners[type][i].wrapped) {
-            callback = this.eventListeners[type][i].wrapped;
+            callback = this.eventListeners[type][i].wrapped
           }
 
-          this.eventListeners[type].splice(i, 1);
-          break;
+          this.eventListeners[type].splice(i, 1)
+          break
         }
       }
 
-      if (this.eventListeners[type].length == 0) {
-        delete this.eventListeners[type];
+      if (this.eventListeners[type].length === 0) {
+        delete this.eventListeners[type]
       }
 
-      return this._removeEventListener(type, callback, options);
-    };
+      return this._removeEventListener(type, callback, options)
+    }
   }
 }
 
 /**
  * Revert the "wrapEventListeners" changes.
  */
-function unwrapEventListeners () {
+export function unwrapEventListeners () {
   if (_doc._addEventListener) {
-    _doc.addEventListener = _doc._addEventListener;
-    delete _doc._addEventListener;
+    _doc.addEventListener = _doc._addEventListener
+    delete _doc._addEventListener
   }
   if (_doc._removeEventListener) {
-    _doc.removeEventListener = _doc._removeEventListener;
-    delete _doc._removeEventListener;
+    _doc.removeEventListener = _doc._removeEventListener
+    delete _doc._removeEventListener
   }
-  delete _doc.eventListeners;
+  delete _doc.eventListeners
 }
 
 // navigation functions for MinesweeperGame and Cyberpunk2077Game
@@ -309,13 +315,9 @@ function getGridY (node) {
 }
 
 function pressStart () {
-  const infiltrating = [..._doc.getElementsByTagName('h4')].find(e => e.innerText.includes('Infiltrating')) !== undefined
+  const infiltrating = queryFilter('h4', 'Infiltrating') !== undefined
   if (!infiltrating) return
-  [..._doc.getElementsByTagName('button')].find(e => e.innerText.includes('Start'))?.click()
-}
-
-function queryFilter (query, filter) {
-  return [..._doc.querySelectorAll(query)].find(e => e.innerText.trim().match(filter))
+  queryFilter('button', 'Start')?.click()
 }
 
 class InfiltrationService {
@@ -329,9 +331,7 @@ class InfiltrationService {
   }
 
   async sendKeyString (str) {
-    const self = this
-    // self.ws.send(str)
-    for (let c of str) {
+    for (const c of str) {
       pressKey(c)
       await sleep(keyDelay)
     }
@@ -349,8 +349,8 @@ class InfiltrationService {
     // get the name of the company we're at
     // check tooltip first, in case we've backdoored and text is wonky
     const titleSpan = buttonNode.parentNode.parentNode.firstChild.nextSibling
-    const companyName = titleSpan.ariaLabel ? titleSpan.ariaLabel.slice(22,-1) : titleSpan.textContent
-    var info = self.rewardInfo.find(c => c.name === companyName)
+    const companyName = titleSpan.ariaLabel ? titleSpan.ariaLabel.slice(22, -1) : titleSpan.textContent
+    const info = self.rewardInfo.find(c => c.name === companyName)
     const rewardStr = `${formatMoney(info.moneyGain)}, ${formatNumberShort(info.repGain)} rep (${info.maxClearanceLevel})`
     buttonNode.insertAdjacentHTML('afterend', `<span class='rewardTooltip'>${rewardStr}</span>`)
   }
@@ -359,7 +359,7 @@ class InfiltrationService {
     // TODO
   }
 
-  clearSolution() {
+  clearSolution () {
     // TODO
   }
 
@@ -384,6 +384,7 @@ class InfiltrationService {
       targetElement = queryFilter('h5', 'Targets:')
     }
   }
+
   async mines () {
     const memoryPhaseText = 'Remember all the mines!'
     const markPhaseText = 'Mark all the mines!'
@@ -418,7 +419,7 @@ class InfiltrationService {
     let activeElement = queryFilter('h4', activeText)
     while (activeElement !== undefined) {
       logConsole('Game active: Slash game')
-      if (queryFilter('h4','ATTACKING!')) {
+      if (queryFilter('h4', 'ATTACKING!')) {
         await sleep(1)
         await self.sendKeyString(' ')
       }
@@ -602,7 +603,7 @@ class InfiltrationService {
     self.tickComplete = true
   }
 
-  start() {
+  start () {
     const self = this
     // ensure that _setInterval gets set first
     setTimeFactor(1)
@@ -774,7 +775,7 @@ function calcReward (player, startingDifficulty) {
   return difficulty
 }
 
-function getAllRewards (ns, bnMults, player, wks=false, display=false) {
+function getAllRewards (ns, bnMults, player, wks = false, display = false) {
   const locations = [...locationInfo]
   for (const location of locations) {
     const levelBonus = location.maxClearanceLevel * Math.pow(1.01, location.maxClearanceLevel)
@@ -813,10 +814,9 @@ function getAllRewards (ns, bnMults, player, wks=false, display=false) {
 
 async function hasSoaAug (ns) {
   try {
-    const augs = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt')
+    const augs = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations()', '/Temp/player-augs-installed.txt')
     return augs.some(aug => aug.toLowerCase().includes('wks harmonizer'))
-  }
-  catch (err) {
+  } catch (err) {
     log(ns, `WARN: Could not get list of owned augs: ${err.toString()}`)
     log(ns, 'WARN: Assuming no WKS harmonizer aug is installed.')
   }
@@ -825,7 +825,7 @@ async function hasSoaAug (ns) {
 
 // service stuff
 
-export async function killPrevService (ns, serviceName, writeback=true) {
+export async function stopPrevService (ns, serviceName, writeback = true) {
   const contents = ns.read('services.txt')
   if (contents === '') {
     return []
@@ -836,27 +836,25 @@ export async function killPrevService (ns, serviceName, writeback=true) {
     if (serviceIndex === -1) {
       return services
     }
-    // remove from service array, kill interval, write back
+    // remove from service array, clear interval, write back
     const intervalId = services.splice(serviceIndex, 1)[0].intervalId
     _win.clearInterval(intervalId)
-    log(ns, `Killed previous interval with id ${intervalId}`, false, 'info')
+    log(ns, `Cleared previous interval with id ${intervalId}`, false, 'info')
     if (writeback) {
       await ns.write('services.txt', JSON.stringify(services, null, 2), 'w')
     }
     return services
-  }
-  catch (err) {
+  } catch (err) {
     if (err instanceof SyntaxError) {
       log(ns, `WARNING: service listing for ${serviceName} is invalid: ${contents}`)
-    }
-    else throw err
+    } else throw err
   }
 }
 
 export async function registerService (ns, serviceName, intervalId, params = {}) {
   // kill previous service with this name, if any
-  const services = await killPrevService(ns, serviceName, false)
-  const newService = { name: serviceName, started: Date.now(), intervalId: intervalId, params: params }
+  const services = await stopPrevService(ns, serviceName, false)
+  const newService = { name: serviceName, started: Date.now(), intervalId, params }
   services.push(newService)
   // write info to services file
   await ns.write('services.txt', JSON.stringify(services, null, 2), 'w')
@@ -866,25 +864,26 @@ export async function registerService (ns, serviceName, intervalId, params = {})
 export async function main (ns) {
   ns.disableLog('ALL')
   const options = ns.flags(argsSchema)
-  if (options['kill']) {
+  if (options.stop) {
     setTimeFactor(1)
-    await killPrevService(ns, serviceName)
+    await stopPrevService(ns, serviceName)
     return
   }
-  infiltrationTimeFactor = options['timeFactor']
-  keyDelay = options['keyDelay']
+  infiltrationTimeFactor = options.timeFactor
+  keyDelay = options.keyDelay
   // get BN multipliers first to feed reward info to infiltration service
   const bnMults = await tryGetBitNodeMultipliers(ns)
   const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
   const wks = await hasSoaAug(ns)
-  log(ns, `Time factor: ${infiltrationTimeFactor}`)
-  log(ns, `Infiltration multipliers: ${bnMults?.InfiltrationRep}× rep, ${bnMults?.InfiltrationMoney}× money`)
-  log(ns, `WKS harmonizer aug: ${wks ? 'yes' : 'no'}`)
+  log(ns, `Time factor: ${infiltrationTimeFactor}`, true)
+  log(ns, `Infiltration multipliers: ${bnMults?.InfiltrationRep}× rep, ${bnMults?.InfiltrationMoney}× money`, true)
+  log(ns, `WKS harmonizer aug: ${wks ? 'yes' : 'no'}`, true)
   const locations = getAllRewards(ns, bnMults, player, wks)
   // launch service and see if it connects
   const service = new InfiltrationService(ns, locations)
   const intervalId = service.start()
   await registerService(ns, serviceName, intervalId, options)
-  log(ns, `Started infiltration service`, false, 'success')
-  log(ns, `Service is running with interval ID ${intervalId}. Script will now exit.`)
+  log(ns, `Started infiltration service: tF=${infiltrationTimeFactor}`, false, 'success')
+  log(ns, `Infiltration service is running with interval ID ${intervalId}`, true)
+  log(ns, 'Script will now exit.')
 }
