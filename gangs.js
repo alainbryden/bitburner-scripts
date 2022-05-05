@@ -93,23 +93,25 @@ async function initialize(ns) {
     pctTraining = options['no-training'] ? 0 : options['training-percentage'];
 
     let loggedWaiting = false;
+    const bitNode = await getNsDataThroughFile(ns, 'ns.getPlayer().bitNodeN', '/Temp/getPlayer-bitNodeN.txt');
     while (!(await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt'))) {
         try {
             if (!loggedWaiting) {
                 log(ns, `Waiting to be in a gang. Will create the highest faction gang as soon as it is available...`);
                 loggedWaiting = true;
             }
-            await runCommand(ns, `ns.args.forEach(g => ns.gang.createGang(g))`, '/Temp/gang-createGang.js', gangsByPower);
+            if (bitNode == 2 || ns.heart.break() <= -54000)
+                await runCommand(ns, `ns.args.forEach(g => ns.gang.createGang(g))`, '/Temp/gang-createGang.js', gangsByPower);
         }
         catch (err) {
             log(ns, `WARNING: gangs.js Caught (and suppressed) an unexpected error while waiting to join a gang:\n` +
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
-        await ns.sleep(1000); // Wait for our human to join a gang
+        await ns.sleep(1000);
     }
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
     log(ns, "Collecting gang information...");
-    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
+    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-getGangInformation.txt');
     myGangFaction = myGangInfo.faction;
     if (loggedWaiting)
         log(ns, `SUCCESS: Created gang ${myGangFaction} (At ${formatDuration(playerData.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
