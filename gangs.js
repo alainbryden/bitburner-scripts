@@ -38,6 +38,7 @@ let lastMemberReset = {}; // Tracks when each member last ascended
 let ownedSourceFiles;
 let myGangFaction = "";
 let isHackGang = false;
+let strWantedReduction;
 let requiredRep = 0;
 let myGangMembers = [];
 let equipments = [];
@@ -116,6 +117,7 @@ async function initialize(ns) {
     if (loggedWaiting)
         log(ns, `SUCCESS: Created gang ${myGangFaction} (At ${formatDuration(playerData.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
     isHackGang = myGangInfo.isHacking;
+    strWantedReduction = isHackGang ? "Ethical Hacking" : "Vigilante Justice";
     importantStats = isHackGang ? ["hack"] : ["str", "def", "dex", "agi"];
     territoryNextTick = lastTerritoryPower = lastOtherGangInfo = null;
     territoryTickDetected = isReadyForNextTerritoryTick = warfareFinished = false;
@@ -309,14 +311,14 @@ async function optimizeGangCrime(ns, myGangInfo) {
             // Find the crime with the best gain (If we can't generate value for any tasks, then we should only be training)
             const bestTask = taskRates[0][optStat] == 0 || (Date.now() - (lastMemberReset[member] || 0) < options['min-training-ticks'] * territoryTickTime) ?
                 taskRates.find(t => t.name === ("Train " + (isHackGang ? "Hacking" : "Combat"))) :
-                (totalWanted > wantedGainTolerance || sustainableTasks.length == 0) ? taskRates.find(t => t.name === "Vigilante Justice") : sustainableTasks[0];
+                (totalWanted > wantedGainTolerance || sustainableTasks.length == 0) ? taskRates.find(t => t.name === strWantedReduction) : sustainableTasks[0];
             [proposedTasks[member], totalWanted, totalGain] = [bestTask, totalWanted + bestTask.wanted, totalGain + bestTask[optStat]];
         });
         // Following the above attempted optimization, if we're above our wanted gain threshold, downgrade the task of the greatest generators of wanted until within our limit
         let infiniteLoop = 9999;
-        while (totalWanted > wantedGainTolerance && Object.values(proposedTasks).some(t => t.name !== "Vigilante Justice")) {
-            const mostWanted = Object.keys(proposedTasks).reduce((t, c) => proposedTasks[c].name !== "Vigilante Justice" && (t == null || proposedTasks[t].wanted < proposedTasks[c].wanted) ? c : t, null);
-            const nextBestTask = memberTaskRates[mostWanted].filter(c => c.wanted < proposedTasks[mostWanted].wanted)[0] ?? memberTaskRates[mostWanted].find(t => t.name === "Vigilante Justice");
+        while (totalWanted > wantedGainTolerance && Object.values(proposedTasks).some(t => t.name !== strWantedReduction)) {
+            const mostWanted = Object.keys(proposedTasks).reduce((t, c) => proposedTasks[c].name !== strWantedReduction && (t == null || proposedTasks[t].wanted < proposedTasks[c].wanted) ? c : t, null);
+            const nextBestTask = memberTaskRates[mostWanted].filter(c => c.wanted < proposedTasks[mostWanted].wanted)[0] ?? memberTaskRates[mostWanted].find(t => t.name === strWantedReduction);
             [proposedTasks[mostWanted], totalWanted, totalGain] = [nextBestTask, totalWanted + nextBestTask.wanted - proposedTasks[mostWanted].wanted, totalGain + nextBestTask[optStat] - proposedTasks[mostWanted][optStat]];
             if (infiniteLoop-- <= 0) throw "Infinite Loop!";
         }
@@ -355,7 +357,7 @@ async function fixWantedGainRate(ns, myGangInfo, wantedGainTolerance = 0) {
     log(ns, `WARNING: Generating wanted levels (${lastWantedLevelGainRate.toPrecision(3)}/sec > ${wantedGainTolerance.toPrecision(3)}/sec), temporarily assigning random members to Vigilante Justice...`, false, 'warning');
     for (const member of shuffleArray(myGangMembers.slice())) {
         if (!crimes.includes(assignedTasks[member])) continue; // This member isn't doing crime, so they aren't contributing to wanted
-        assignedTasks[member] = "Vigilante Justice";
+        assignedTasks[member] = strWantedReduction;
         await updateMemberActivities(ns);
         const wantedLevelGainRate = (myGangInfo = await waitForGameUpdate(ns, myGangInfo)).wantedLevelGainRate;
         if (wantedLevelGainRate < wantedGainTolerance) return;
