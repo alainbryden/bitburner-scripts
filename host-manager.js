@@ -198,7 +198,7 @@ async function tryToBuyBestServerPossible(ns) {
         }
     }
 
-    let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], (ns.args[1])`,
+    let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`,
         '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     if (!purchasedServer)
         setStatus(ns, `${prefix}Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
