@@ -32,7 +32,7 @@ export async function main(ns) {
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
         let fullLocalFilePath = pathJoin(options.subfolder, localFilePath);
-        const remoteFilePath = baseUrl + localFilePath;
+        const remoteFilePath = pathJoin(baseUrl, localFilePath);
         ns.print(`Trying to update "${fullLocalFilePath}" from ${remoteFilePath} ...`);
         if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, fullLocalFilePath) && await rewriteFileForSubfolder(ns, fullLocalFilePath))
             ns.tprint(`SUCCESS: Updated "${localFilePath}" to the latest from ${remoteFilePath}`);
