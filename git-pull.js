@@ -28,11 +28,11 @@ export async function main(ns) {
     options = ns.flags(argsSchema);
     if (options.subfolder && !options.subfolder.startsWith('/'))
         options.subfolder = '/' + options.subfolder; // Game requires folders to have a leading slash. Add one if it's missing.
-    const baseUrl = `https://raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
+    const baseUrl = `raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
         let fullLocalFilePath = pathJoin(options.subfolder, localFilePath);
-        const remoteFilePath = pathJoin(baseUrl, localFilePath);
+        const remoteFilePath = `https://` + pathJoin(baseUrl, localFilePath);
         ns.print(`Trying to update "${fullLocalFilePath}" from ${remoteFilePath} ...`);
         if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, fullLocalFilePath) && await rewriteFileForSubfolder(ns, fullLocalFilePath))
             ns.tprint(`SUCCESS: Updated "${localFilePath}" to the latest from ${remoteFilePath}`);
