@@ -140,12 +140,10 @@ export async function main(ns) {
  *  Helper to kill all scripts on all other servers, except this one **/
 async function killAllOtherScripts(ns, removeRemoteFiles) {
 	// Kill processes on home (except this one)
-	const thisScript = ns.getScriptName();
-	const otherPids = ns.ps().filter(p => p.filename != thisScript).map(p => p.pid);
-	let pid = await runCommand(ns, 'ns.args.forEach(pid => ns.kill(pid))',
-		'/Temp/kill-scripts-by-id.js', otherPids);
+	let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => ns.kill(s.pid));`,
+		'/Temp/kill-everything-but.js', [ns.getScriptName()]);
 	await waitForProcessToComplete(ns, pid);
-	log(ns, `INFO: Killed ${otherPids.length} other scripts running on home...`, true);
+	log(ns, `INFO: Killed other scripts running on home...`, true);
 
 	// Kill processes on all other servers
 	const allServers = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
