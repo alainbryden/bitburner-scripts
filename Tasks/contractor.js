@@ -16,9 +16,11 @@ export async function main(ns) {
 
     // Spawn temporary scripts to gather the remainder of contract data required for solving
     ns.print(`Found ${contractsDb.length} contracts to solve. Gathering contract data via separate scripts..."`);
-    let contractsDictCommand = command => `Object.fromEntries(${JSON.stringify(contractsDb)}.map(c => [c.contract, ${command}]))`;
-    let dictContractTypes = await getNsDataThroughFile(ns, contractsDictCommand('ns.codingcontract.getContractType(c.contract, c.hostname)'), '/Temp/contract-types.txt');
-    let dictContractData = await getNsDataThroughFile(ns, contractsDictCommand('ns.codingcontract.getData(c.contract, c.hostname)'), '/Temp/contract-data.txt');
+    const serializedContractDb = JSON.stringify(contractsDb);
+    let contractsDictCommand = async (command, tempName) => await getNsDataThroughFile(ns,
+        `Object.fromEntries(JSON.parse(ns.args[0]).map(c => [c.contract, ${command}]))`, tempName, [serializedContractDb]);
+    let dictContractTypes = await contractsDictCommand('ns.codingcontract.getContractType(c.contract, c.hostname)', '/Temp/contract-types.txt');
+    let dictContractData = await contractsDictCommand('ns.codingcontract.getData(c.contract, c.hostname)', '/Temp/contract-data.txt');
     contractsDb.forEach(c => c.type = dictContractTypes[c.contract]);
     contractsDb.forEach(c => c.data = dictContractData[c.contract]);
 
