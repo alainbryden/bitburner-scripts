@@ -211,8 +211,15 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
         (verbose ? `let output = ${command}; ns.tprint(output)` : command) +
         `; } catch(err) { ns.tprint(String(err)); throw(err); } }`;
     fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
-    // To improve performance and save on garbage collection, we can skip writing this exact same script was previously written (common for repeatedly-queried data)
-    if (ns.read(fileName) != script) await ns.write(fileName, script, "w");
+    // To improve performance avoid various issues, we try to avoid overwriting temp scripts with different contents.
+    const oldContents = ns.read(fileName);
+    if (oldContents != script) {
+        if (oldContents)
+            ns.tprint(`WARNING: Had to overwrite temp script ${fileName}\nOld Contents:\n${oldContents}\nNew Contents:\n${script}` +
+                `\nThis warning is generated as part of an effort to switch over to using only 'immutable' temp scripts. ` +
+                `Please paste a screenshot in Discord at https://discord.com/channels/415207508303544321/935667531111342200`);
+        await ns.write(fileName, script, "w");
+    }
     // Wait for the script to appear (game can be finicky on actually completing the write)
     await autoRetry(ns, () => ns.read(fileName), contents => contents == script,
         () => `Temporary script ${fileName} is not available, despite having written it. (Did a competing process delete or overwrite it?)`,
