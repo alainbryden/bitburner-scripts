@@ -167,9 +167,13 @@ async function checkIfBnIsComplete(ns, player) {
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 
+	// Clean out our temp folder and flags so we don't have any stale data when the next BN starts.
+	let pid = launchScriptHelper(ns, 'cleanup.js');
+	if (pid) await waitForProcessToComplete(ns, pid);
+
 	// Run the --on-completion-script if specified
 	if (options['on-completion-script']) {
-		const pid = launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
+		pid = launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
 		if (pid) await waitForProcessToComplete(ns, pid);
 	}
 
@@ -178,7 +182,7 @@ async function checkIfBnIsComplete(ns, player) {
 		return wdAvailable = false;
 	}
 	// Use the new special singularity function to automate entering a new BN
-	const pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
+	pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
 		'/Temp/singularity-destroyW0r1dD43m0n.js', [options['next-bn'], ns.getScriptName()]);
 	if (pid) {
 		await waitForProcessToComplete(ns, pid);
