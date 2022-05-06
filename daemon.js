@@ -92,6 +92,7 @@ let highUtilizationIterations = 0;
 let lastShareTime = 0; // Tracks when share was last invoked so we can respect the configured share-cooldown
 let allTargetsPrepped = false;
 
+/** @returns {Player} */
 async function updatePlayerStats() { return playerStats = await getNsDataThroughFile(_ns, `ns.getPlayer()`, '/Temp/player-info.txt'); }
 
 function playerHackSkill() { return playerStats.hacking; }
@@ -177,9 +178,9 @@ export async function main(ns) {
     const scriptName = ns.getScriptName();
     const competingDaemons = ns.ps("home").filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
     if (competingDaemons.length > 0) {
-        const strDaemonPids = JSON.stringify(competingDaemons.map(p => p.pid));
-        log(ns, `WARN: Detected ${competingDaemons.length} other '${scriptName}' instance is running at home (pids: ${strDaemonPids}) - shutting it down...`, true, 'warning')
-        const killPid = await runCommand(ns, `${strDaemonPids}.forEach(ns.kill)`, '/Temp/kill-daemons.js');
+        const daemonPids = competingDaemons.map(p => p.pid);
+        log(ns, `WARN: Detected ${competingDaemons.length} other '${scriptName}' instance is running at home (pids: ${daemonPids}) - shutting it down...`, true, 'warning')
+        const killPid = await killProcessIds(ns, daemonPids);
         await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), killPid);
     }
 
@@ -1602,6 +1603,7 @@ async function updateStockPositions(ns) {
     shouldManipulateHack = newShouldManipulateHack;
     serversWithOwnedStock = newServersWithOwnedStock;
 }
+
 // Kills all scripts running the specified tool and targeting one of the specified servers if stock market manipulation is enabled
 async function terminateScriptsManipulatingStock(ns, servers, toolName) {
     const problematicProcesses = addedServerNames.flatMap(hostname => ps(ns, hostname)
@@ -1609,8 +1611,14 @@ async function terminateScriptsManipulatingStock(ns, servers, toolName) {
         .map(process => process.pid));
     if (problematicProcesses.length > 0) {
         log(ns, `INFO: Killing ${problematicProcesses.length} pids running ${toolName} with stock manipulation in the wrong direction.`);
-        await runCommand(ns, 'ns.args.forEach(p => ns.kill(p))', '/Temp/kill-all-pids.js', problematicProcesses);
+        await killProcessIds(ns, problematicProcesses);
     }
+}
+
+/** Helper to kill a list of process ids
+ * @param {NS} ns **/
+async function killProcessIds(ns, processIds) {
+    return await runCommand(ns, `ns.args.forEach(ns.kill)`, '/Temp/kill-pids.js', processIds);
 }
 
 function addServer(server, verbose) {
