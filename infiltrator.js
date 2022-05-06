@@ -513,7 +513,8 @@ class InfiltrationService {
       'hardworking',
       'patient',
       'dynamic',
-      'loyal'
+      'loyal',
+      'based'
     ]
     while (activeElement !== undefined) {
       logConsole('Game active: Bribe game')

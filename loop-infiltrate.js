@@ -53,10 +53,13 @@ async function mainLoop () {
       // log(ns, 'Waiting')
     }
     if (fail) {
+      console.log('### INFILTRATION FAILED ###')
       continue
     }
+    console.log('---INFILTRATION SUCCESS---')
     const sellBtn = queryFilter('button', 'Sell')
     log(_ns, `Selling for ${sellBtn?.innerText.split('\n').at(-1)}`)
+
     sellBtn?.click()
     await _ns.asleep(1000)
   }
@@ -96,6 +99,5 @@ function clickTrusted (node) {
 
 function infiltrationComplete () {
   const ret = queryFilter('h4', 'Infiltration successful!') !== undefined
-  console.log(`infiltrationComplete() returning ${ret}`)
   return ret
 }
