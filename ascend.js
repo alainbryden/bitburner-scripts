@@ -1,7 +1,4 @@
-import { getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles, log } from './helpers.js'
-
-const defaultScriptsToKill = ['daemon.js', 'gangs.js', 'sleeve.js', 'work-for-factions.js', 'farm-intelligence.js', 'hacknet-upgrade-manager.js']
-    .map(s => getFilePath(s));
+import { log, getConfiguration, getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles } from './helpers.js'
 
 const argsSchema = [
     ['prioritize-augmentations', false], // If set to true, will spend as much money as possible on augmentations before upgrading home RAM
@@ -9,7 +6,6 @@ const argsSchema = [
     /* OR */['reset', false], // An alias for the above flag, does the same thing.
     ['allow-soft-reset', false], // If set to true, allows ascend.js to invoke a **soft** reset (installs no augs) when no augs are affordable. This is useful e.g. when ascending rapidly to grind hacknet hash upgrades.
     ['bypass-stanek-warning', false], // If set to true, and this will bypass the warning before purchasing augmentations if you haven't gotten stanek yet.
-    ['scripts-to-kill', []], // Kill these money-spending scripts at launch (if not specified, defaults to all scripts in defaultScriptsToKill above)
     // Spawn this script after installing augmentations (Note: Args not supported by the game)
     ['on-reset-script', null], // By default, will start with `stanek.js` if you have stanek's gift, otherwise `daemon.js`.
 ];
@@ -17,7 +13,7 @@ const argsSchema = [
 export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
-    if (["--scripts-to-kill", "--on-reset-script"].includes(lastFlag))
+    if (["--on-reset-script"].includes(lastFlag))
         return data.scripts;
     return [];
 }
@@ -25,9 +21,8 @@ export function autocomplete(data, args) {
 /** @param {NS} ns 
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
-    const options = ns.flags(argsSchema);
-    let scriptsToKill = options['scripts-to-kill'];
-    if (scriptsToKill.length == 0) scriptsToKill = defaultScriptsToKill;
+    const options = getConfiguration(ns, argsSchema);
+    if (!options) return; // Invalid options, or ran in --help mode.
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');
@@ -36,8 +31,9 @@ export async function main(ns) {
     // - We should be able to install ~10 augs or so after maxing home ram purchases?
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
-    // Kill any other scripts that may interfere with our spending
-    let pid = await runCommand(ns, `ns.ps().filter(s => ${JSON.stringify(scriptsToKill)}.includes(s.filename)).forEach(s => ns.kill(s.pid));`, '/Temp/kill-processes.js');
+    // Kill every script except this one, since it can interfere with out spending
+    let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => ns.kill(s.pid));`,
+        '/Temp/kill-everything-but.js', [ns.getScriptName()]);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
     // Stop the current action so that we're no longer spending money (if training) and can collect rep earned (if working)
@@ -154,9 +150,9 @@ export async function main(ns) {
             // Default script (if none is specified) is stanek.js if we have it (which in turn will spawn daemon.js when done)
             (purchasedAugmentations.includes(`Stanek's Gift - Genesis`) ? getFilePath('stanek.js') : getFilePath('daemon.js'));
         if (noAugsToInstall)
-            await runCommand(ns, `ns.softReset('${resetScript}')`, '/Temp/soft-reset.js');
+            await runCommand(ns, `ns.softReset(ns.args[0])`, '/Temp/soft-reset.js', [resetScript]);
         else
-            await runCommand(ns, `ns.installAugmentations('${resetScript}')`, '/Temp/install-augmentations.js');
+            await runCommand(ns, `ns.installAugmentations(ns.args[0])`, '/Temp/install-augmentations.js', [resetScript]);
     } else
         log(ns, `SUCCESS: Ready to ascend. In the future, you can run with --reset (or --install-augmentations) ` +
             `to actually perform the reset automatically.`, true, 'success');

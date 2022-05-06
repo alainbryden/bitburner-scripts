@@ -17,5 +17,6 @@ export async function main(ns) {
     let escaped = firstArg.startsWith('"') && firstArg.endsWith('"') || firstArg.startsWith("'") && firstArg.endsWith("'") || firstArg.startsWith("`") && firstArg.endsWith("`");
     let command = args == escaped ? args[0] : args.join(" "); // If args weren't escaped, join them together
     //3.6 return await runCommand(ns.run, ns.write, command, `/Temp/terminal-command.js`, !silent);
+    await ns.write(`/Temp/terminal-command.js`, "", "w"); // Clear the previous command file to avoid a warning about re-using temp script names. This is the one exception.
     return await runCommand(ns, command, `/Temp/terminal-command.js`, (escaped ? args.slice(1) : undefined), !silent);
 }

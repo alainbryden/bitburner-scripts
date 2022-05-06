@@ -1,4 +1,4 @@
-import { formatMoney, formatRam } from './helpers.js'
+import { formatMoney, formatRam, getConfiguration, getNsDataThroughFile, log } from './helpers.js'
 
 const max_ram = 2 ** 30;
 const argsSchema = [
@@ -13,35 +13,33 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    const options = ns.flags(argsSchema);
+    const options = getConfiguration(ns, argsSchema);
+    if (!options) return; // Invalid options, or ran in --help mode.
     const reserve = (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
-    const money = ns.getServerMoneyAvailable("home");
+    const money = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, `/Temp/getServerMoneyAvailable.txt`, ["home"]);
     let spendable = Math.min(money - reserve, money * options.budget);
+    if (isNaN(spendable))
+        return log(ns, `ERROR: One of the arguments could not be parsed as a number: ${JSON.stringify(options)}`, true, 'error');
     // Quickly buy as many upgrades as we can within the budget
     do {
-        let cost = ns.getUpgradeHomeRamCost();
-        let currentRam = ns.getServerMaxRam("home");
+        let cost = await getNsDataThroughFile(ns, `ns.getUpgradeHomeRamCost()`, `/Temp/getUpgradeHomeRamCost.txt`);
+        let currentRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
         if (cost >= Number.MAX_VALUE || currentRam == max_ram)
-            return ns.print(`We're at max home RAM (${formatRam(currentRam)})`);
+            return log(ns, `INFO: We're at max home RAM (${formatRam(currentRam)})`);
         const nextRam = currentRam * 2;
         const upgradeDesc = `home RAM from ${formatRam(currentRam)} to ${formatRam(nextRam)}`;
         if (spendable < cost)
-            return ns.print(`Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
-        if (!ns.upgradeHomeRam())
-            return announce(ns, `ERROR: Failed to upgrade ${upgradeDesc} thinking we could afford it ` +
-                `(cost: ${formatMoney(cost)} cash: ${formatMoney(money)} budget: ${formatMoney(spendable)})`, 'error');
+            return log(ns, `Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
+        if (!(await getNsDataThroughFile(ns, `ns.upgradeHomeRam()`, `/Temp/upgradeHomeRam.txt`)))
+            return log(ns, `ERROR: Failed to upgrade ${upgradeDesc} thinking we could afford it ` +
+                `(cost: ${formatMoney(cost)} cash: ${formatMoney(money)} budget: ${formatMoney(spendable)})`, true, 'error');
         // Otherwise, we've successfully upgraded home ram.
-        announce(ns, `SUCCESS: Upgraded ${upgradeDesc}`, 'success');
-        if (nextRam != ns.getServerMaxRam("home"))
-            announce(ns, `WARNING: Expected to upgrade ${upgradeDesc}, but new home ram is ${formatRam(ns.getServerMaxRam("home"))}`, 'warning');
+        log(ns, `SUCCESS: Upgraded ${upgradeDesc}`, true, 'success');
+        const newMaxRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
+        if (nextRam != newMaxRam)
+            log(ns, `WARNING: Expected to upgrade ${upgradeDesc}, but new home ram is ${newMaxRam}`, true, 'warning');
         // Only loop again if we successfully upgraded home ram, to see if we can upgrade further
         spendable -= cost;
         await ns.sleep(100); // On the off-chance we have an infinite loop bug, this makes us killable.
     } while (spendable > 0)
-}
-
-function announce(ns, message, toastStyle) {
-    ns.print(message);
-    ns.tprint(message);
-    if (toastStyle) ns.toast(message, toastStyle);
 }

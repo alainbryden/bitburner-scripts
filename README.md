@@ -6,30 +6,44 @@ If you manually `nano git-pull.js` from the terminal and copy the [contents of t
 
 Scripts can mostly be run on their own, but are primarily designed to be orchestrated by `daemon.js`. If you `run daemon.js` from the terminal, it will start several other scripts.
 
+Note that a new "master orchestrator" script named `autopilot.js` is also in the works. On top of running `daemon.js` and its suite of scripts, it will monitor your progress throughout the game and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
+
 ## Manually run scripts
 
-Some scripts are meant to be manually run as needed, or at least are not yet fully automated. Note that daemon will run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the daemon's version or simply run with your desired arguments before starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
+Some scripts are meant to be manually run as needed. Most scripts take arguments to tweak or customize their behaviour based on your preferences or special circumstance. More on this in [below](#customizing-script-behaviour-basic).
+Run scripts with the `--help` flag to get a list of their arguments, default values, and a brief description of each:
+![image](https://user-images.githubusercontent.com/2285037/166085058-952b0805-cf4e-4548-8829-1e1ebeb5428b.png)
+You will also see an error-version of this dialog if you make a mistake in how you run the script.
+
+If you have personal preference and wish to "permanently" change the configuration of one of my scripts, you can do so without sacrificing your ability to "git-pull.js" the latest - simply [create a custom `config.txt`](https://github.com/alainbryden/bitburner-scripts/edit/main/README.md#config-files) file for the script.
+
+_Note:_ `daemon.js` will already run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the daemon's version or simply run with your desired arguments before starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
+
+## Brief description of Scripts
 
 Here are scripts that you may want to manually run, roughly in the order in which you'll want to experiment with them:
 
 - `git-pull.js` - Hopefully you used this to download the scripts. Run it whenever you want to update.
 - `scan.js` - Shows you the entire server network and important information about each server. A nice replacement for the built-in `scan` and/or `scan-analyze` commands, with support for unlimited depth.
+- `autopilot.js` - Plays the game for you (more or less), but is a work in progress.
+- `daemon.js` - Automates hacking and infrastructure, and kicking off various scripts to take advantage of other mechanics in the game as you unlock them.
 - `casino.js` - The first time you run this may come as a surprise, it will play blackjack and reload the game if it loses (automated save-scumming). Once you win 10b, you cannot enter the casino any more. Great way to boost your progress once you make the initial 200k needed to travel to Aevum and use the casino. For best performance, run `kill-all-scripts.js` before you run this, since other running scripts slow down the game's load time.
 - `reserve.js` - A simple way to reserve money across all scripts, in case you wanted to be certain to save up for something. e.g. `run reserve.js 200k` will reserve the $200,000 needed to get `casino.js` going.
+- `kill-all-scripts.js` - Kills all scripts running on home and remote servers, and also removes files that were copied to remote servers.
 - `faction-manager.js` - (Requires SF4) Run this periodically to find out how many augmentations you can currently afford. There are many command line options available to tweak the sort of augmentations you wish to prioritize. Run with `--purchase` to pull the trigger if you're ready to ascend.
-- `ascend.js` - (Requires SF4) A nearly-fully-automated way to ascend. Takes care of all the things you may or may not have known you wanted to do before installing augmentations and resetting.
 - `work-for-factions.js` - (Requires SF4) Daemon.js will start a version of this to make sure your "focus" work goes to good use, but often you'll want to run with your own arguments to specify what kind of work you want to be doing, depending on your goals for the current BitNode.
 - `crime.js` - (Requires SF4) While `work-for-factions.js` will do crime as-needed, you can use this instead to do nothing but crime.
-- `farm-intelligence.js` - (Requires SF4) Contains a script that can execute one or more of the best known methods to farm intelligence experience.
-  - Note that the current best method (soft reset loop) is most effective if you delete all scripts except this one (and helpers.js which it relies on) before running. You can do this quickly by modifying cleanup.js to run on all files instead of just /Temp/. You then would have to restore scripts by nano'ing git-pull as when you started out.
+- `ascend.js` - (Requires SF4) A nearly-fully-automated way to ascend. Takes care of all the things you may or may not have known you wanted to do before installing augmentations and resetting.
 - `spend-hacknet-hashes.js` - (Requires SF9) Many scripts will launch this automatically, but you can start your own instances to focus on purchasing the hash upgrades you want in your current situation. Many aliases for this exist below.
-- `kill-all-scripts.js` - Kills all scripts running on home and remote servers, and also removes files that were copied to remote servers.
+- `farm-intelligence.js` - (Requires SF4, SF5) Contains a script that can execute one or more of the best known methods to farm intelligence experience.
+  - Note that the current best method (soft reset loop) is most effective if you delete all scripts except this one (and helpers.js which it relies on) before running. You can do this quickly by modifying cleanup.js to run on all files instead of just /Temp/. You then would have to restore scripts by nano'ing git-pull as when you started out.
 - `cleanup.js` - Use this to clear out your temp folder (which contains hundreds of miniature scripts generated by the main scripts). Useful to reduce your save file size before exporting.
 - `grep.js` - Use this to search one or all files for certain text. Handy if you are trying to figure out e.g. what script spend hashes, or care about the TIX api.
 - `run-command.js` - Useful for testing a bit of code from the terminal without having to create a new script. Creating the alias `alias do="run run-command.js"` makes this extra useful. e.g. `do ns.getPlayer()` will print all the player's info to the terminal. `do ns.getServer('joesguns')` will print all info about that server to the terminal.
-- `autopilot.js` - (SF4 Strongly Suggested) Launches some of the other scripts, including `casino.js`, `daemon.js`, `stockmaster.js`, and `ascend.js` with options approriate to your progress within the current BitNode.
 
-# Customizing Script Behaviour (Basic)
+If you want more information about any script, try reading the source. I do my best to document things clearly. If it's not clear, feel free to raise an issue.
+
+## Customizing Script Behaviour (Basic)
 Most scripts are designed to be configured via command line arguments. (Such as using `run host-manager.js --min-ram-exponent 8` to ensure no servers are purchased with less than 2^8 GB of RAM)
 
 Default behaviours are to try to "balance" priorities and give most things an equal share of budget / RAM, but this isn't always ideal, especially in bitnodes that cripple one aspect of the game or the other. You can `nano` to view the script and see what the command line options are, or type e.g. `daemon.js --` (dash dash) and hit `<tab>` to get a pop-up auto-completion list. (Make sure your mouse cursor is over the terminal for the auto-complete to appear.)
@@ -83,6 +97,25 @@ You may find it useful to set up one or more aliases with the default options yo
   - Let this be a hint as to how customizable some of these scripts are (without editing the source code). The above alias is powerful when you are end-of-bn and your hacking skill is very high (8000+), so hack/grow/weaken times are very fast (milliseconds). You can greatly increase productivity and reduce lag by switching to this `--looping-mode` which creates long-lived hack/grow/weaken scripts that run in a loop. This, in addition to the tighter cycle-timing makes them more vulnerable to misfiring (completing out-of-order), but adding recovery thread padding (a multiple on the number of grow/weaken threads to use) can quickly recover from misfires. Note that if you don't yet have enough home-ram to support such a high recovery-thread multiple, you can start lower (5 or 10) then buy more home ram and work your way up.
 - `alias ascend="run ascend.js --prioritize-augmentations --reset"`
   - A good way to finish your node. I personally `--prioritize-augmentations` when resetting, because I have all SF bonuses unlocked, but until you have SF11.3 for aug cost reduction, you may want to leave the default which prioritizes upgrading home RAM as much as possible first.
+
+## Config Files
+
+Persistent Custom Configurations (script.js.config.txt files) can be specified to override the default args specified by the "args schema" in each script.
+
+The order in which argument values are determined are:
+1. Arguments provided at the command line (or in the alias) take priority
+2. If no override is provided at the command line, any value in the config file is used.
+3. If no config file value is present, the default in the source (argsSchema) is used.
+   - Note that some defaults are set to `null` in the args schema to be overridden with more complex defaulting behaviour elsewhere in the script.
+
+### Format Specifications
+The file should have the name `some-script-name.js.config.txt` (i.e. append `.config.txt` to the name of the script you are configuring)
+
+Your config file should either of the following two formats
+1. A dictionary e.g.: `{ "string-opt": "value", "num-opt": 123, "array-opt": ["one", "two"] }`
+2. An array of dict entries (2-element arrays) e.g.: `[ ["string-opt", "value"], ["num-opt", 123], ["array-opt", ["one", "two"]] ]` +
+
+You are welcome to use line breaks and spacing to make things more human readable, so long as it is able to be parsed by JSON.parse (when in doubt, built it in code and generate it with JSON.stringify).
 
 ## Customizing Script Code (Advanced)
 

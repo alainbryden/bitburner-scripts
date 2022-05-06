@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, instanceCount, getNsDataThroughFile, scanAllServers, log } from './helpers.js'
+import { log, getConfiguration, instanceCount, getNsDataThroughFile, scanAllServers, formatMoney, formatRam } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -36,12 +36,13 @@ export function autocomplete(data, _) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
-    if (await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    const runOptions = getConfiguration(ns, argsSchema);
+    if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+    options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     ns.disableLog('ALL')
-    options = ns.flags(argsSchema);
 
     // Get the maximum number of purchased servers in this bitnode
-    maxPurchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServerLimit()', '/Temp/host-limit.txt');
+    maxPurchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServerLimit()', '/Temp/getPurchasedServerLimit.txt');
     log(ns, `INFO: Max purchasable servers has been detected as ${maxPurchasedServers.toFixed(0)}.`);
     if (maxPurchasedServers == 0)
         return log(ns, `INFO: Shutting down due to host purchasing being disabled in this BN...`);
@@ -98,7 +99,7 @@ function setStatus(ns, logMessage) {
   * Attempts to buy a server at or better than your home machine. **/
 async function tryToBuyBestServerPossible(ns) {
     // Gether the list of all purchased servers.
-    const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/purchased-servers.txt');
+    const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/getPurchasedServers.txt');
     // Scan the set of all servers on the network that we own (or rooted) to get a sense of current RAM utilization
     const rootedServers = scanAllServers(ns).filter(s => ns.hasRootAccess(s));
     const totalMaxRam = rootedServers.reduce((t, s) => t + ns.getServerMaxRam(s), 0);
@@ -120,7 +121,7 @@ async function tryToBuyBestServerPossible(ns) {
         // Decay factor of 0.2 = Starts willing to spend 95% of our money, backing down to ~75% at 1 hour, ~60% at 2 hours, ~25% at 6 hours, and ~10% at 10 hours.
         // Decay factor of 0.3 = Starts willing to spend 95% of our money, backing down to ~66% at 1 hour, ~45% at 2 hours, ~23% at 4 hours, ~10% at 6 hours
         // Decay factor of 0.5 = Starts willing to spend 95% of our money, then halving every hour (to ~48% at 1 hour, ~24% at 2 hours, ~12% at 3 hours, etc)
-        const timeSinceLastAug = await getNsDataThroughFile(ns, 'ns.getTimeSinceLastAug()', '/Temp/time-since-last-aug.txt');
+        const timeSinceLastAug = await getNsDataThroughFile(ns, 'ns.getTimeSinceLastAug()', '/Temp/getTimeSinceLastAug.txt');
         const t = timeSinceLastAug / (60 * 60 * 1000); // Time since last aug, in hours.
         const decayFactor = 0.5;
         pctReservedMoney = 1 - 0.95 * Math.pow(1 - decayFactor, t);
@@ -197,7 +198,8 @@ async function tryToBuyBestServerPossible(ns) {
         }
     }
 
-    let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer('${purchasedServerName}', ${maxRamPossibleToBuy})`, '/Temp/purchase-server.txt');
+    let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`,
+        '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     if (!purchasedServer)
         setStatus(ns, `${prefix}Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);

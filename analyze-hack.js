@@ -1,11 +1,11 @@
-import { disableLogs, formatMoney, scanAllServers } from './helpers.js'
+import { getConfiguration, disableLogs, formatMoney, scanAllServers } from './helpers.js'
 
 const argsSchema = [
-    ['all', false],
-    ['silent', false],
-    ['at-hack-level', 0],
-    ['hack-percent', -1],
-    ['include-hacknet-ram', false],
+    ['all', false], // Set to true to report on all servers, not just the ones within our hack level
+    ['silent', false], // Set to true to disable outputting the best servers to the terminal
+    ['at-hack-level', 0], // Simulate expected gains when the player reaches the specified hack level. 0 means use the player's current hack level.
+    ['hack-percent', -1], // Compute gains when hacking a certain percentage of each server's money. -1 estimates hack percentage based on current ram available, capped at 98%
+    ['include-hacknet-ram', false], // Whether to include hacknet servers' RAM when computing current ram available
 ];
 
 export function autocomplete(data, args) {
@@ -15,6 +15,8 @@ export function autocomplete(data, args) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
+    const options = getConfiguration(ns, argsSchema);
+    if (!options) return; // Invalid options, or ran in --help mode.
     disableLogs(ns, ["scan", "sleep"]);
 
     let serverNames = scanAllServers(ns);
@@ -23,13 +25,12 @@ export async function main(ns) {
     var grow_ram = 1.75;
     var hack_ram = 1.7;
 
-    const flags = ns.flags(argsSchema);
-    var hack_percent = flags['hack-percent'] / 100;
+    var hack_percent = options['hack-percent'] / 100;
     var use_est_hack_percent = false;
-    if (flags['hack-percent'] == -1) {
+    if (options['hack-percent'] == -1) {
         use_est_hack_percent = true;
     } else {
-        hack_percent = flags['hack-percent'] / 100;
+        hack_percent = options['hack-percent'] / 100;
         if (hack_percent <= 0 || hack_percent >= 1) {
             ns.tprint("hack-percent out of range (0-100)");
             return;
@@ -39,11 +40,11 @@ export async function main(ns) {
     var player = ns.getPlayer();
     //ns.print(JSON.stringify(player));
 
-    if (flags['at-hack-level']) player.hacking = flags['at-hack-level'];
+    if (options['at-hack-level']) player.hacking = options['at-hack-level'];
     var servers = serverNames.map(ns.getServer);
     // Compute the total RAM available to us on all servers (e.g. for running hacking scripts)
     var ram_total = servers.reduce(function (total, server) {
-        if (!server.hasAdminRights || (server.hostname.startsWith('hacknet') && !flags['include-hacknet-ram'])) return total;
+        if (!server.hasAdminRights || (server.hostname.startsWith('hacknet') && !options['include-hacknet-ram'])) return total;
         return total + server.maxRam;
     }, 0);
 
@@ -86,12 +87,12 @@ export async function main(ns) {
         }
     }
 
-    ns.print(`All? ${flags['all']} Player hack: ${player.hacking} Ram total: ${ram_total}`);
+    ns.print(`All? ${options['all']} Player hack: ${player.hacking} Ram total: ${ram_total}`);
     //ns.print(`\n` + servers.map(s => `${s.hostname} bought: ${s.purchasedByPlayer} moneyMax: ${s.moneyMax} admin: ${s.hasAdminRights} hack: ${s.requiredHackingSkill}`).join('\n'));
 
     // Filter down to the list of servers we wish to report on
     servers = servers.filter(server => !server.purchasedByPlayer && (server.moneyMax || 0) > 0 &&
-        (flags['all'] || server.hasAdminRights && server.requiredHackingSkill <= player.hacking));
+        (options['all'] || server.hasAdminRights && server.requiredHackingSkill <= player.hacking));
 
     // First address the servers within our hacking level
     const unlocked_servers = servers.filter(s => s.requiredHackingSkill <= player.hacking)
@@ -121,7 +122,7 @@ export async function main(ns) {
     // Combine the lists, sort, and display a summary.
     const server_eval = unlocked_servers.concat(locked_servers);
     const best_server = server_eval.sort((a, b) => b.gainRate - a.gainRate)[0];
-    if (!flags['silent'])
+    if (!options['silent'])
         ns.tprint("Best server: ", best_server.hostname, " with ", formatMoney(best_server.gainRate), " per ram-second");
 
     let order = 1;
@@ -134,7 +135,7 @@ export async function main(ns) {
     var best_exp_server = server_eval.sort(function (a, b) {
         return b.expRate - a.expRate;
     })[0];
-    if (!flags['silent'])
+    if (!options['silent'])
         ns.tprint("Best exp server: ", best_exp_server.hostname, " with ", best_exp_server.expRate, " exp per ram-second");
     order = 1;
     let serverListByExp = `Servers in order of best to worst hack exp at Hack ${player.hacking}:`;
