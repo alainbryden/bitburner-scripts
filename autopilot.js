@@ -24,6 +24,7 @@ const argsSchema = [ // The set of all command line arguments
 	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
 	['wait-for-4s-threshold', 0.5], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
 	['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
+	['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
 	['on-completion-script', null], // Spawn this script when we defeat the bitnode
 	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
 ];
@@ -304,7 +305,7 @@ async function checkOnRunningScripts(ns, player) {
 	if (2 in unlockedSFs) {
 		// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
 		if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
-		rushGang = !playerInGang;
+		rushGang = !options['disable-rush-gangs'] && !playerInGang;
 		// Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
 		// (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
 		const wrongWork = findScript('work-for-factions.js', !rushGang ? s => s.args.includes("--crime-focus") :
