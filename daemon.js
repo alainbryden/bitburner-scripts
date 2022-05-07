@@ -341,7 +341,7 @@ async function kickstartHackXp(ns) {
                     log(ns, `INFO: Cannot study, because you are in city ${playerStats.city} which has no known university, and you cannot afford to travel to another city.`);
                 else {
                     const course = playerStats.city == "Sector-12" ? "Study Computer Science" : "Algorithms"; // Assume if we are still in Sector-12 we are poor and should only take the free course
-                    await getNsDataThroughFile(ns, `ns.universityCourse('${university}', '${course}', false)`, '/Temp/study-for-hack-xp.txt');
+                    await getNsDataThroughFile(ns, `ns.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
                     startedStudying = true;
                     await ns.asleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
                 }
