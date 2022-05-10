@@ -79,18 +79,24 @@ async function startUp(ns) {
 	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = false;
 	playerInstalledAugCount = wdAvailable = null;
 	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
-	killScripts = [];
+	installedAugmentations = killScripts = [];
 
 	// Collect and cache some one-time data
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
 	dictOwnedSourceFiles = await getActiveSourceFiles(ns, false);
 	unlockedSFs = await getActiveSourceFiles(ns, true);
-	installedAugmentations = !(4 in unlockedSFs) ? [] :
-		await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
-	if (!(4 in unlockedSFs))
-		log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
-			`Some functionality will be diabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
+	try {
+		installedAugmentations = !(4 in unlockedSFs) ? [] :
+			await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
+		if (!(4 in unlockedSFs))
+			log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
+				`Some functionality will be diabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
+	} catch (err) {
+		if (unlockedSFs[4] || 0 == 3) throw err; // No idea why this failed, treat as temporary and allow auto-retry.		
+		log(ns, `WARNING: You only have SF4 level ${unlockedSFs[4]}. Without level 3, some singularity functions will be ` +
+			`too expensive to run until you have bought a lot of home RAM.`, true);
+	}
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns);
 	return true;
@@ -297,6 +303,9 @@ async function checkOnRunningScripts(ns, player) {
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
 	// By default, don't join bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
 	if (options['enable-bladeburner']) daemonArgs.push('--run-script', getFilePath('bladeburner.js'));
+	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
+	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
+		daemonArgs.push('--reserved-ram ', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
 	// Launch or re-launch daemon with the desired arguments
 	if (!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) {
 		if (player.hacking >= hackThreshold)
