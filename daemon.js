@@ -1730,8 +1730,8 @@ async function establishMultipliers(ns) {
 async function buildToolkit(ns) {
     log(ns, "buildToolkit");
     let allTools = hackTools.concat(asynchronousHelpers).concat(periodicScripts);
-    let toolCosts = await getNsDataThroughFile(ns, `Object.fromEntries(${JSON.stringify(allTools.map(t => t.name))}` +
-        `.map(s => [s, ns.getScriptRam(s, '${daemonHost}')]))`, '/Temp/script-costs.txt');
+    let toolCosts = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(s => [s, ns.getScriptRam(s, 'home')]))`,
+        '/Temp/script-costs.txt', allTools.map(t => t.name));
     for (const toolConfig of allTools) {
         let tool = {
             instance: ns,
