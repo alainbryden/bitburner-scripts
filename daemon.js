@@ -182,6 +182,7 @@ export async function main(ns) {
         log(ns, `WARN: Detected ${competingDaemons.length} other '${scriptName}' instance is running at home (pids: ${daemonPids}) - shutting it down...`, true, 'warning')
         const killPid = await killProcessIds(ns, daemonPids);
         await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), killPid);
+        await ns.sleep(loopInterval); // The game can be slow to kill scripts, give it an extra bit of time.
     }
 
     _ns = ns;
