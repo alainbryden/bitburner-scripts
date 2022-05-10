@@ -195,10 +195,11 @@ function addCSS(doc) {
     if (priorCss) priorCss.parentNode.removeChild(priorCss); // Remove old CSS to facilitate tweaking css above
     // Hopefully this logic remains valid for detecting which element is the HUD draggable window
     const hudParent = doc.getElementsByClassName(`MuiCollapse-root`)[0].parentElement;
-    if (hudParent) hudParent.style.zIndex = Number.MAX_SAFE_INTEGER;
+    if (hudParent) hudParent.style.zIndex = 1E4; // Tail windows start around 1500, this should keep the HUD above them
     doc.head.insertAdjacentHTML('beforeend', css(hudParent ? eval('window').getComputedStyle(hudParent) : null));
 }
 const css = (rootStyle) => `<style id="statsCSS">
+    .MuiTooltip-popper { z-index: 10001 } /* Sadly, not parented by its owners, so must be updated with MuiCollapse-root's parent */
     .tooltip  { margin: 0; position: relative; }
     .tooltip:hover .tooltiptext { visibility: visible; opacity: 0.85; }
     .tooltip .tooltiptext {
