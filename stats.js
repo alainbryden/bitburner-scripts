@@ -27,6 +27,9 @@ export async function main(ns) {
     let inBladeburner = playerInfo.inBladeburner;
     disableLogs(ns, ['sleep']);
 
+    // Hook script exit to clean up after ourselves.
+    ns.atExit(() => hook1.innerHTML = hook0.innerHTML = "");
+
     // Logic for adding a single custom HUD entry
     addCSS(doc);
     const hudData = [];
@@ -41,13 +44,15 @@ export async function main(ns) {
     while (true) {
         try {
             // Show what bitNode we're currently playing in
-            addHud("BitNode", `${bitNode}.${1 + (dictSourceFiles[bitNode] || 0)}`, "Detected as being one more than your current owned SF level.");
+            addHud("BitNode", `${bitNode}.${1 + (dictSourceFiles[bitNode] || 0)}`,
+                `Detected as being one more than your current owned SF level (${dictSourceFiles[bitNode] || 0}) in the current bitnode (${bitNode}).`);
 
             // Show Hashes
             if (9 in dictSourceFiles || 9 == bitNode) { // Section not relevant if you don't have access to hacknet servers
                 const hashes = await getNsDataThroughFile(ns, '[ns.hacknet.numHashes(), ns.hacknet.hashCapacity()]', '/Temp/hash-stats.txt')
                 if (hashes[1] > 0) {
-                    addHud("Hashes", `${formatNumberShort(hashes[0], 3, 1)}/${formatNumberShort(hashes[1], 3, 1)}`, 'Current Hashes / Current Hash Capacity');
+                    addHud("Hashes", `${formatNumberShort(hashes[0], 3, 1)}/${formatNumberShort(hashes[1], 3, 1)}`,
+                        `Current Hashes ${hashes[0].toLocaleString()} / Current Hash Capacity ${hashes[1].toLocaleString()}`);
                 }
                 // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)               
                 if (ns.isRunning('spend-hacknet-hashes.js', 'home', '--liquidate') || ns.isRunning('spend-hacknet-hashes.js', 'home', '-l')) {
@@ -62,8 +67,8 @@ export async function main(ns) {
             }
 
             // Show total instantaneous script income and experience per second (values provided directly by the game)
-            addHud("ScrInc", formatMoney(ns.getScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
-            addHud("ScrExp", formatNumberShort(ns.getScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
+            addHud("Scr Inc", formatMoney(ns.getScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
+            addHud("Scr Exp", formatNumberShort(ns.getScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
 
             // Show reserved money
             const reserve = ns.read("reserve.txt") || 0;
@@ -71,14 +76,21 @@ export async function main(ns) {
                 addHud("Reserve", formatNumberShort(reserve, 3, 2), "Most scripts will leave this much money unspent. Remove with `run reserve.js 0`");
 
             // Show gang income and territory
-            let gangInfo = false;
             if (2 in dictSourceFiles || 2 == bitNode) { // Gang income is only relevant once gangs are unlocked
-                gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
-                if (gangInfo !== false) {
+                var gangInfo = await getGangInfo(ns);
+                if (gangInfo) {
                     // Add Gang Income
-                    addHud("Gang", formatMoney(gangInfo.moneyGainRate * 5, 3, 2) + '/sec', "Gang income per second while doing tasks. (Note: If 0, your gang may temporarily be set to all be training).");
+                    addHud("Gang Inc", formatMoney(gangInfo.moneyGainRate * 5, 3, 2) + '/sec',
+                        `Gang (${gangInfo.faction}) income per second while doing tasks.` +
+                        `\nIncome: ${formatMoney(gangInfo.moneyGainRate * 5)}/sec (${formatMoney(gangInfo.moneyGainRate)}/tick)` +
+                        `  Respect: ${formatNumberShort(gangInfo.respect)} (${formatNumberShort(gangInfo.respectGainRate)}/tick)` +
+                        `\nNote: If you see 0, your gang may all be temporarily set to training or territory warfare.`);
                     // Add Gang Territory
-                    addHud("Territory", formatNumberShort(gangInfo.territory * 100, 4, 2) + "%", "How your gang is currently doing in territory warfare. Starts at 14.29%");
+                    addHud("Territory", formatNumberShort(gangInfo.territory * 100, 4, 2) + "%",
+                        `How your gang is currently doing in territory warfare. Starts at 14.29%\n` +
+                        `Gang: ${gangInfo.faction} ${gangInfo.isHacking ? "(Hacking)" : "(Combat)"}  ` +
+                        `Power: ${gangInfo.power.toLocaleString()}  Clash ${gangInfo.territoryWarfareEngaged ? "enabled" : "disabled"} ` +
+                        `(${(gangInfo.territoryClashChance * 100).toFixed(0)}% chance)`);
                 }
             }
 
@@ -113,18 +125,23 @@ export async function main(ns) {
             // Show various RAM utilization stats
             if (!options['hide-RAM-utilization']) {
                 const servers = await getAllServersInfo(ns);
-                addHud("Servers", `${servers.length}/${servers.filter(s => s.hasAdminRights).length}/${servers.filter(s => s.purchasedByPlayer).length}`,
-                    "The number of servers on the network / number rooted / number purchased" +
-                    (9 in dictSourceFiles || 9 == bitNode ? " (including hacknet servers)" : "")); // No spoilers
+                const [count, rooted, purchased] = [servers.length, servers.filter(s => s.hasAdminRights).length, servers.filter(s => s.purchasedByPlayer).length];
+                const likelyHacknet = servers.filter(s => s.hostname.startsWith("hacknet-node-"));
+                // Add Server count
+                addHud("Servers", `${count}/${rooted}/${purchased}`, `The number of servers on the network (${count}) / ` +
+                    `number rooted (${rooted}) / number purchased ` + (9 in dictSourceFiles || 9 == bitNode ?
+                        `(${purchased - likelyHacknet.length} host + ${likelyHacknet.length} hacknet servers)` : `(${purchased})`));
                 const home = servers.find(s => s.hostname == "home");
-                addHud("Home RAM\n", `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
-                    `Shows total home RAM (and current utilization %)` +
-                    `\nDetails: Using ${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
+                // Add Home RAM and Utilization
+                addHud("Home RAM", `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
+                    `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
+                    `${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
                 // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
-                const includeHacknet = servers.filter(s => s.hostname.startsWith("hacknet-node-")).some(s => s.ramUsed > 0);
+                const includeHacknet = likelyHacknet.some(s => s.ramUsed > 0);
                 const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-node-")))
                     .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
-                addHud("All RAM\n", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
+                // Add Total Network RAM and Utilization
+                addHud("All RAM", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
                     `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                         (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
                     `\nDetails: Using ${formatRam(totalUsed)} of ${formatRam(totalMax)} (${formatRam(totalMax - totalUsed)} free)`);
@@ -133,14 +150,16 @@ export async function main(ns) {
             // Show current share power
             const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()', '/Temp/getSharePower.txt');
             if (sharePower > 1.0001) // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing
-                addHud("Share Pwr", formatNumberShort(sharePower, 3, 2), "Uses RAM to boost faction reputation gain rate while working for factions. Run `daemon.js` with the `--no-share` flag to disable.");
+                addHud("Share Pwr", formatNumberShort(sharePower, 3, 2),
+                    "Uses RAM to boost faction reputation gain rate while working for factions (capped at 1.5) " +
+                    "\nRun `daemon.js` with the `--no-share` flag to disable.");
 
             // Clear the previous loop's custom HUDs
             hook1.innerHTML = hook0.innerHTML = "";
             // Create new HUD elements with info collected above.
             for (const hudRow of hudData) {
                 const [header, formattedValue, toolTip] = hudRow;
-                hook0.appendChild(newline(header, toolTip));
+                hook0.appendChild(newline(header.padEnd(9, " "), toolTip));
                 hook1.appendChild(newline(formattedValue, toolTip));
             }
             hudData.length = 0; // Clear the hud data for the next iteration
@@ -156,6 +175,12 @@ export async function main(ns) {
 function formatSixSigFigs(value, minDecimalPlaces = 0, maxDecimalPlaces = 0) {
     return value >= 1E7 ? formatNumberShort(value, 6, 3) :
         value.toLocaleString(undefined, { minimumFractionDigits: minDecimalPlaces, maximumFractionDigits: maxDecimalPlaces });
+}
+
+/** @param {NS} ns
+ *  @returns {Promise<GangGenInfo|boolean>} Gang information, if we're in a gang, or False */
+async function getGangInfo(ns) {
+    return await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt')
 }
 
 /** @param {NS} ns 
