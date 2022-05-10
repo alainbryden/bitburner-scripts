@@ -53,21 +53,29 @@ export async function main(ns) {
 	const runOptions = getConfiguration(ns, argsSchema);
 	if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
 	options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
-
-	// Because we cannot pass args to "install" and "destroy" functions, we write them to disk to override defaults
-	const changedArgs = JSON.stringify(argsSchema
-		.filter(a => JSON.stringify(runOptions[a[0]]) != JSON.stringify(a[1]))
-		.map(a => [a[0], runOptions[a[0]]]));
-	// Only update the config file if it doesn't match the most resent set of run args
-	const configPath = `${ns.getScriptName()}.config.txt`
-	const currentConfig = ns.read(configPath);
-	if ((changedArgs.length > 2 || currentConfig) && changedArgs != currentConfig) {
-		await ns.write(configPath, changedArgs, "w");
-		log(ns, `INFO: Updated "${configPath}" to persist the most recent run args through resets: ${changedArgs}`, true, 'info');
+	let startUpRan = false;
+	while (true) {
+		try {
+			// Start-up actions, wrapped in error handling in case of temporary failures
+			if (!startUpRan) startUpRan = await startUp(ns);
+			// Main loop: Monitor progress in the current BN and automatically reset when we can afford TRP, or N augs.
+			await mainLoop(ns);
+		}
+		catch (err) {
+			log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:\n` +
+				(typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+		}
+		await ns.asleep(options['interval']);
 	}
+}
 
-	// Clear reset global state
+/** @param {NS} ns **/
+async function startUp(ns) {
+	await persistConfigChanges(ns);
+
+	// Reset global state
 	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = false;
 	playerInstalledAugCount = wdAvailable = null;
 	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
@@ -85,15 +93,22 @@ export async function main(ns) {
 			`Some functionality will be diabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns);
+	return true;
+}
 
-	// Main loop: Monitor progress in the current BN and automatically reset when we can afford TRP, or N augs.
-	while (true) {
-		try { await mainLoop(ns); }
-		catch (err) {
-			log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error in the main loop:\n` +
-				(typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
-		}
-		await ns.asleep(options['interval']);
+/** Write any configuration changes to disk so that they will survive resets and new bitnodes
+ * @param {NS} ns **/
+async function persistConfigChanges(ns) {
+	// Because we cannot pass args to "install" and "destroy" functions, we write them to disk to override defaults
+	const changedArgs = JSON.stringify(argsSchema
+		.filter(a => JSON.stringify(options[a[0]]) != JSON.stringify(a[1]))
+		.map(a => [a[0], options[a[0]]]));
+	// Only update the config file if it doesn't match the most resent set of run args
+	const configPath = `${ns.getScriptName()}.config.txt`
+	const currentConfig = ns.read(configPath);
+	if ((changedArgs.length > 2 || currentConfig) && changedArgs != currentConfig) {
+		await ns.write(configPath, changedArgs, "w");
+		log(ns, `INFO: Updated "${configPath}" to persist the most recent run args through resets: ${changedArgs}`, true, 'info');
 	}
 }
 
