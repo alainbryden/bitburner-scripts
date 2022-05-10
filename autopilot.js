@@ -76,7 +76,7 @@ async function startUp(ns) {
 	await persistConfigChanges(ns);
 
 	// Reset global state
-	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = false;
+	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = stanekLaunched = false;
 	playerInstalledAugCount = wdAvailable = null;
 	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
 	installedAugmentations = killScripts = [];
