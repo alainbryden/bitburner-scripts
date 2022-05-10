@@ -116,7 +116,7 @@ async function tryToBuyBestServerPossible(ns) {
     let prefix = 'Host-manager wants to buy another server, but ';
 
     // Determine our budget for spending money on home RAM
-    let spendableMoney = await getNsDataThroughFile(ns, 'ns.getServerMoneyAvailable("home")', '/Temp/player-money.txt');
+    let spendableMoney = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, `/Temp/getServerMoneyAvailable.txt`, ["home"]);
     if (options['reserve-by-time']) { // Option to vary pctReservedMoney by time since augment. 
         // Decay factor of 0.2 = Starts willing to spend 95% of our money, backing down to ~75% at 1 hour, ~60% at 2 hours, ~25% at 6 hours, and ~10% at 10 hours.
         // Decay factor of 0.3 = Starts willing to spend 95% of our money, backing down to ~66% at 1 hour, ~45% at 2 hours, ~23% at 4 hours, ~10% at 6 hours

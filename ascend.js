@@ -133,7 +133,9 @@ export async function main(ns) {
     let money = 0, lastMoney = 0, ticksWithoutPurchases = 0;
     while (ticksWithoutPurchases < 10) { // 10 * 200ms (game tick time) ~= 2 seconds
         const start = Date.now(); // Used to wait for the game to tick.
-        while ((Date.now() - start <= 200) && lastMoney == (money = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable('home')`, '/Temp/player-money.txt')))
+        const refreshMoney = async () => money =
+            await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, `/Temp/getServerMoneyAvailable.txt`, ["home"]);
+        while ((Date.now() - start <= 200) && lastMoney == await refreshMoney())
             await ns.sleep(10); // Wait for game to tick (money to change) - might happen sooner than 200ms
         ticksWithoutPurchases = money < lastMoney ? 0 : ticksWithoutPurchases + 1;
         lastMoney = money;
