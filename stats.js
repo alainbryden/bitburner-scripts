@@ -1,11 +1,12 @@
 import {
     log, disableLogs, instanceCount, getConfiguration, getNsDataThroughFile, getActiveSourceFiles,
-    getStocksValue, formatNumberShort, formatMoney
+    getStocksValue, formatNumberShort, formatMoney, formatRam
 } from './helpers.js'
 
 const argsSchema = [
-    ['hide-stocks', false],
     ['show-peoplekilled', false],
+    ['hide-stocks', false],
+    ['hide-RAM-utilization', false],
 ];
 
 export function autocomplete(data, args) {
@@ -27,9 +28,14 @@ export async function main(ns) {
     disableLogs(ns, ['sleep']);
 
     // Logic for adding a single custom HUD entry
-    const newline = (txt, tt = "") => { let p = doc.createElement("p"); p.appendChild(doc.createTextNode(txt)); p.style = "margin: 0"; p.title = tt; return p; };
+    addCSS(doc);
     const hudData = [];
     const addHud = (...args) => hudData.push(args);
+    const newline = (txt, tt = "") => {
+        let p = doc.createElement("p"); p.appendChild(doc.createTextNode(txt)); p.className = "tooltip"; //p.title = tt;
+        let s = doc.createElement("span"); p.appendChild(s); s.appendChild(doc.createTextNode(tt)); s.className = "tooltiptext";
+        return p;
+    };
 
     // Main stats update loop
     while (true) {
@@ -104,6 +110,26 @@ export async function main(ns) {
                 }
             }
 
+            // Show various RAM utilization stats
+            if (!options['hide-RAM-utilization']) {
+                const servers = await getAllServersInfo(ns);
+                addHud("Servers", `${servers.length}/${servers.filter(s => s.hasAdminRights).length}/${servers.filter(s => s.purchasedByPlayer).length}`,
+                    "The number of servers on the network / number rooted / number purchased" +
+                    (9 in dictSourceFiles || 9 == bitNode ? " (including hacknet servers)" : "")); // No spoilers
+                const home = servers.find(s => s.hostname == "home");
+                addHud("Home RAM\n", `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
+                    `Shows total home RAM (and current utilization %)` +
+                    `\nDetails: Using ${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
+                // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
+                const includeHacknet = servers.filter(s => s.hostname.startsWith("hacknet-node-")).some(s => s.ramUsed > 0);
+                const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-node-")))
+                    .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
+                addHud("All RAM\n", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
+                    `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
+                        (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
+                    `\nDetails: Using ${formatRam(totalUsed)} of ${formatRam(totalMax)} (${formatRam(totalMax - totalUsed)} free)`);
+            }
+
             // Show current share power
             const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()', '/Temp/getSharePower.txt');
             if (sharePower > 1.0001) // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing
@@ -131,3 +157,28 @@ function formatSixSigFigs(value, minDecimalPlaces = 0, maxDecimalPlaces = 0) {
     return value >= 1E7 ? formatNumberShort(value, 6, 3) :
         value.toLocaleString(undefined, { minimumFractionDigits: minDecimalPlaces, maximumFractionDigits: maxDecimalPlaces });
 }
+
+/** @param {NS} ns 
+ * @returns {Promise<Server[]>} **/
+async function getAllServersInfo(ns) {
+    const serverNames = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    return await getNsDataThroughFile(ns, 'ns.args.map(ns.getServer)', '/Temp/getServers.txt', serverNames);
+}
+
+function addCSS(doc) {
+    let priorCss = doc.getElementById("statsCSS");
+    if (priorCss) priorCss.parentNode.removeChild(priorCss); // Remove old CSS to facilitate tweaking css above
+    const rootStyle = eval('window').getComputedStyle(doc.getElementsByClassName(`MuiCollapse-root`)[0].parentElement);
+    doc.head.insertAdjacentHTML('beforeend', css(rootStyle));
+}
+const css = (rootStyle) => `<style id="statsCSS">
+    .tooltip  { margin: 0; position: relative; }
+    .tooltip:hover .tooltiptext { visibility: visible; opacity: 0.85; }
+    .tooltip .tooltiptext {
+        visibility: hidden; position: absolute; z-index: 1;
+        right: 20px; top: 19px; padding: 2px 10px;
+        text-align: right; white-space: pre;       
+        border-radius: 6px; border: ${rootStyle?.border || "inherit"};
+        background-color: ${rootStyle?.backgroundColor || "#900C"};
+    }
+</style>`;
