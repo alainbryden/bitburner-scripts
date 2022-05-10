@@ -193,8 +193,10 @@ async function getAllServersInfo(ns) {
 function addCSS(doc) {
     let priorCss = doc.getElementById("statsCSS");
     if (priorCss) priorCss.parentNode.removeChild(priorCss); // Remove old CSS to facilitate tweaking css above
-    const rootStyle = eval('window').getComputedStyle(doc.getElementsByClassName(`MuiCollapse-root`)[0].parentElement);
-    doc.head.insertAdjacentHTML('beforeend', css(rootStyle));
+    // Hopefully this logic remains valid for detecting which element is the HUD draggable window
+    const hudParent = doc.getElementsByClassName(`MuiCollapse-root`)[0].parentElement;
+    if (hudParent) hudParent.style.zIndex = Number.MAX_SAFE_INTEGER;
+    doc.head.insertAdjacentHTML('beforeend', css(hudParent ? eval('window').getComputedStyle(hudParent) : null));
 }
 const css = (rootStyle) => `<style id="statsCSS">
     .tooltip  { margin: 0; position: relative; }
