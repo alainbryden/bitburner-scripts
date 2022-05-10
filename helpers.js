@@ -273,17 +273,17 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
     maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false) {
     checkNsInstance(ns, '"autoRetry"');
-    let retryDelayMs = initialRetryDelayMs;
-    while (maxRetries-- > 0) {
+    let retryDelayMs = initialRetryDelayMs, attempts = 0;
+    while (attempts++ <= maxRetries) {
         try {
             const result = await fnFunctionThatMayFail()
             if (!fnSuccessCondition(result)) throw typeof errorContext === 'string' ? errorContext : errorContext();
             return result;
         }
         catch (error) {
-            const fatal = maxRetries === 0;
-            const errorLog = `${fatal ? 'FAIL' : 'WARN'}: (${maxRetries} retries remaining): ${String(error)}`
-            log(ns, errorLog, fatal, !verbose ? undefined : (fatal ? 'error' : 'warning'))
+            const fatal = attempts >= maxRetries;
+            const errorLog = `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed: ${String(error)}`
+            log(ns, errorLog, fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
             await ns.asleep(retryDelayMs);
             retryDelayMs *= backoffRate;
