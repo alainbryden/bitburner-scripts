@@ -120,7 +120,7 @@ export async function main(ns) {
     log(ns, `Player has sf11Level ${sf11Level}, so the multiplier after each aug purchased is ${augCountMult}.`);
 
     // Collect information about the player
-    const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
+    const gangInfo = await getGangInfo(ns);
     gangFaction = gangInfo ? gangInfo.faction : false;
     favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
     startingPlayerMoney = playerData.money;
@@ -183,6 +183,12 @@ export async function main(ns) {
             total_rep_cost: Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0),
             total_aug_cost: getTotalCost(purchaseableAugs),
         }), "w");
+}
+
+/** @param {NS} ns
+ *  @returns {Promise<GangGenInfo|boolean>} Gang information, if we're in a gang, or False */
+async function getGangInfo(ns) {
+    return await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt')
 }
 
 // Helper function to make multi names shorter for display in a table

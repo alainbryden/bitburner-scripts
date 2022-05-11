@@ -23,8 +23,14 @@ export function autocomplete(data, args) {
 
 let _ns; // Lazy global copy of ns so we can sleep in the click handler
 
-/** @param {NS} ns 
- *  Super recommend you kill all other scripts before starting this up. **/
+/** Helper to open a tail window and log a message to the console and terminal. Useful when trying to inform the player of a failure.
+ * @param {NS} ns **/
+function tailAndLog(ns, message) {
+	ns.tail();
+	log(ns, message, true);
+}
+
+/** @param {NS} ns **/
 export async function main(ns) {
 	options = getConfiguration(ns, argsSchema);
 	if (!options) return; // Invalid options, or ran in --help mode.
@@ -39,9 +45,9 @@ export async function main(ns) {
 	if (ns.getPlayer().city != "Aevum") {
 		try {
 			if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.travelToCity(ns.args[0])', '/Temp/travelToCity.txt', ["Aevum"])))
-				return ns.tprint("ERROR: Sorry, you need at least 200k to travel to the casino.");
+				return tailAndLog(ns, "ERROR: Sorry, you need at least 200k to travel to the casino.");
 		} catch (err) {
-			return ns.tprint("ERROR: You must manually travel to to Aevum to use this script until you get SF4");
+			return tailAndLog(ns, "ERROR: You must manually travel to to Aevum to use this script until you get SF4");
 		}
 	}
 
@@ -50,54 +56,74 @@ export async function main(ns) {
 		await findRetry(ns, "//button[contains(text(), 'Stop playing')]", true) ? false : // False positive, casino "stop" button, no problems here
 			await findRetry(ns, "//button[contains(text(), 'Stop')]", true); // Otherwise, a button with "Stop" on it is probably from the work screen
 
-	// Step 2: Navigate to the City Casino
-	try { // Try to do this without SF4, because it's faster and doesn't require a temp script to be cleaned up below
-		const btnStopAction = await checkForFocusScreen();
-		if (btnStopAction) // If we were performing an action unfocused, it will be focused on restart and we must stop that action to navigate.
-			await click(btnStopAction);
-		// Click our way to the city casino
-		await click(await findRetry(ns, "//div[(@role = 'button') and (contains(., 'City'))]"));
-		await click(await findRetry(ns, "//span[@aria-label = 'Iker Molina Casino']"));
-	} catch { // Use SF4 as a fallback, it's more reliable.
-		try { await getNsDataThroughFile(ns, 'ns.goToLocation(ns.args[0])', '/Temp/goToLocation.txt', ["Iker Molina Casino"]); }
-		catch { return ns.tprint("ERROR: Failed to travel to the casino both using UI navigation and using SF4 as a fall-back."); }
-	}
-	// Pick the game we wish to automate (Blackjack)
-	await click(await findRetry(ns, "//button[contains(text(), 'blackjack')]"));
-
-	// Step 3: Get some buttons we will need to play blackjack
-	const inputWager = await findRetry(ns, "//input[@value = 1000000]");
-	const btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
+	// Find the button used to save the game
 	const btnSaveGame = await findRetry(ns, "//button[@aria-label = 'save game']");
+	let inputWager, btnStartGame;
 
-	// Step 4: Clean up temp files and kill other running scripts to speed up the reload cycle
-	if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
-		// Step 4.5: Test that we aren't already kicked out of the casino before doing drastic things like killing scripts
-		await setText(inputWager, `1`); // Bet just a dollar and quick the game right away, no big deal
-		await click(btnStartGame);
-		if (await findRetry(ns, "//p[contains(text(), 'Count:')]", true, 10)) {
-			const btnStay = await findRetry(ns, "//button[text() = 'Stay']", true);
-			if (btnStay) await click(btnStay); // Trigger the game to end if we didn't instantly win/lose our $1 bet.
-		} else {
-			// Because we haven't killed scripts yet, it's possible another script stole focus again. Detect and handle that case.
-			if (await checkForFocusScreen())
-				return ns.tprint("ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.");
-			await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
-			return ns.tprint("INFO: We've appear to already have been previously kicked out of the casino.");
+	// Step 2: Try to navigate to the blackjack game until successful, in case something repeatedly steals focus
+	while (true) {
+		try {
+			// Step 2.1: If the player is focused, stop the current action
+			const btnStopAction = await checkForFocusScreen();
+			if (btnStopAction) { // If we were performing an action unfocused, it will be focused on restart and we must stop that action to navigate.
+				log(ns, "It looks like we're on a focus screen. Stopping whatever we're doing...")
+				await click(btnStopAction);
+			}
+			// Step 2.2: Navigate to the City Casino
+			try { // Try to do this without SF4, because it's faster and doesn't require a temp script to be cleaned up below
+				// Click our way to the city casino
+				await click(await findRetry(ns, "//div[(@role = 'button') and (contains(., 'City'))]"));
+				await click(await findRetry(ns, "//span[@aria-label = 'Iker Molina Casino']"));
+			} catch { // Use SF4 as a fallback, it's more reliable.
+				try { await getNsDataThroughFile(ns, 'ns.goToLocation(ns.args[0])', '/Temp/goToLocation.txt', ["Iker Molina Casino"]); }
+				catch { return tailAndLog(ns, "ERROR: Failed to travel to the casino both using UI navigation and using SF4 as a fall-back."); }
+			}
+			// Step 2.3: Try to start the blackjack game
+			const blackjack = await findRetry(ns, "//button[contains(text(), 'blackjack')]");
+			if (!blackjack) return tailAndLog(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Please post a full-game screenshot on Discord.`)
+			await click(blackjack);
+
+			// Step 2.4: Get some buttons we will need to play blackjack
+			inputWager = await findRetry(ns, "//input[@value = 1000000]");
+			btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
+
+			// Step 2.5: Clean up temp files and kill other running scripts to speed up the reload cycle
+			if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
+				// Step 2.5.1: Test that we aren't already kicked out of the casino before doing drastic things like killing scripts
+				await setText(inputWager, `1`); // Bet just a dollar and quick the game right away, no big deal
+				await click(btnStartGame);
+				if (await findRetry(ns, "//p[contains(text(), 'Count:')]", true, 10)) { // If this works, we're still allowed in
+					const btnStay = await findRetry(ns, "//button[text() = 'Stay']", true);
+					if (btnStay) await click(btnStay); // Trigger the game to end if we didn't instantly win/lose our $1 bet.
+				} else { // Otherwise, we've probably been kicked out of the casino, but...
+					// because we haven't killed scripts yet, it's possible another script stole focus again. Detect and handle that case.
+					if (await checkForFocusScreen()) {
+						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.", true);
+						continue; // Loop back to start and try again
+					}
+					await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
+					return log(ns, "INFO: We appear to already have been previously kicked out of the casino.", true);
+				}
+				// Step 2.5.2: Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
+				if (options['kill-all-scripts'])
+					await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
+				// Step 2.5.3: Clear the temp folder on home (all transient scripts / outputs)
+				await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+			}
+			break; // We achieved everthing we wanted, we can exit the while loop.
+		} catch (err) {
+			ns.tail(); // We're having difficulty, pop open a tail window so the user is aware.
+			log(ns, `WARNING: casino.js Caught (and suppressed) an unexpected error while navigating to blackjack. Will try again...\n` +
+				(typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
 		}
-		// Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
-		if (options['kill-all-scripts'])
-			await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
-		// Clear the temp folder on home (all transient scripts / outputs)
-		await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
 	}
 
-	// Step 5: Save the fact that this script is now running, so that future reloads start this script back up immediately.
+	// Step 3: Save the fact that this script is now running, so that future reloads start this script back up immediately.
 	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
 	await click(btnSaveGame);
 	if (saveSleepTime) await ns.asleep(saveSleepTime);
 
-	// Step 6: Play until we lose
+	// Step 4: Play until we lose
 	while (true) {
 		const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
 		await setText(inputWager, `${bet}`);
@@ -114,13 +140,13 @@ export async function main(ns) {
 				const txtCount = await findRetry(ns, "//p[contains(text(), 'Count:')]", true, 20);
 				if (!txtCount) { // If we can't find the count, we've either been kicked out, or maybe routed to another screen.
 					return await checkForFocusScreen() /* Detect the case where we started working/training */ ?
-						ns.tprint("ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.") :
+						log("ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.", true) :
 						await onCompletion(ns); // Otherwise, assume we've been kicked out of the casino for having stolen the max 10b
 				}
 				const allCounts = txtCount.querySelectorAll('span');
 				const highCount = Number(allCounts[allCounts.length - 1].innerText);
 				const shouldHit = options['use-basic-strategy'] ? highCount < 17 : shouldHitAdvanced(ns, txtCount);
-				if (options['enable-logging']) ns.print(`INFO: Count is ${highCount}, we will ${shouldHit ? 'Hit' : 'Stay'}`);
+				if (options['enable-logging']) log(ns, `INFO: Count is ${highCount}, we will ${shouldHit ? 'Hit' : 'Stay'}`);
 				await click(shouldHit ? btnHit : btnStay);
 				await ns.sleep(1); // Yeild for an instant so the UI can update and process events
 			}
@@ -167,7 +193,7 @@ async function killAllOtherScripts(ns, removeRemoteFiles) {
  *  Run when we can no longer gamble at the casino (presumably because we've been kicked out) **/
 async function onCompletion(ns) {
 	await ns.write(ran_flag, true, "w"); // Write an file indicating we think we've been kicked out of the casino.
-	ns.tprint("SUCCESS: We've been kicked out of the casino.");
+	log(ns, "SUCCESS: We've been kicked out of the casino.", true);
 
 	// Run the completion script before shutting down    
 	let completionScript = options['on-completion-script'];
@@ -205,7 +231,7 @@ function shouldHitAdvanced(ns, playerCountElem) {
 	const txtPlayerCount = playerCountElem.textContent.substring(7);
 	const player = parseInt(txtPlayerCount.match(/\d+/).shift());
 	const dealer = getDealerCount();
-	if (options['enable-logging']) ns.print(`Player Count Text: ${txtPlayerCount}, Player: ${player}, Dealer: ${dealer}`);
+	if (options['enable-logging']) log(ns, `Player Count Text: ${txtPlayerCount}, Player: ${player}, Dealer: ${dealer}`);
 	// Strategy to minimize house-edge. See https://wizardofodds.com/blackjack/images/bj_4d_s17.gif
 	if (txtPlayerCount.includes("or")) { // Player has an Ace
 		if (player >= 9) return false; // Stay on Soft 19 or higher

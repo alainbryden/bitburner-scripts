@@ -109,8 +109,8 @@ async function mainLoop(ns) {
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
-    let sleeveStats = await getNsDataThroughFile(ns, `[...Array(${numSleeves}).keys()].map(i => ns.sleeve.getSleeveStats(i))`, '/Temp/sleeve-stats.txt');
-    let sleeveInfo = await getNsDataThroughFile(ns, `[...Array(${numSleeves}).keys()].map(i => ns.sleeve.getInformation(i))`, '/Temp/sleeve-information.txt');
+    let sleeveStats = await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getSleeveStats(i))`, '/Temp/sleeve-stats.txt', [...Array(numSleeves).keys()]);
+    let sleeveInfo = await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getInformation(i))`, '/Temp/sleeve-information.txt', [...Array(numSleeves).keys()]);
     for (let i = 0; i < numSleeves; i++) {
         let sleeve = { ...sleeveStats[i], ...sleeveInfo[i] }; // For convenience, merge all sleeve stats/info into one object
         // MANAGE SLEEVE AUGMENTATIONS
