@@ -285,11 +285,11 @@ async function checkOnRunningScripts(ns, player) {
 
 	// TODO: Take charge to stanek.acceptGift and place fragments before installing augs and ascending for the first time
 	// Once stanek's gift is accepted and not charged, launch it first
-	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched) {
+	const stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
+	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
 		stanekLaunched = true;
-		if (!findScript('stanek.js'))
-			launchScriptHelper(ns, 'stanek.js');
-		await ns.asleep(2000); // Stanek will launch a version of daemon that works with charging. Give it time so we detect it as started below.
+		launchScriptHelper(ns, 'stanek.js');
+		stanekRunning = true;
 	}
 
 	// Ensure daemon.js is running in some form
@@ -306,8 +306,8 @@ async function checkOnRunningScripts(ns, player) {
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
 		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
-	// Launch or re-launch daemon with the desired arguments
-	if (!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) {
+	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
+	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) && !stanekRunning) {
 		if (player.hacking >= hackThreshold)
 			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
