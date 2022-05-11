@@ -552,7 +552,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     } while (restart);
 
     // TODO: Stanek Exploit, may be patched in the future. We can "accept Stanek's Gift" by buying this aug at any time, even after buying other augs.
-    if (!options['ignore-stanek'] && !ownedAugmentations.includes(staneksGift)) {
+    if (!options['ignore-stanek'] && !ownedAugmentations.includes(staneksGift) && staneksGift in augmentationData) {
         const giftAug = augmentationData[staneksGift];
         giftAug.joinedFactionsWithAug = giftAug.getFromJoined = () => "Church of the Machine God"; // We can buy it from them, even if not technically joined
         giftAug.canAfford = () => true;
