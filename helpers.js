@@ -282,8 +282,8 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         }
         catch (error) {
             const fatal = attempts >= maxRetries;
-            const errorLog = `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed: ${String(error)}`
-            log(ns, errorLog, fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
+            log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed` +
+                (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`), fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
             await ns.asleep(retryDelayMs);
             retryDelayMs *= backoffRate;
