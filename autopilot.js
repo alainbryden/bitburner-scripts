@@ -286,7 +286,7 @@ async function checkOnRunningScripts(ns, player) {
 	// Once stanek's gift is accepted and not charged, launch it first
 	let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
 	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
-		stanekLaunched = true;
+		stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
 		launchScriptHelper(ns, 'stanek.js');
 		stanekRunning = true;
 	}
@@ -491,8 +491,8 @@ async function shouldDelayInstall(ns, player) {
 			(player.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		if (totalWorth / totalCost >= options['wait-for-4s-threshold']) {
-			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have 
-				${(100 * totalWorth / totalCost).toFixed(0)}% of the cost (controlled by --wait-for-4s-threshold)`);
+			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have ` +
+				`${(100 * totalWorth / totalCost).toFixed(0)}% of the cost (controlled by --wait-for-4s-threshold)`);
 			return true;
 		}
 	}
