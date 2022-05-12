@@ -48,14 +48,24 @@ export async function main(ns) {
 
 const layouts = [
 	{
-		height: 3, width: 3, fragments: [
+		"height": 3, "width": 3, "fragments": [
 			{ "id": 1, "x": 0, "y": 0, "rotation": 3 },
 			{ "id": 25, "x": 1, "y": 0, "rotation": 3 },
 		]
 	}, {
-		height: 5, width: 5, fragments: [
-			{ "id": 1, "x": 0, "y": 0, "rotation": 3 },
-			{ "id": 25, "x": 1, "y": 0, "rotation": 3 },
+		"height": 7, "width": 8, "fragments": [
+			{ "id": 104, "x": 1, "y": 2, "rotation": 0 },
+			{ "id": 0, "x": 3, "y": 2, "rotation": 2 },
+			{ "id": 6, "x": 2, "y": 1, "rotation": 2 },
+			{ "id": 1, "x": 3, "y": 4, "rotation": 2 },
+			{ "id": 103, "x": 5, "y": 1, "rotation": 1 },
+			{ "id": 5, "x": 6, "y": 3, "rotation": 1 },
+			{ "id": 25, "x": 5, "y": 0, "rotation": 2 },
+			{ "id": 20, "x": 1, "y": 0, "rotation": 2 },
+			{ "id": 7, "x": 1, "y": 5, "rotation": 2 },
+			{ "id": 27, "x": 0, "y": 5, "rotation": 0 },
+			{ "id": 21, "x": 0, "y": 2, "rotation": 1 },
+			{ "id": 28, "x": 4, "y": 5, "rotation": 0 }
 		]
-	},
+	}
 ];
