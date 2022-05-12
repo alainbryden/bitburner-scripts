@@ -603,7 +603,7 @@ async function monitorStudies(ns, stat, requirement) {
 }
 
 /** @param {NS} ns */
-export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000) {
+export async function waitForFactionInvite(ns, factionName, maxWaitTime = 25000) {
     ns.print(`Waiting for invite from faction "${factionName}"...`);
     let waitTime = maxWaitTime;
     do {
