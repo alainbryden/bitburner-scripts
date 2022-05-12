@@ -46,9 +46,10 @@ const preferredEarlyFactionOrder = [
     "Daedalus", // Once we have all faction_rep boosting augs, there's no reason not to work towards Daedalus as soon as it's available/feasible so we can buy Red Pill
     "CyberSec", /* Quick, and NightSec aug depends on an aug from here */ "NiteSec", "Tetrads", // Cha augs to speed up earning company promotions
     "Bachman & Associates", // Boost company/faction rep for future augs
+    "BitRunners", // Fast source of some unique hack augs
     "Fulcrum Secret Technologies", // Will be removed if hack level is too low to backdoor their server
     "ECorp", // More cmp_rep augs, and some strong hack ones as well
-    "BitRunners", "The Black Hand", // Fastest sources of hacking augs after the above companies
+    "The Black Hand", // Fastest sources of hacking augs after the above companies
     "The Dark Army", // Unique cmp_rep aug TODO: Can it sensibly be gotten before corps? Requires 300 all combat stats.
     "Clarke Incorporated", "OmniTek Incorporated", "NWO", // More hack augs from companies
     "Chongqing", // Unique Source of big 1.4x hack exp boost (Can only join if not in e.g. Aevum as well)
