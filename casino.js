@@ -61,7 +61,9 @@ export async function main(ns) {
 	let inputWager, btnStartGame;
 
 	// Step 2: Try to navigate to the blackjack game until successful, in case something repeatedly steals focus
-	while (true) {
+	let attempts = 0;
+	while (attempts++ <= 10) {
+		if (attempts > 1) ns.sleep(1000);
 		try {
 			// Step 2.1: If the player is focused, stop the current action
 			const btnStopAction = await checkForFocusScreen();
@@ -80,12 +82,21 @@ export async function main(ns) {
 			}
 			// Step 2.3: Try to start the blackjack game
 			const blackjack = await findRetry(ns, "//button[contains(text(), 'blackjack')]");
-			if (!blackjack) return tailAndLog(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Please post a full-game screenshot on Discord.`)
+			if (!blackjack) {
+				tailAndLog(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Trying again... ` +
+					`Please post a full-game screenshot on Discord if you can't get past this point.`)
+				continue; // Loop back to start and try again
+			}
 			await click(blackjack);
 
 			// Step 2.4: Get some buttons we will need to play blackjack
 			inputWager = await findRetry(ns, "//input[@value = 1000000]");
 			btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
+			if (!inputWager || !btnStartGame) {
+				tailAndLog(ns, `ERROR: Could not find one or more game controls. Did something steal focus? Trying again... ` +
+					`Please post a full-game screenshot on Discord if you can't get past this point.`)
+				continue; // Loop back to start and try again
+			}
 
 			// Step 2.5: Clean up temp files and kill other running scripts to speed up the reload cycle
 			if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
@@ -98,7 +109,7 @@ export async function main(ns) {
 				} else { // Otherwise, we've probably been kicked out of the casino, but...
 					// because we haven't killed scripts yet, it's possible another script stole focus again. Detect and handle that case.
 					if (await checkForFocusScreen()) {
-						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.", true);
+						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Trying again.");
 						continue; // Loop back to start and try again
 					}
 					await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
