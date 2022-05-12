@@ -285,7 +285,7 @@ async function checkOnRunningScripts(ns, player) {
 
 	// TODO: Take charge to stanek.acceptGift and place fragments before installing augs and ascending for the first time
 	// Once stanek's gift is accepted and not charged, launch it first
-	const stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
+	let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
 	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
 		stanekLaunched = true;
 		launchScriptHelper(ns, 'stanek.js');
