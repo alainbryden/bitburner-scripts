@@ -4,7 +4,7 @@ const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
 let options;
 const argsSchema = [
-	['save-sleep-time', 100], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
+	['save-sleep-time', 10], // Time to sleep in milliseconds after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
 	['click-sleep-time', 1], // Time to sleep in milliseconds after clicking any button (or setting text). Increase if your are getting errors on click.
 	['use-basic-strategy', false], // Set to true to use the basic strategy (Stay on 17+)
 	['enable-logging', false], // Set to true to pop up a tail window and generate logs.
