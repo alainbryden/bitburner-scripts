@@ -119,7 +119,7 @@ export async function main(ns) {
 	}
 
 	// Step 3: Save the fact that this script is now running, so that future reloads start this script back up immediately.
-	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
+	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include casino.js running). Maybe this delay helps?
 	await click(btnSaveGame);
 	if (saveSleepTime) await ns.asleep(saveSleepTime);
 
