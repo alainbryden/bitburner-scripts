@@ -207,7 +207,7 @@ async function mainLoop(ns) {
 /** @param {NS} ns 
  * Do some things only once per territory tick **/
 async function onTerritoryTick(ns, myGangInfo) {
-    territoryNextTick = lastLoopTime + territoryTickTime; // Reset the time the next tick will occur
+    territoryNextTick = lastLoopTime + territoryTickTime / (ns.gang.getBonusTime() > 0 ? 5 : 1); // Reset the time the next tick will occur
     if (lastTerritoryPower != myGangInfo.power || lastTerritoryPower == null) {
         log(ns, `Territory power updated from ${formatNumberShort(lastTerritoryPower)} to ${formatNumberShort(myGangInfo.power)}.`)
         consecutiveTerritoryDetections++;
