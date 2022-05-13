@@ -46,8 +46,15 @@ export async function main(ns) {
     disableLogs(ns, ['sleep', 'run', 'getServerMaxRam', 'getServerUsedRam'])
 
     // Validate whether we can run
-    if ((await getActiveFragments(ns)).length == 0)
-        return log(ns, "ERROR: You must manually populate your stanek grid with your desired fragments before you run this script to charge them.", true, 'error');
+    if ((await getActiveFragments(ns)).length == 0) {
+        // Try to run our helper script to set up the grid
+        pid = ns.run(getFilePath('stanek.js.create.js'));
+        if (pid) await waitForProcessToComplete(ns, pid);
+        else log(ns, "ERROR while attempting to run stanek.js.create.js (pid was 0)");
+        // Verify that this worked.
+        if ((await getActiveFragments(ns)).length == 0)
+            return log(ns, "ERROR: You must manually populate your stanek grid with your desired fragments before you run this script to charge them.", true, 'error');
+    }
 
     currentServer = await getNsDataThroughFile(ns, `ns.getHostname()`, '/Temp/getHostname.txt');
     maxCharges = options['max-charges']; // Don't bother adding charges beyond this amount
