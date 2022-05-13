@@ -410,8 +410,6 @@ async function maybeInstallAugmentations(ns, player) {
 		return reservedPurchase = 0;
 	}
 	const facman = JSON.parse(facmanOutput); // { affordable_nf_count: int, affordable_augs: [string], owned_count: int, unowned_count: int, total_rep_cost: number, total_aug_cost: number }
-	// TODO: Temporary Hack, don't count `Stanek's Gift - Genesis` in the list of affordable_augs if it's there, we will be skipping it for now
-	facman.affordable_augs = facman.affordable_augs.filter(a => a != `Stanek's Gift - Genesis`);
 	const affordableAugCount = facman.affordable_augs.length;
 	playerInstalledAugCount = facman.owned_count;
 
@@ -468,9 +466,7 @@ async function maybeInstallAugmentations(ns, player) {
 
 	// Kick off ascend.js
 	let errLog;
-	const ascendArgs = ['--install-augmentations', true,
-		'--on-reset-script', ns.getScriptName(), // TODO: Preserve the current script's state / args through the reset		
-		'--bypass-stanek-warning', true] // TODO: Automate accepting stanek's gift now that we can
+	const ascendArgs = ['--install-augmentations', true, '--on-reset-script', ns.getScriptName()]
 	if (affordableAugCount == 0) // If we know we have 0 augs, but still wish to reset, we must enable soft resetting
 		ascendArgs.push("--allow-soft-reset")
 	let pid = launchScriptHelper(ns, 'ascend.js', ascendArgs);
