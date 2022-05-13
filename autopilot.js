@@ -296,8 +296,10 @@ async function checkOnRunningScripts(ns, player) {
 	const hackThreshold = options['high-hack-threshold'];
 	const daemonArgs = player.hacking < hackThreshold ? ["--stock-manipulation"] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
-		["--looping-mode", "--recovery-thread-padding", 10, "--cycle-timing-delay", 2000, "--queue-delay", "10",
-			"--stock-manipulation-focus", "--silent-misfires", "--initial-max-targets", "63", "--no-share"];
+		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
+			"--stock-manipulation-focus", "--silent-misfires", "--no-share",
+			// User recovery thread padding sparingly until our hack level is significantly higher
+			"--recovery-thread-padding", 1.0 + (player.hacking - hackThreshold) / 1000.0];
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
 	// By default, don't join bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
 	if (options['enable-bladeburner']) daemonArgs.push('--run-script', getFilePath('bladeburner.js'));
