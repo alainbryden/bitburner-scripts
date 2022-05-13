@@ -261,10 +261,12 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
     if (!verbose) disableLogs(ns, ['asleep']);
     // Wait for the PID to stop running (cheaper than e.g. deleting (rm) a possibly pre-existing file and waiting for it to be recreated)
     let start = Date.now();
+    let sleepMs = 1;
     for (var retries = 0; retries < 1000; retries++) {
         if (!fnIsAlive(pid)) break; // Script is done running
         if (verbose && retries % 100 === 0) ns.print(`Waiting for pid ${pid} to complete... (${formatDuration(Date.now() - start)})`);
-        await ns.asleep(10);
+        await ns.asleep(sleepMs);
+        sleepMs = Math.min(sleepMs * 2, 200);
     }
     // Make sure that the process has shut down and we haven't just stopped retrying
     if (fnIsAlive(pid)) {
