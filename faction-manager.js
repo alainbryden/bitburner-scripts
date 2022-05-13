@@ -4,11 +4,10 @@ import {
 } from './helpers.js'
 
 // PLAYER CONFIGURATION CONSTANTS
-// This also acts as a list of default "easy" factions to list and compare, in addition to any other invites you may have
-const preferredFactionOrder = [ // Prefer to join factions in (ish) order of most expensive to least expensive 
-    "BitRunners", "The Black Hand", "NiteSec", "CyberSec", "Netburners", // Hack Based
-    "Tian Di Hui", "Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven", // Location Based
-    "Slum Snakes", "Tetrads" // Crime Based
+// This acts as a list of default "easy" factions to always show even if the user has --hide-locked-factions
+const easyAccessFactions = [
+    "Tian Di Hui", "Sector-12", "Chongqing", "New Tokyo", "Ishima", "Aevum", "Volhaven", // Location-Based
+    "BitRunners", "CyberSec", "NiteSec", /* Hack Based */ "Netburners", /* Hacknet-based */ "Slum Snakes", "Tetrads", /* Early Crime */
 ];
 const default_priority_augs = ["The Red Pill", "The Blade's Simulacrum", "Neuroreceptor Management Implant"]; // By default, take these augs when they are accessible
 // If not in a gang, and we are nearing unlocking gangs (54K Karma) we will attempt to join any/all of these factions
@@ -25,15 +24,16 @@ let favorToDonate; // Based on the current BitNode Multipliers, the favour requi
 let playerData = null, gangFaction = null;
 let augsAwaitingInstall, startingPlayerMoney, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
-let ownedAugmentations = [], simulatedOwnedAugmentations = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
+let ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
 let factionData = {}, augmentationData = {};
 let printToTerminal, ignorePlayerData;
 let _ns; // Used to avoid passing ns to functions that don't need it except for some logs.
 
 let options = null; // A copy of the options used at construction time
 const argsSchema = [ // The set of all command line arguments
-    ['all', false], // Display all factions (spoilers), not just unlocked and early-game factions
-    ['a', false], // Flag alias for --all
+    ['all', false], // Display all factions (spoilers), not just accessible factions
+    ['a', false], // Flag-style alias for --all.
+    ['hide-locked-factions', false], // Don't show factions that we don't currently have access to
     ['verbose', null], // Print the terminal as well as the script logs. If left null, this defaults to true in code now, but can be disabled with an explicit `--verbose false`
     ['v', false], // (Kept for backwards compatilily) this was an alias flag for setting --verbose to true when it previously defaulted to false.
     ['ignore-player-data', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
@@ -64,7 +64,7 @@ const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "comp
     "bladeburner_analysis", "bladeburner_max_stamina", "bladeburner_stamina_gain", "bladeburner_success_chance",
     "hacknet_node_core_cost", "hacknet_node_level_cost", "hacknet_node_money", "hacknet_node_purchase_cost", "hacknet_node_ram_cost"];
 const statShortcuts = ["agi_exp", "agi", "cha_exp", "cha", "cmp_rep", "crm_$", "crm_prob", "def_exp", "def", "dex_exp", "dex", "fac_rep", "hack_prob", "hack_exp", "hack_grow", "hack_$", "hack", "hack_speed", "str_exp", "str", "work_$", 'bladeburner', 'hacknet'];
-const factions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
+const allFactions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
     "Volhaven", "Speakers for the Dead", "The Dark Army", "The Syndicate", "Silhouette", "Tetrads", "Slum Snakes", "Netburners", "Tian Di Hui", "CyberSec", "Bladeburners", "Church of the Machine God"];
 // TODO: This list is missing augmentations. Regenerate.
@@ -77,7 +77,7 @@ export function autocomplete(data, args) {
     if (lastFlag == "--sort" || lastFlag == "--stat-desired" || lastFlag == "--hide-stat")
         return statShortcuts.concat(stat_multis);
     if (lastFlag == "--ignore-faction" || lastFlag == "--after-faction")
-        return factions.map(f => f.replaceAll(" ", "_")).sort(); // Command line doesn't like spaces
+        return allFactions.map(f => f.replaceAll(" ", "_")).sort(); // Command line doesn't like spaces
     if (lastFlag == "--omit-aug" || lastFlag == "--aug-desired" || lastFlag == "--priority-aug")
         return augmentations.map(f => f.replaceAll(" ", "_"));
     return [];
@@ -94,13 +94,11 @@ export async function main(ns) {
     // Ensure all globals are reset before we proceed with the script, in case we've done things out of order
     augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;
     factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
-    ownedAugmentations = [], simulatedOwnedAugmentations = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
+    ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
     factionData = {}, augmentationData = {};
 
     printToTerminal = (options.v || options.verbose === true || options.verbose === null) && !options['join-only'];
-    const allFactions = options.a || options.all;
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
-    const omitFactions = options['ignore-faction'].map(f => f.replaceAll("_", " "));
     const omitAugs = options['omit-aug'].map(f => f.replaceAll("_", " "));
     priorityAugs = options['priority-aug']?.map(f => f.replaceAll("_", " "));
     if (priorityAugs.length == 0) priorityAugs = default_priority_augs;
@@ -110,6 +108,7 @@ export async function main(ns) {
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
     playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
+    effectiveSourceFiles = await getActiveSourceFiles(ns, true);
     const sf4Level = playerData.bitNodeN == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
     if (sf4Level == 0)
         return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'ERROR');
@@ -119,10 +118,6 @@ export async function main(ns) {
     const sf11Level = ownedSourceFiles[11] || 0;
     augCountMult = [1.9, 1.824, 1.786, 1.767][sf11Level];
     log(ns, `Player has sf11Level ${sf11Level}, so the multiplier after each aug purchased is ${augCountMult}.`);
-
-    // Add specialty factions to our default faction list as we unlock them
-    if (13 in ownedSourceFiles || playerData.bitNodeN == 13) preferredFactionOrder.push("Church of the Machine God")
-    if (6 in ownedSourceFiles || playerData.bitNodeN == 6 || 7 in ownedSourceFiles || playerData.bitNodeN == 7) preferredFactionOrder.push("Bladeburners");
 
     // Collect information about the player
     const gangInfo = await getGangInfo(ns);
@@ -150,7 +145,7 @@ export async function main(ns) {
 
     // Prepare global data sets of faction and augmentation information
     log(ns, 'Getting all faction data...');
-    await updateFactionData(ns, allFactions, omitFactions);
+    await updateFactionData(ns, options['ignore-faction'].map(f => f.replaceAll("_", " ")));
     log(ns, 'Getting all augmentation data...');
     await updateAugmentationData(ns, desiredAugs);
 
@@ -230,16 +225,21 @@ let factionSortValue = faction => {
 const dictCommand = (command) => `Object.fromEntries(ns.args.map(o => [o, ${command}]))`;
 
 /** @param {NS} ns **/
-async function updateFactionData(ns, allFactions, factionsToOmit) {
-    factionNames = preferredFactionOrder.filter(f => !factionsToOmit.includes(f));
-    // Add any player joined factions that may not be in the pre-defined list
-    factionNames.push(...joinedFactions.filter(f => !factionNames.includes(f) && !factionsToOmit.includes(f)));
-    // Add any factions that the player has earned an invite to
+async function updateFactionData(ns, factionsToOmit) {
+    // Gather a list of all faction names to collect information about. Start with any player joined and invited factions
     const invitations = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/checkFactionInvitations.txt');
-    factionNames.push(...invitations.filter(f => !factionNames.includes(f) && !factionsToOmit.includes(f)));
-    // If specified, get info about *all* factions in the game, not just the ones hard-coded in the preferred faction order list.
-    if (allFactions)
-        factionNames.push(...factions.filter(f => !factionNames.includes(f) && !factionsToOmit.includes(f)));
+    factionNames = joinedFactions.concat(invitations);
+    // Add in factions the user hasn't seen. All factions by default, or a small subset of easy-access factions if --hide-locked-factions is set
+    factionNames.push(...(options['hide-locked-factions'] ? easyAccessFactions : allFactions).filter(f => !factionNames.includes(f)));
+    // Unless "all factions" is requested, omit factions that are in no way accessible on this reset
+    if (!(options.a || options.all)) {
+        if (!(13 in effectiveSourceFiles)) factionsToOmit.push("Church of the Machine God");
+        if (!(6 in effectiveSourceFiles || 7 in effectiveSourceFiles)) factionsToOmit.push("Bladeburners");
+    }
+    // Finally, remove all factions marked as omitted
+    log(ns, `We "know" about ${factionNames.length} factions, and will omit ${factionsToOmit.length} of them.`)
+    factionNames = factionNames.filter(f => !factionsToOmit.includes(f));
+    log(ns, `Retrieving data for ${factionNames.length} factions: ${factionNames}`)
 
     let dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', factionNames);
     let dictFactionReps = await getNsDataThroughFile(ns, dictCommand('ns.getFactionRep(o)'), '/Temp/getFactionReps.txt', factionNames);
@@ -649,12 +649,12 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // Start adding as many neuroflux levels as we can afford
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
     const augNfFaction = factionData[augNf.getFromJoined()];
-    if (augNf.canAfford() || augNf.canAffordWithDonation())
+    if (augNfFaction && (augNf.canAfford() || augNf.canAffordWithDonation()))
         log(ns, `Getting NF from faction ${augNfFaction.name} (rep: ${formatNumberShort(augNfFaction.reputation)}). Cost of NF 1 is ` +
             `${formatMoney(augNf.price)}, requires reputation: ${formatNumberShort(augNf.reputation)} ` +
             `(have ${formatNumberShort(augNfFaction.reputation)}, donate ${formatNumberShort(getReqDonationForRep(augNf.reputation, augNfFaction))})`);
     let nextUpNf; // Will tell the user when they will unlock the next NF level
-    while (nfPurchased < 200) { // Limit to 200 to avoid breaking the game if near infinite money.
+    while (augNfFaction && nfPurchased < 200) { // Limit to 200 to avoid breaking the game if near infinite money.
         const nextNfCost = augNf.price * (nfCountMult ** nfPurchased) * (augCountMult ** purchaseableAugs.length);
         const nextNfRep = augNf.reputation * (nfCountMult ** nfPurchased);
         const currentNfFactionDonation = purchaseFactionDonations[augNfFaction.name] || 0;
@@ -674,18 +674,19 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             break; // If we cannot afford the next NF, break
         }
         // Otherwise, add the next NF to our purchase order, and see if we can afford any more.
+        // TODO: Clone nf first, and possible buy from different factions as we move from ones with enough rep to ones that support donation
         const nfClone = { ...augNf };
         nfClone.displayName += ` Level ${++nfLevel}`
-        nfClone.price = augNf.price * (nfCountMult ** nfPurchased);
+        nfClone.price = augNf.price * (nfCountMult ** nfPurchased); // Note this should be the base price, before scaling for number of augs purchased
         nfClone.reputation = nextNfRep;
         // Note, insert all NF purchases after the current NF purchase, in front of all augs cheaper than the first NF
         purchaseableAugs.splice(purchaseableAugs.length - augsCheaperThanNF, 0, nfClone);
         totalAugCost += nextNfCost;
-        purchaseFactionDonations[augNfFaction.name] = Math.max(currentNfFactionDonation, nextNfTotalRepDonation);
+        const newDonationForRep = Math.max(currentNfFactionDonation, nextNfTotalRepDonation);
+        if (newDonationForRep > 0) purchaseFactionDonations[augNfFaction.name] = newDonationForRep;
         totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
         nfPurchased++;
     }
-    if (purchaseFactionDonations[augNfFaction.name] == 0) delete purchaseFactionDonations[augNfFaction.name];
     log(ns, `With ${formatMoney(budget)}, can afford to purchase ${nfPurchased} levels of ${strNF}. New total cost: ${getCostString(totalAugCost, totalRepCost)}`);
     // Add back free augmentations removed temporarily before inserting additional NF purchases
     purchaseableAugs.push(...cheapAugs);
