@@ -48,7 +48,7 @@ export async function main(ns) {
     // Validate whether we can run
     if ((await getActiveFragments(ns)).length == 0) {
         // Try to run our helper script to set up the grid
-        pid = ns.run(getFilePath('stanek.js.create.js'));
+        const pid = ns.run(getFilePath('stanek.js.create.js'));
         if (pid) await waitForProcessToComplete(ns, pid);
         else log(ns, "ERROR while attempting to run stanek.js.create.js (pid was 0)");
         // Verify that this worked.
