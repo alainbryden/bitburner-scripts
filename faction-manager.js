@@ -237,9 +237,8 @@ async function updateFactionData(ns, factionsToOmit) {
         if (!(6 in effectiveSourceFiles || 7 in effectiveSourceFiles)) factionsToOmit.push("Bladeburners");
     }
     // Finally, remove all factions marked as omitted
-    log(ns, `We "know" about ${factionNames.length} factions, and will omit ${factionsToOmit.length} of them.`)
+    log(ns, `We "know" about ${factionNames.length} factions, and will omit ${factionsToOmit.length} of them.`);
     factionNames = factionNames.filter(f => !factionsToOmit.includes(f));
-    log(ns, `Retrieving data for ${factionNames.length} factions: ${factionNames}`)
 
     let dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', factionNames);
     let dictFactionReps = await getNsDataThroughFile(ns, dictCommand('ns.getFactionRep(o)'), '/Temp/getFactionReps.txt', factionNames);
