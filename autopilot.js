@@ -6,6 +6,7 @@ import {
 
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
+const casinoFlagFile = "/Temp/ran-casino.txt";
 
 let options = null; // The options used at construction time
 const argsSchema = [ // The set of all command line arguments
@@ -97,7 +98,7 @@ async function startUp(ns) {
 			`too expensive to run until you have bought a lot of home RAM.`, true);
 	}
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
-		await initializeNewBitnode(ns);
+		await initializeNewBitnode(ns, player);
 	return true;
 }
 
@@ -119,10 +120,8 @@ async function persistConfigChanges(ns) {
 
 /** Logic run once at the beginning of a new BN
  * @param {NS} ns */
-async function initializeNewBitnode(ns) {
-	// Clean up all temporary scripts, which will include stale temp files
-	// launchScriptHelper(ns, 'cleanup.js'); // No need, ascend.js and casino.js do this
-	// await ns.sleep(200); // Wait a short while for the dust to settle.
+async function initializeNewBitnode(ns, player) {
+	// Nothing to do here (yet)
 }
 
 /** Logic run periodically throughout the BN
@@ -355,9 +354,15 @@ async function checkOnRunningScripts(ns, player) {
  * @param {NS} ns 
  * @param {Player} player */
 async function maybeDoCasino(ns, player) {
-	const casinoFlagFile = "/Temp/ran-casino.txt";
 	if (ranCasino) return;
-	if (ns.read(casinoFlagFile)) return ranCasino = true;
+	const casinoRanFileSet = ns.read(casinoFlagFile);
+	// If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
+	// it's likely a sign that the flag is wrong and we should run cleanup and let casino get run again to be safe.
+	if (player.playtimeSinceLastAug < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns, player)) < 8E9) {
+		launchScriptHelper(ns, 'cleanup.js');
+		await ns.sleep(200); // Wait a short while for the dust to settle.
+	} else if (casinoRanFileSet)
+		return ranCasino = true;
 	if (player.playtimeSinceLastAug < 60000) // If it's been less than 1 minute, wait a while to establish income
 		return;
 	if (player.money / player.playtimeSinceLastAug > 5e9 / 60000) // If we're making more than ~5b / minute, no need to run casino.
