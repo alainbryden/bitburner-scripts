@@ -371,12 +371,14 @@ async function maybeDoCasino(ns, player) {
 		return ranCasino = true;
 	if (player.money > 10E9) // If we already have 10b, assume we ran and lost track, or just don't need the money
 		return ranCasino = true;
-	if (player.money < 210000)
+	if (player.money < 250000)
 		return; // We need at least 200K (and change) to run casino so we can travel to aevum
 
 	// Run casino.js (and expect ourself to get killed in the process)
 	// Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
 	await killScript(ns, 'work-for-factions.js');
+	// Kill any action, in case we are studying or working out, as it might steal focus or funds before we can bet it at the casino.
+	await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
 
 	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
 	if (pid) {
