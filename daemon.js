@@ -477,7 +477,8 @@ async function exec(ns, script, host, numThreads, ...args) {
         const p = ns.exec(script, host, numThreads, ...args)
         //if (firstRun) await ns.asleep(5); // Reports have come in that putting a brief sleep after the calls to exec works around the issue
         return p;
-    }, p => p !== 0, () => `Attempt to exec ${script} on ${host} returned no pid.\nYou may be too low on RAM, or the script may be invalid.`);
+    }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${host} with ${numThreads} threads.` +
+        `This is likely due to having insufficient RAM.\nArgs were: ${args}`));
     return pid; // Caller is responsible for handling errors if final pid returned is 0 (indicating failure)
 }
 
@@ -731,7 +732,8 @@ async function doTargetingLoop(ns) {
             const expectedDeletedHostPhrase = "Invalid hostname: ";
             let expectedErrorPhraseIndex = errorMessage.indexOf(expectedDeletedHostPhrase);
             if (expectedErrorPhraseIndex == -1) {
-                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${err?.stack ?? errorMessage}`, true, 'warning');
+                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
+                if (err.stack) log(ns, `WARNING: Stack Trace: ${err.stack}`, true);
                 continue;
             }
             let start = expectedErrorPhraseIndex + expectedDeletedHostPhrase.length;
