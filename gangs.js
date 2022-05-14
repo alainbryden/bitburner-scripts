@@ -95,8 +95,10 @@ async function initialize(ns) {
 
     let loggedWaiting = false;
     const bitNode = await getNsDataThroughFile(ns, 'ns.getPlayer().bitNodeN', '/Temp/getPlayer-bitNodeN.txt');
-    while (!(await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt'))) {
+    let haveJoinedAGang = false;
+    while (!haveJoinedAGang) {
         try {
+            haveJoinedAGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
             if (!loggedWaiting) {
                 log(ns, `Waiting to be in a gang. Will create the highest faction gang as soon as it is available...`);
                 loggedWaiting = true;
