@@ -14,8 +14,8 @@ const awakeningRep = 1E6;
 const serenityRep = 100E6;
 
 const argsSchema = [
-    ['reserved-ram', 0], // Don't use this RAM
-    ['reserved-ram-ideal', 32], // Leave this amount of RAM free if it represents less than 5% of available RAM
+    ['reserved-ram', 32], // Don't use this RAM
+    ['reserved-ram-ideal', 64], // Leave this amount of RAM free if it represents less than 5% of available RAM
     ['max-charges', 120], // Stop charging when all fragments have this many charges (diminishing returns - num charges is ^0.07 )
     // By default, starting an augmentation with stanek.js will still spawn daemon.js, but will instruct it not to schedule any hack cycles against home by 'reserving' all its RAM
     // TODO: Set these defaults in some way that the user can explicitly specify that they want to run **no** startup script and **no** completion script
@@ -73,10 +73,13 @@ export async function main(ns) {
         log(ns, `WARNING: Stanek.js has started successfully, but failed to launch accompanying 'on-startup-script': ${startupScript}...`, false, 'warning');
     chargeAttempts = {}; // We keep track of how many times we've charged each segment, to work around a placement bug where fragments can overlap, and then don't register charge
 
-    // Check if our charge script exists. If not, we can create it (facilitates copying stanek.js to a new server to run)
-    if (!ns.read(chargeScript)) {
-        await ns.write(chargeScript, "export async function main(ns) { await ns.stanek.chargeFragment(ns.args[0], ns.args[1]); }", "w");
-        await ns.sleep(100); // To be safe, there have been bugs with ns.write not waiting long enough
+    const chargeScriptBody = "export async function main(ns) { await ns.stanek.chargeFragment(ns.args[0], ns.args[1]); }";
+    const checkOnChargeScript = async () => { // We must use this periodically since cleanup might be run while we're charging.
+        // Check if our charge script exists. If not, we can create it (facilitates copying stanek.js to a new server to run)
+        if (ns.read(chargeScript) != chargeScriptBody) {
+            await ns.write(chargeScript, chargeScriptBody, "w");
+            await ns.sleep(100); // To be safe, there have been bugs with ns.write not waiting long enough
+        }
     }
 
     // Check what augs we own and establish the theshold to continue grinding REP if we're close to one.
@@ -101,6 +104,7 @@ export async function main(ns) {
         lastLoopSuccessful = false;
         try {
             if (!options['no-tail']) ns.tail(); // Keep a tail window open unless otherwise configured
+            await checkOnChargeScript();
             const fragmentsToCharge = await getFragmentsToCharge(ns);
             if (fragmentsToCharge === undefined) continue;
             if (fragmentsToCharge.length == 0) break; // All fragments at max desired charge
