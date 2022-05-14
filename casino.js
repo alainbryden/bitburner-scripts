@@ -178,7 +178,7 @@ export async function main(ns) {
  * @param {NS} ns */
 async function reload(ns) {
 	eval("window").onbeforeunload = null; // Disable the unsaved changes warning before reloading
-	await ns.sleep(saveSleepTime); // Yeild execution for an instant incase the game needs to finish a save or something
+	await ns.sleep(options['save-sleep-time']); // Yeild execution for an instant incase the game needs to finish a save or something
 	location.reload(); // Force refresh the page without saving           
 	await ns.asleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
 }
