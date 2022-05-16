@@ -208,8 +208,9 @@ async function checkIfBnIsComplete(ns, player) {
 		const shouldHaveSleeveCount = Math.max(8, 6 + dictOwnedSourceFiles[10]);
 		const numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
 		if (numSleeves < shouldHaveSleeveCount) {
-			log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}. You should try not ` +
-				`to leave BN10 until you've bought all the sleeves you can (from the faction "The Covenant") and maxed out their memory.`);
+			log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.` +
+				`\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
+				`\nNOTE: You can ONLY buy sleeves/memory from The Covenant in BN10, which is why it's important to do this before you leave.`);
 			return wdAvailable = false;
 		}
 	}
