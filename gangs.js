@@ -99,6 +99,7 @@ async function initialize(ns) {
     while (!haveJoinedAGang) {
         try {
             haveJoinedAGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+            if (haveJoinedAGang) break;
             if (!loggedWaiting) {
                 log(ns, `Waiting to be in a gang. Will create the highest faction gang as soon as it is available...`);
                 loggedWaiting = true;
