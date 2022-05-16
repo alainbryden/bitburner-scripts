@@ -51,7 +51,7 @@ const argsSchema = [ // The set of all command line arguments
     ['purchase', false], // Set to true to pull the trigger on purchasing all desired augs in the order specified
     ['ignore-stocks', false], // Set to true to ignore the liquidation value of stocks currently held when running
     ['ignore-stanek', false], // Set to true to ignore the fact that stanek is not yet taken before purchasing your first augs
-    ['show-unavailable-aug-purchase-order', false], // Set to true to print the list of unavailable augmentations in optimal purchase order
+    ['show-unavailable-aug-purchase-order', false], // Set to true to print the list of unavailable augmentations in optimal purchase order. (Note: Always displayed when no augs are available)
     ['show-all-purchase-lists', false], // Set to true to re-print the list of augmentations each time it changes
     // Display-related options - controls what information is displayed in the final "cumulative stats by faction" table
     ['sort', null], // What stat is the table of total faction stats sorted by. Defaults to your first --stat-desired
@@ -449,15 +449,17 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
     const unownedAugs = Object.values(augmentationData).filter(aug => (!aug.owned || aug.name == strNF) && !ignoredAugs.includes(aug.name));
     if (unownedAugs.length == 0) return log(ns, `All ${Object.keys(augmentationData).length} augmentations are either owned or ignored!`, printToTerminal)
     let unavailableAugs = unownedAugs.filter(aug => aug.getFromJoined() == null);
-    if (unavailableAugs.length > 0 && options['show-unavailable-aug-purchase-order']);
-    await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, true, false);
-    // Prepare a little legend of what symbols mean
+    let availableAugs = unownedAugs.filter(aug => aug.getFromJoined() != null);
+    // List unavailable augs only if there are none available, or if the user specifically requested to see this list.
+    if (availableAugs.length == 0 || unavailableAugs.length > 0 && options['show-unavailable-aug-purchase-order'])
+        await manageFilteredSubset(ns, outputRows, 'Unavailable', unavailableAugs, true, false);
+    // Prepare and display a little legend of what symbols in our augmentation list mean
     const legendTitle = 'Optimized Purchase Order Legend';
     outputRows.push(legendTitle, '-'.repeat(legendTitle.length), "✓  Can afford", "✗  Cannot afford", "$  Can donate for rep",
         `*  Desired aug/stats (${desiredStatsFilters.join(", ")})`, '-'.repeat(legendTitle.length));
-    // We use the return value to "lock in" the new sort order. Going forward, the routine will only re-print the aug list if the sort order changes (or forcePrint == true)
-    let availableAugs = ignorePlayerData ? unavailableAugs : await manageFilteredSubset(ns, outputRows, 'Available',
-        unownedAugs.filter(aug => aug.getFromJoined() != null && aug.name != strNF), true); // Note, we omit NF from available augs now because as many as we can afford are added at the end.
+    // Display available augs. We use the return value to "lock in" the new sort order. If enabled, subsequent tables are displayed if the filtered sort order changes.
+    availableAugs = ignorePlayerData ? unavailableAugs : // Note: We omit NF from available augs here because as many as we can afford are added at the end.
+        await manageFilteredSubset(ns, outputRows, 'Available', availableAugs.filter(aug => aug.name != strNF), true);
     if (availableAugs?.length > 0) {
         let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
         let desiredAugs = availableAugs.filter(aug => aug.desired);
