@@ -48,62 +48,84 @@ export async function main(ns) {
 		log(ns, `ERROR: Failed to place one or more fragments. The layout may be invalid.`, true, 'error');
 }
 
-const layouts = [
+const layouts = [ // NOTE: Width appears to be always the same as, or one more than height.
 	{
 		"height": 3, "width": 3, "fragments": [
-			{ "id": 1, "x": 0, "y": 0, "rotation": 3 },
-			{ "id": 25, "x": 1, "y": 0, "rotation": 3 },
+			{ "id": 1, "x": 0, "y": 0, "rotation": 3 }, // Hacking Mult
+			{ "id": 25, "x": 1, "y": 0, "rotation": 3 }, // Reputation
 		]
 	}, {
+		"height": 4, "width": 4, "fragments": [ // Note: Possible to fit 4 fragments, but have to sacrifice a hacking mult piece
+			{ "id": 0, "x": 0, "y": 0, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 0, "y": 2, "rotation": 0 }, // Hacking Mult
+			{ "id": 25, "x": 2, "y": 0, "rotation": 3 } // Reputation
+		]
+	}, {
+		"height": 4, "width": 5, "fragments": [
+			{ "id": 0, "x": 0, "y": 0, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 0, "y": 2, "rotation": 0 }, // Hacking Mult
+			{ "id": 25, "x": 3, "y": 1, "rotation": 3 }, // Reputation
+			{ "id": 104, "x": 2, "y": 0, "rotation": 0 }, // Booster
+		]
+	}, {
+		"height": 5, "width": 5, "fragments": [
+			{ "id": 0, "x": 0, "y": 0, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 1, "y": 2, "rotation": 0 }, // Hacking Mult
+			{ "id": 25, "x": 3, "y": 2, "rotation": 3 }, // Reputation
+			{ "id": 105, "x": 0, "y": 2, "rotation": 1 }, // Booster
+			{ "id": 100, "x": 2, "y": 0, "rotation": 0 }, // Booster
+		]
+	},
+	{
 		"height": 5, "width": 6, "fragments": [
-			{ "id": 0, "x": 3, "y": 3, "rotation": 0 },
-			{ "id": 1, "x": 0, "y": 2, "rotation": 0 },
-			{ "id": 5, "x": 4, "y": 0, "rotation": 1 },
-			{ "id": 6, "x": 1, "y": 0, "rotation": 0 },
-			{ "id": 7, "x": 0, "y": 0, "rotation": 0 },
-			{ "id": 25, "x": 0, "y": 3, "rotation": 0 },
-			{ "id": 107, "x": 2, "y": 1, "rotation": 0 },
+			{ "id": 0, "x": 3, "y": 3, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 0, "y": 2, "rotation": 0 }, // Hacking Mult
+			{ "id": 5, "x": 4, "y": 0, "rotation": 1 }, // Hacking Speed
+			{ "id": 6, "x": 1, "y": 0, "rotation": 0 }, // Hack power
+			{ "id": 7, "x": 0, "y": 0, "rotation": 0 }, // Grow power
+			{ "id": 25, "x": 0, "y": 3, "rotation": 0 }, // Reputation
+			{ "id": 107, "x": 2, "y": 1, "rotation": 0 }, // Booster
 		]
 	}, {
 		"height": 6, "width": 6, "fragments": [
-			{ "id": 0, "x": 3, "y": 0, "rotation": 0 },
-			{ "id": 1, "x": 1, "y": 1, "rotation": 0 },
-			{ "id": 5, "x": 0, "y": 1, "rotation": 3 },
-			{ "id": 6, "x": 5, "y": 1, "rotation": 3 },
-			{ "id": 7, "x": 3, "y": 4, "rotation": 0 },
-			{ "id": 10, "x": 3, "y": 2, "rotation": 1 },
-			{ "id": 20, "x": 0, "y": 0, "rotation": 0 },
-			{ "id": 21, "x": 1, "y": 3, "rotation": 0 },
-			{ "id": 25, "x": 0, "y": 4, "rotation": 0 },
+			{ "id": 0, "x": 3, "y": 0, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 1, "y": 1, "rotation": 0 }, // Hacking Mult
+			{ "id": 5, "x": 0, "y": 1, "rotation": 3 }, // Hacking Speed
+			{ "id": 6, "x": 5, "y": 1, "rotation": 3 }, // Hack power
+			{ "id": 7, "x": 3, "y": 4, "rotation": 0 }, // Grow power
+			{ "id": 10, "x": 3, "y": 2, "rotation": 1 }, // Strength TODO: Not universally useful
+			{ "id": 20, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Production
+			{ "id": 21, "x": 1, "y": 3, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 0, "y": 4, "rotation": 0 }, // Reputation
 		]
 	}, {
 		"height": 7, "width": 7, "fragments": [
-			{ "id": 0, "x": 1, "y": 5, "rotation": 2 },
-			{ "id": 1, "x": 3, "y": 3, "rotation": 0 },
-			{ "id": 5, "x": 0, "y": 4, "rotation": 3 },
-			{ "id": 6, "x": 0, "y": 0, "rotation": 1 },
-			{ "id": 7, "x": 1, "y": 1, "rotation": 1 },
-			{ "id": 20, "x": 1, "y": 0, "rotation": 2 },
-			{ "id": 21, "x": 3, "y": 1, "rotation": 0 },
-			{ "id": 25, "x": 5, "y": 4, "rotation": 3 },
-			{ "id": 30, "x": 3, "y": 5, "rotation": 2 },
-			{ "id": 101, "x": 5, "y": 0, "rotation": 3 },
-			{ "id": 106, "x": 1, "y": 2, "rotation": 3 },
+			{ "id": 0, "x": 1, "y": 5, "rotation": 2 }, // Hacking Mult
+			{ "id": 1, "x": 3, "y": 3, "rotation": 0 }, // Hacking Mult
+			{ "id": 5, "x": 0, "y": 4, "rotation": 3 }, // Hacking Speed
+			{ "id": 6, "x": 0, "y": 0, "rotation": 1 }, // Hack power
+			{ "id": 7, "x": 1, "y": 1, "rotation": 1 }, // Grow power
+			{ "id": 20, "x": 1, "y": 0, "rotation": 2 }, // Hacknet Production
+			{ "id": 21, "x": 3, "y": 1, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 5, "y": 4, "rotation": 3 }, // Reputation
+			{ "id": 30, "x": 3, "y": 5, "rotation": 2 }, // Bladeburner Stats TODO: Not universally useful
+			{ "id": 101, "x": 5, "y": 0, "rotation": 3 }, // Booster
+			{ "id": 106, "x": 1, "y": 2, "rotation": 3 }, // Booster
 		]
 	}, {
 		"height": 7, "width": 8, "fragments": [
-			{ "id": 0, "x": 3, "y": 2, "rotation": 2 },
-			{ "id": 1, "x": 3, "y": 4, "rotation": 2 },
-			{ "id": 5, "x": 6, "y": 3, "rotation": 1 },
-			{ "id": 6, "x": 2, "y": 1, "rotation": 2 },
-			{ "id": 7, "x": 1, "y": 5, "rotation": 2 },
-			{ "id": 20, "x": 1, "y": 0, "rotation": 2 },
-			{ "id": 21, "x": 0, "y": 2, "rotation": 1 },
-			{ "id": 25, "x": 5, "y": 0, "rotation": 2 },
-			{ "id": 27, "x": 0, "y": 5, "rotation": 0 },
-			{ "id": 28, "x": 4, "y": 5, "rotation": 0 },
-			{ "id": 103, "x": 5, "y": 1, "rotation": 1 },
-			{ "id": 104, "x": 1, "y": 2, "rotation": 0 },
+			{ "id": 0, "x": 3, "y": 2, "rotation": 2 }, // Hacking Chance
+			{ "id": 1, "x": 3, "y": 4, "rotation": 2 }, // Hacking Chance
+			{ "id": 5, "x": 6, "y": 3, "rotation": 1 }, // Hacking Speed
+			{ "id": 6, "x": 2, "y": 1, "rotation": 2 }, // Hack power
+			{ "id": 7, "x": 1, "y": 5, "rotation": 2 }, // Grow power
+			{ "id": 20, "x": 1, "y": 0, "rotation": 2 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 2, "rotation": 1 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 5, "y": 0, "rotation": 2 }, // Reputation
+			{ "id": 27, "x": 0, "y": 5, "rotation": 0 }, // Work Money
+			{ "id": 28, "x": 4, "y": 5, "rotation": 0 }, // Crime Money
+			{ "id": 103, "x": 5, "y": 1, "rotation": 1 }, // Booster
+			{ "id": 104, "x": 1, "y": 2, "rotation": 0 }, // Booster
 		]
 	}
 ];
