@@ -906,13 +906,13 @@ class Server {
     hasRoot() { return this._hasRootCached || (this._hasRootCached = this.ns.hasRootAccess(this.name)); }
     isHost() { return this.name == daemonHost; }
     totalRam() {
-        var maxRam = this.ns.getServerMaxRam(this.name);
+        let maxRam = this.ns.getServerMaxRam(this.name);
         if (this.name == "home")
             maxRam = Math.max(0, maxRam - homeReservedRam); // Complete HACK: but for most planning purposes, we want to pretend home has less ram to leave room for temp scripts to run
         return maxRam;
     }
     usedRam() {
-        var usedRam = this.ns.getServerUsedRam(this.name);
+        let usedRam = this.ns.getServerUsedRam(this.name);
         // TODO: Uncertain whether reserved ram is best done by pretending home has less RAM, or pretending it has more ram in use.
         //if (this.name == "home")
         //    usedRam = Math.min(this.totalRam(), usedRam + homeReservedRam);
@@ -1789,7 +1789,10 @@ class Tool {
         for (const server of getAllServersByFreeRam().filter(s => s.hasRoot())) {
             // Note: To be conservative, we allow double imprecision to cause this floor() to return one less than should be possible,
             //       because the game likely doesn't account for this imprecision (e.g. let 1.9999999999999998 return 1 rather than 2)
-            var threadsHere = Math.floor((server.ramAvailable() / this.cost) /*.toPrecision(14)*/);
+            let threadsHere = Math.floor((server.ramAvailable() / this.cost) /*.toPrecision(14)*/);
+            // HACK: Temp script firing before the script gets scheduled can cause home ram reduction, don't promise as much from home 
+            if (server.name == "home") // TODO: Revise this hack, it is technically messing further with the "servers by free ram" sort order
+                threadsHere = Math.min(0, threadsHere - 2); // TODO: Perhaps scheduler should not be so strict about home reserved ram enforcement?
             if (!allowSplitting)
                 return threadsHere;
             maxThreads += threadsHere;
