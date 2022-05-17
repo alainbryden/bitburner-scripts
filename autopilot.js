@@ -226,7 +226,7 @@ async function checkIfBnIsComplete(ns, player) {
 		await waitForProcessToComplete(ns, pid);
 		await ns.sleep(10000);
 	}
-	log(ns, `ERROR: Tried destroy the bitnode, but we're still here...`, true, 'ERROR')
+	log(ns, `ERROR: Tried destroy the bitnode, but we're still here...`, true, 'error')
 	return true;
 }
 
