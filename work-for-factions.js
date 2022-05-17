@@ -21,6 +21,7 @@ const argsSchema = [
     ['prioritize-invites', false], // Prioritize working for as many invites as is practical before starting to grind for faction reputation
     ['get-invited-to-every-faction', false], // You want to be in every faction? You got it!
     ['karma-threshold-for-gang-invites', -40000], // Prioritize working for gang invites once we have this much negative Karma
+    ['disable-treating-gang-as-sole-provider-of-its-augs', false], // Set to true if you still want to grind for rep with factions that only have augs your gang provides
     ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
 ];
 
@@ -180,7 +181,8 @@ async function loadStartupData(ns) {
     // Find out if we're in a gang
     const gangInfo = await getGangInfo(ns);
     playerGang = gangInfo ? gangInfo.faction : null;
-    if (playerGang) { // Whatever augmentations the gang provides are so easy to get form them, might as well ignore any other factions that have them.
+    if (playerGang && !options['disable-treating-gang-as-sole-provider-of-its-augs']) {
+        // Whatever augmentations the gang provides are so easy to get from them, might as well ignore any other factions that have them.
         const gangAugs = dictFactionAugs[playerGang];
         ns.print(`Your gang ${playerGang} provides easy access to ${gangAugs.length} augs. Ignoring these augs from the original factions that provide them.`);
         for (const faction of allKnownFactions.filter(f => f != playerGang))
