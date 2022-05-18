@@ -71,33 +71,31 @@ export async function main(ns) {
 		return;
 	}*/
 
-
-	// 1. Pick dimensions
-	const height = 6; //ns.stanek.giftHeight()
-	const width = 6; //ns.stanek.giftWidth(); // NOTE: Width is always the same, or one more than height.
-
-	// 2. 
-	//const targetTypes = ns.args.map(arg => FragmentType[arg]);
-	// Note boosters are automatically included, they shouldn't be specified in the list of fragment ids
+	// 1. Set up priority order of stat fragments to include
 	const targetIds = [
 		FragmentId.Rep, FragmentId.Hacking1, FragmentId.Hacking2 // Basics, always want
 		, FragmentId.HackingSpeed, // Priority 2, improve hack EXP gain and income?
 		, FragmentId.HacknetMoney, FragmentId.HacknetCost // Priority 3, hacknet good for lots of things?
 		//, FragmentId.HackingGrow, FragmentId.HackingMoney // Priority 4, improves growth, income for RAM from hacking?
-
+		//etc...
 	];
 	const allFragments = ns.stanek.fragmentDefinitions();
 	const statFrags = allFragments.filter(frag => targetIds.includes(frag.id));
 	const boosterFrags = allFragments.filter(frag => frag.type == FragmentType.Booster);
 
-	const [score, plan] = await planFragments(ns, width, height, statFrags, boosterFrags);
-	ns.tprint(score);
-	//ns.tprint(plan);
-
-	const strFragments = [];
-	for (const elem of [...plan.stats, ...plan.boosters])
-		strFragments.push(`{"id":${elem.fragment.id},"x":${elem.x},"y":${elem.y},"rotation":${elem.rot}}`);
-	ns.tprint(`\n{"height": ${height}, "width": ${width}, "fragments": [\n    ${strFragments.join(",\n    ")}\n]}`);
+	// 2. Pick dimensions (why not pick many!)
+	//const height = 6; //ns.stanek.giftHeight()
+	//const width = 6; //ns.stanek.giftWidth(); // NOTE: Width is always the same, or one more than height.
+	for (let height = 6; height <= 8; height++)
+		for (let width = height; width <= height + 1; width++) {
+			const [score, plan] = await planFragments(ns, width, height, statFrags, boosterFrags);
+			ns.tprint(score);
+			const strFragments = [];
+			// Output the layout so you can stick it in a database
+			for (const elem of [...plan.stats, ...plan.boosters])
+				strFragments.push(`{"id":${elem.fragment.id},"x":${elem.x},"y":${elem.y},"rotation":${elem.rot}}`);
+			ns.tprint(`\n{"height": ${height}, "width": ${width}, "fragments": [\n    ${strFragments.join(",\n    ")}\n]}`);
+		}
 }
 
 /** @param {NS} ns */
@@ -128,6 +126,7 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
 
 	let statSeqn = 0, boosterSeqn = 0;
 	for (let x = 0; x < width; x++) {
+		await ns.sleep(0); // Don't hang the game
 		for (let y = 0; y < height; y++) {
 			for (let rot = 0; rot < 4; rot++) {
 				for (const frag of [...statFrags, ...boosterFrags]) {
@@ -238,6 +237,8 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
  *  @return {[number, Plan, Uint8Array, Uint8Array]} */
 function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies) {
 	planStatsCount++;
+	if (planStatsCount % 10000 == 0)
+		await ns.sleep(0); // Don't hang the game
 	if (statFragsKeys.length == 0) {
 		// Mark boosters that are not blocked, but also not adjacent to a stat fragment as unavailable
 		// and count the remaining available boosters
