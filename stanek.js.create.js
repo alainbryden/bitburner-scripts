@@ -48,6 +48,7 @@ export async function main(ns) {
 		log(ns, `ERROR: Failed to place one or more fragments. The layout may be invalid.`, true, 'error');
 }
 
+// DISCLAIMER: These layouts are decidedly hack focused.
 const layouts = [ // NOTE: Width appears to be always the same as, or one more than height.
 	{
 		"height": 3, "width": 3, "fragments": [
@@ -75,28 +76,28 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 105, "x": 0, "y": 2, "rotation": 1 }, // Booster
 			{ "id": 100, "x": 2, "y": 0, "rotation": 0 }, // Booster
 		]
-	},
-	{
+	}, {
+		// NOTE: Things get pretty subjective after this. Should we prioritize boosting hacking multi or adding more stats?
+		//       I've decided to start by adding in Hacking Speed, Hacknet Production + Cost as 3 stats more important than just more boost
 		"height": 5, "width": 6, "fragments": [
-			{ "id": 0, "x": 3, "y": 3, "rotation": 0 }, // Hacking Mult
-			{ "id": 1, "x": 0, "y": 2, "rotation": 0 }, // Hacking Mult
-			{ "id": 5, "x": 4, "y": 0, "rotation": 1 }, // Hacking Speed
-			{ "id": 6, "x": 1, "y": 0, "rotation": 0 }, // Hack power
-			{ "id": 7, "x": 0, "y": 0, "rotation": 0 }, // Grow power
-			{ "id": 25, "x": 0, "y": 3, "rotation": 0 }, // Reputation
-			{ "id": 107, "x": 2, "y": 1, "rotation": 0 }, // Booster
+			{ "id": 0, "x": 3, "y": 0, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 3, "y": 3, "rotation": 0 }, // Hacking Mult
+			{ "id": 5, "x": 4, "y": 1, "rotation": 1 }, // Hacking Speed
+			{ "id": 20, "x": 0, "y": 4, "rotation": 0 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 1, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 0, "y": 0, "rotation": 2 }, // Reputation
+			{ "id": 102, "x": 0, "y": 2, "rotation": 2 } // Booster
 		]
 	}, {
 		"height": 6, "width": 6, "fragments": [
-			{ "id": 0, "x": 3, "y": 0, "rotation": 0 }, // Hacking Mult
-			{ "id": 1, "x": 1, "y": 1, "rotation": 0 }, // Hacking Mult
-			{ "id": 5, "x": 0, "y": 1, "rotation": 3 }, // Hacking Speed
-			{ "id": 6, "x": 5, "y": 1, "rotation": 3 }, // Hack power
-			{ "id": 7, "x": 3, "y": 4, "rotation": 0 }, // Grow power
-			{ "id": 10, "x": 3, "y": 2, "rotation": 1 }, // Strength TODO: Not universally useful
-			{ "id": 20, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Production
-			{ "id": 21, "x": 1, "y": 3, "rotation": 0 }, // Hacknet Cost Reduction
-			{ "id": 25, "x": 0, "y": 4, "rotation": 0 }, // Reputation
+			{ "id": 0, "x": 0, "y": 2, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 2, "y": 2, "rotation": 1 }, // Hacking Mult
+			{ "id": 5, "x": 3, "y": 3, "rotation": 1 }, // Hacking Speed
+			{ "id": 20, "x": 5, "y": 2, "rotation": 1 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 3, "y": 0, "rotation": 2 }, // Reputation
+			{ "id": 103, "x": 0, "y": 4, "rotation": 2 }, // Booster
+			{ "id": 104, "x": 2, "y": 0, "rotation": 1 } // Booster
 		]
 	}, {
 		"height": 7, "width": 7, "fragments": [
