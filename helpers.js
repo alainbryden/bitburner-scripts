@@ -153,13 +153,14 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     fName = fName || `/Temp/${commandHash}-data.txt`;
     const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
     // Defend against stale data by pre-writing the file with invalid data TODO: Remove if this condition is never encountered
-    await ns.write(fName, "STALE", 'w');
+    await ns.write(fName, "<Insufficient RAM>", 'w');
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
     const commandToFile = `let result="";try{result=JSON.stringify(
-        ${command}
-        );}catch{} const f="${fName}"; if(ns.read(f)!=result) await ns.write(f,result,'w')`;
+            ${command}
+        );}catch(err){result = "ERROR: " + (typeof err === 'string' ? err : err.message || JSON.stringify(err))}
+        const f="${fName}"; if(ns.read(f)!==result) await ns.write(f,result,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, false, maxRetries, retryDelayMs);
     // Wait for the process to complete
@@ -168,10 +169,14 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     // Read the file, with auto-retries if it fails
     let lastRead;
     try {
-        const fileData = await autoRetry(ns, () => ns.read(fName), f => (lastRead = f) !== undefined && f !== "" && f !== "STALE",
-            () => `ns.read('${fName}') returned no result ("${lastRead}") (command likely failed to run).` +
-                `\n  Command: ${command}\n  Script: ${fNameCommand}` +
-                `\nEnsure you have sufficient free RAM to run this temporary script.`,
+        const fileData = await autoRetry(ns, () => ns.read(fName),
+            f => (lastRead = f) !== undefined && f !== "" && f !== "<Insufficient RAM>" && !(typeof f == "string" && f.startsWith("ERROR: ")),
+            () => `\nns.read('${fName}') returned a bad result: "${lastRead}".` +
+                `\n  Script:  ${fNameCommand}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
+                (lastRead == undefined ? '\nThe developer has no idea how this could have happend. Please post a screenshot of this error on discord.' :
+                    lastRead == "<Insufficient RAM>" ? `\nThe script that ran this will likely recover and try again later once you have more free ram.` :
+                        lastRead == "" ? `\nThe file appears to have been deleted before a result could be retrieved. Perhaps there is a conflicting script.` :
+                            `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
             maxRetries, retryDelayMs, undefined, verbose);
         if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
         return JSON.parse(fileData); // Deserialize it back into an object/array and return
@@ -205,6 +210,7 @@ export async function runCommand(ns, command, fileName, args = [], verbose = fal
  **/
 export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand_Custom"');
+    if (!Array.isArray(args)) throw Error(`args specified were a ${typeof args}, but an array is required.`);
     if (!verbose) disableLogs(ns, ['asleep']);
     let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
         `export async function main(ns) { try { ` +
@@ -255,16 +261,18 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
     if (!verbose) disableLogs(ns, ['asleep']);
     // Wait for the PID to stop running (cheaper than e.g. deleting (rm) a possibly pre-existing file and waiting for it to be recreated)
     let start = Date.now();
+    let sleepMs = 1;
     for (var retries = 0; retries < 1000; retries++) {
         if (!fnIsAlive(pid)) break; // Script is done running
         if (verbose && retries % 100 === 0) ns.print(`Waiting for pid ${pid} to complete... (${formatDuration(Date.now() - start)})`);
-        await ns.asleep(10);
+        await ns.asleep(sleepMs);
+        sleepMs = Math.min(sleepMs * 2, 200);
     }
     // Make sure that the process has shut down and we haven't just stopped retrying
     if (fnIsAlive(pid)) {
         let errorMessage = `run-command pid ${pid} is running much longer than expected. Max retries exceeded.`;
         ns.print(errorMessage);
-        throw errorMessage;
+        throw Error(errorMessage);
     }
 }
 
@@ -277,13 +285,15 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
     while (attempts++ <= maxRetries) {
         try {
             const result = await fnFunctionThatMayFail()
-            if (!fnSuccessCondition(result)) throw typeof errorContext === 'string' ? errorContext : errorContext();
+            const error = typeof errorContext === 'string' ? errorContext : errorContext();
+            if (!fnSuccessCondition(result))
+                throw typeof error === 'string' ? Error(error) : error;
             return result;
         }
         catch (error) {
             const fatal = attempts >= maxRetries;
-            const errorLog = `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed: ${String(error)}`
-            log(ns, errorLog, fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
+            log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed` +
+                (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`), fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
             await ns.asleep(retryDelayMs);
             retryDelayMs *= backoffRate;
@@ -408,7 +418,10 @@ export async function getStocksValue(ns, player = null, stockSymbols = null) {
 
 /** @param {NS} ns 
  * Returns a helpful error message if we forgot to pass the ns instance to a function */
-export function checkNsInstance(ns, fnName = "this function") { if (!ns.print) throw `The first argument to ${fnName} should be a 'ns' instance.`; return ns; }
+export function checkNsInstance(ns, fnName = "this function") {
+    if (!ns.print) throw Error(`The first argument to ${fnName} should be a 'ns' instance.`);
+    return ns;
+}
 
 /** A helper to parse the command line arguments with a bunch of extra features, such as
  * - Loading a persistent defaults override from a local config file named after the script.
@@ -432,9 +445,9 @@ export function getConfiguration(ns, argsSchema) {
                 const matchIndex = overriddenSchema.findIndex(o => o[0] == key);
                 const match = matchIndex === -1 ? null : overriddenSchema[matchIndex];
                 if (!match)
-                    throw `Unrecognized key "${key}" does not match of this script's options: ` + JSON.stringify(argsSchema.map(a => a[0]));
+                    throw Error(`Unrecognized key "${key}" does not match of this script's options: ` + JSON.stringify(argsSchema.map(a => a[0])));
                 else if (override === undefined)
-                    throw `The key "${key}" appeared in the config with no value. Some value must be provided. Try null?`;
+                    throw Error(`The key "${key}" appeared in the config with no value. Some value must be provided. Try null?`);
                 else if (match && JSON.stringify(match[1]) != JSON.stringify(override)) {
                     if (typeof (match[1]) !== typeof (override))
                         log(ns, `WARNING: The "${confName}" overriding "${key}" value: ${JSON.stringify(override)} has a different type (${typeof override}) than the ` +

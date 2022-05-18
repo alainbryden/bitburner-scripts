@@ -61,7 +61,9 @@ export async function main(ns) {
 	let inputWager, btnStartGame;
 
 	// Step 2: Try to navigate to the blackjack game until successful, in case something repeatedly steals focus
-	while (true) {
+	let attempts = 0;
+	while (attempts++ <= 10) {
+		if (attempts > 1) ns.sleep(1000);
 		try {
 			// Step 2.1: If the player is focused, stop the current action
 			const btnStopAction = await checkForFocusScreen();
@@ -80,12 +82,21 @@ export async function main(ns) {
 			}
 			// Step 2.3: Try to start the blackjack game
 			const blackjack = await findRetry(ns, "//button[contains(text(), 'blackjack')]");
-			if (!blackjack) return tailAndLog(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Please post a full-game screenshot on Discord.`)
+			if (!blackjack) {
+				tailAndLog(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Trying again... ` +
+					`Please post a full-game screenshot on Discord if you can't get past this point.`)
+				continue; // Loop back to start and try again
+			}
 			await click(blackjack);
 
 			// Step 2.4: Get some buttons we will need to play blackjack
 			inputWager = await findRetry(ns, "//input[@value = 1000000]");
 			btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
+			if (!inputWager || !btnStartGame) {
+				tailAndLog(ns, `ERROR: Could not find one or more game controls. Did something steal focus? Trying again... ` +
+					`Please post a full-game screenshot on Discord if you can't get past this point.`)
+				continue; // Loop back to start and try again
+			}
 
 			// Step 2.5: Clean up temp files and kill other running scripts to speed up the reload cycle
 			if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
@@ -98,7 +109,7 @@ export async function main(ns) {
 				} else { // Otherwise, we've probably been kicked out of the casino, but...
 					// because we haven't killed scripts yet, it's possible another script stole focus again. Detect and handle that case.
 					if (await checkForFocusScreen()) {
-						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.", true);
+						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Trying again.");
 						continue; // Loop back to start and try again
 					}
 					await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
@@ -118,14 +129,18 @@ export async function main(ns) {
 		}
 	}
 
+	if (ns.getPlayer().money < 1)
+		return log(ns, "WARNING: Whoops, we have no money to bet! Kill whatever's spending it and try again later.", true, 'warning');
+
 	// Step 3: Save the fact that this script is now running, so that future reloads start this script back up immediately.
-	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include blackjack.js running). Maybe this delay helps?
+	if (saveSleepTime) await ns.asleep(saveSleepTime); // Anecdotally, some users report the first save is "stale" (doesn't include casino.js running). Maybe this delay helps?
 	await click(btnSaveGame);
 	if (saveSleepTime) await ns.asleep(saveSleepTime);
 
 	// Step 4: Play until we lose
 	while (true) {
 		const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
+		if (bet < 0) return await reload(ns); // If somehow we have no money, we can't continue
 		await setText(inputWager, `${bet}`);
 		await click(btnStartGame);
 		const btnHit = await findRetry(ns, "//button[text() = 'Hit']");
@@ -152,15 +167,20 @@ export async function main(ns) {
 			}
 		} while (won === null);
 		if (won === null) continue; // Only possible if we tied and broke out early. Start a new hand.
-		if (!won) { // Reload if we lost
-			eval("window").onbeforeunload = null; // Disable the unsaved changes warning before reloading
-			await ns.sleep(saveSleepTime); // Yeild execution for an instant incase the game needs to finish a save or something
-			location.reload(); // Force refresh the page without saving           
-			return await ns.asleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
-		}
+		if (!won) return await reload(ns); // Reload if we lost
 		await click(btnSaveGame); // Save if we won
 		if (saveSleepTime) await ns.asleep(saveSleepTime);
 	}
+}
+
+/** Forces the game to reload (without saving). Great for save scumming.
+ * WARNING: Doesn't work if the user last ran the game with "Reload and kill all scripts" 
+ * @param {NS} ns */
+async function reload(ns) {
+	eval("window").onbeforeunload = null; // Disable the unsaved changes warning before reloading
+	await ns.sleep(options['save-sleep-time']); // Yeild execution for an instant incase the game needs to finish a save or something
+	location.reload(); // Force refresh the page without saving           
+	await ns.asleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
 }
 
 /** @param {NS} ns 
