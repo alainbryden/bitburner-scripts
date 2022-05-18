@@ -31,7 +31,8 @@ const _doc = _win.document
 const argsSchema = [
   ['stop', false], // set to stop the old service and not start a new one
   ['timeFactor', 1], // interval multiplier to apply during infiltrations (set to 1 to disable)
-  ['keyDelay', 1] // delay in ms between keystrokes
+  ['keyDelay', 1], // delay in ms between keystrokes
+  ['allowedHost', 'home'] // error out if running anywhere other than here (service logic is dependent on local file system)
 ]
 
 export function autocomplete (data) {
@@ -872,6 +873,12 @@ export async function main (ns) {
   }
   infiltrationTimeFactor = options.timeFactor
   keyDelay = options.keyDelay
+  // ensure that we're running this on home, if necessary
+  const host = ns.getHostname()
+  if (host !== options.allowedHost) {
+    log(ns, `ERROR: script is running on ${host}, not on ${options.allowedHost} as required. Exiting.`, true)
+    return
+  }
   // get BN multipliers first to feed reward info to infiltration service
   const bnMults = await tryGetBitNodeMultipliers(ns)
   const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')
