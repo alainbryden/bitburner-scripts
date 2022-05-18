@@ -76,7 +76,7 @@ export async function main(ns) {
 		FragmentId.Rep, FragmentId.Hacking1, FragmentId.Hacking2 // Basics, always want
 		, FragmentId.HackingSpeed, // Priority 2, improve hack EXP gain and income?
 		, FragmentId.HacknetMoney, FragmentId.HacknetCost // Priority 3, hacknet good for lots of things?
-		//, FragmentId.HackingGrow, FragmentId.HackingMoney // Priority 4, improves growth, income for RAM from hacking?
+		, FragmentId.HackingGrow, FragmentId.HackingMoney // Priority 4, improves growth, income for RAM from hacking?
 		//etc...
 	];
 	const allFragments = ns.stanek.fragmentDefinitions();
@@ -86,7 +86,7 @@ export async function main(ns) {
 	// 2. Pick dimensions (why not pick many!)
 	//const height = 6; //ns.stanek.giftHeight()
 	//const width = 6; //ns.stanek.giftWidth(); // NOTE: Width is always the same, or one more than height.
-	for (let height = 6; height <= 8; height++)
+	for (let height = 3; height <= 5; height++)
 		for (let width = height; width <= height + 1; width++) {
 			const [score, plan] = await planFragments(ns, width, height, statFrags, boosterFrags);
 			ns.tprint(score);
@@ -215,7 +215,7 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
 	planStatsCount = 0;
 	planBoostersCount = 0;
 	const t1 = performance.now();
-	const [score, plan] = planStats(ns, statPlacements, boosterPlacements, statFragsKeys,
+	const [score, plan] = await planStats(ns, statPlacements, boosterPlacements, statFragsKeys,
 		blockedStats0, plan0, bestResult0, blockedBoosters0, boosterStatAdjacencies0);
 	const t2 = performance.now();
 
@@ -228,18 +228,19 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
 /** @param {NS} ns
  *  @param {Placement[]} statPlacements
  *  @param {Placement[]} boosterPlacements
- *  @param {number[][]} statFragsKeys
+ *  @param {number[][]} statFragsKeys - the remaining desired fragment ids to be placed on the board
  *  @param {Uint8Array} blockedStats
  *  @param {Plan} plan
  *  @param {[number, Plan]} bestResult
  *  @param {Uint8Array} blockedBoosters
  *  @param {Uint8Array} boosterStatAdjacencies
  *  @return {[number, Plan, Uint8Array, Uint8Array]} */
-function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies) {
+async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies) {
 	planStatsCount++;
-	if (planStatsCount % 10000 == 0)
+	if (planStatsCount % 100000 == 0)
 		await ns.sleep(0); // Don't hang the game
-	if (statFragsKeys.length == 0) {
+	// If at least one fragment has been placed, see what the best score is we can get by adding boosters
+	if (plan.stats.length > 0) {
 		// Mark boosters that are not blocked, but also not adjacent to a stat fragment as unavailable
 		// and count the remaining available boosters
 		let availableBoostersCount = 0;
@@ -250,7 +251,7 @@ function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, blocked
 				availableBoostersCount++;
 		}
 
-		const result = planBoosters(plan, boosterPlacements, boosterStatAdjacencies,
+		const addBoostersBestResult = planBoosters(plan, boosterPlacements, boosterStatAdjacencies,
 			blockedBoosters, availableBoostersCount, 0, bestResult);
 
 		// Undo changes
@@ -258,37 +259,40 @@ function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, blocked
 			if (boosterStatAdjacencies[i] === 0)
 				blockedBoosters[i]--;
 
-		return result;
+		if (addBoostersBestResult > bestResult) bestResult = addBoostersBestResult;
 	}
+	// If there are fragments left to place, recurse to see if we can improve the score by placing more
+	if (statFragsKeys.length > 0) {
+		for (const key of statFragsKeys[0]) {
+			if (blockedStats[key] !== 0) continue;
+			const placement = statPlacements[key];
+			const adjacentBoosters = placement.adjacentBoosters;
+			const overlapWithBoosters = placement.overlapWithBoosters;
+			const overlapWithStats = placement.overlapWithStats;
 
-	for (const key of statFragsKeys[0]) {
-		if (blockedStats[key] !== 0) continue;
-		const placement = statPlacements[key];
-		const adjacentBoosters = placement.adjacentBoosters;
-		const overlapWithBoosters = placement.overlapWithBoosters;
-		const overlapWithStats = placement.overlapWithStats;
+			// Add the fragment placement to plan and update usability in-place to account for the new blocks
+			plan.stats.push(placement);
+			for (let i = 0; i < overlapWithStats.length; i++)
+				blockedStats[overlapWithStats[i]]++;
+			for (let i = 0; i < overlapWithBoosters.length; i++)
+				blockedBoosters[overlapWithBoosters[i]]++;
+			for (let i = 0; i < adjacentBoosters.length; i++)
+				boosterStatAdjacencies[adjacentBoosters[i]]++;
 
-		// Add the fragment placement to plan and update usability in-place to account for the new blocks
-		plan.stats.push(placement);
-		for (let i = 0; i < overlapWithStats.length; i++)
-			blockedStats[overlapWithStats[i]]++;
-		for (let i = 0; i < overlapWithBoosters.length; i++)
-			blockedBoosters[overlapWithBoosters[i]]++;
-		for (let i = 0; i < adjacentBoosters.length; i++)
-			boosterStatAdjacencies[adjacentBoosters[i]]++;
+			// Find and score best plan that includes this fragment placement
+			const recursiveBestResult = await planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
+				blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies);
+			if (recursiveBestResult > bestResult) bestResult = recursiveBestResult;
 
-		// Find and score best plan that includes this fragment placement
-		bestResult = planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
-			blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies);
-
-		// Undo the changes
-		plan.stats.pop();
-		for (let i = 0; i < overlapWithStats.length; i++)
-			blockedStats[overlapWithStats[i]]--;
-		for (let i = 0; i < overlapWithBoosters.length; i++)
-			blockedBoosters[overlapWithBoosters[i]]--;
-		for (let i = 0; i < adjacentBoosters.length; i++)
-			boosterStatAdjacencies[adjacentBoosters[i]]--;
+			// Undo the changes
+			plan.stats.pop();
+			for (let i = 0; i < overlapWithStats.length; i++)
+				blockedStats[overlapWithStats[i]]--;
+			for (let i = 0; i < overlapWithBoosters.length; i++)
+				blockedBoosters[overlapWithBoosters[i]]--;
+			for (let i = 0; i < adjacentBoosters.length; i++)
+				boosterStatAdjacencies[adjacentBoosters[i]]--;
+		}
 	}
 
 	return bestResult;
