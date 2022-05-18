@@ -1790,9 +1790,10 @@ class Tool {
             // Note: To be conservative, we allow double imprecision to cause this floor() to return one less than should be possible,
             //       because the game likely doesn't account for this imprecision (e.g. let 1.9999999999999998 return 1 rather than 2)
             let threadsHere = Math.floor((server.ramAvailable() / this.cost) /*.toPrecision(14)*/);
-            // HACK: Temp script firing before the script gets scheduled can cause home ram reduction, don't promise as much from home 
+            // HACK: Temp script firing before the script gets scheduled can cause home ram reduction, don't promise as much from home
             if (server.name == "home") // TODO: Revise this hack, it is technically messing further with the "servers by free ram" sort order
-                threadsHere = Math.min(0, threadsHere - 2); // TODO: Perhaps scheduler should not be so strict about home reserved ram enforcement?
+                threadsHere = Math.min(0, threadsHere - Math.ceil(homeReservedRam / this.cost)); // Note: Effectively doubles home reserved RAM in cases where we plan to consume all available RAM
+            // TODO: Perhaps an alternative to the above is that the scheduler should not be so strict about home reserved ram enforcement if we use thread spreading and save scheduling on home for last?
             if (!allowSplitting)
                 return threadsHere;
             maxThreads += threadsHere;
