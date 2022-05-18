@@ -21,6 +21,7 @@ const argsSchema = [
     ['prioritize-invites', false], // Prioritize working for as many invites as is practical before starting to grind for faction reputation
     ['get-invited-to-every-faction', false], // You want to be in every faction? You got it!
     ['karma-threshold-for-gang-invites', -40000], // Prioritize working for gang invites once we have this much negative Karma
+    ['disable-treating-gang-as-sole-provider-of-its-augs', false], // Set to true if you still want to grind for rep with factions that only have augs your gang provides
     ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
 ];
 
@@ -46,9 +47,10 @@ const preferredEarlyFactionOrder = [
     "Daedalus", // Once we have all faction_rep boosting augs, there's no reason not to work towards Daedalus as soon as it's available/feasible so we can buy Red Pill
     "CyberSec", /* Quick, and NightSec aug depends on an aug from here */ "NiteSec", "Tetrads", // Cha augs to speed up earning company promotions
     "Bachman & Associates", // Boost company/faction rep for future augs
+    "BitRunners", // Fast source of some unique hack augs
     "Fulcrum Secret Technologies", // Will be removed if hack level is too low to backdoor their server
     "ECorp", // More cmp_rep augs, and some strong hack ones as well
-    "BitRunners", "The Black Hand", // Fastest sources of hacking augs after the above companies
+    "The Black Hand", // Fastest sources of hacking augs after the above companies
     "The Dark Army", // Unique cmp_rep aug TODO: Can it sensibly be gotten before corps? Requires 300 all combat stats.
     "Clarke Incorporated", "OmniTek Incorporated", "NWO", // More hack augs from companies
     "Chongqing", // Unique Source of big 1.4x hack exp boost (Can only join if not in e.g. Aevum as well)
@@ -179,7 +181,8 @@ async function loadStartupData(ns) {
     // Find out if we're in a gang
     const gangInfo = await getGangInfo(ns);
     playerGang = gangInfo ? gangInfo.faction : null;
-    if (playerGang) { // Whatever augmentations the gang provides are so easy to get form them, might as well ignore any other factions that have them.
+    if (playerGang && !options['disable-treating-gang-as-sole-provider-of-its-augs']) {
+        // Whatever augmentations the gang provides are so easy to get from them, might as well ignore any other factions that have them.
         const gangAugs = dictFactionAugs[playerGang];
         ns.print(`Your gang ${playerGang} provides easy access to ${gangAugs.length} augs. Ignoring these augs from the original factions that provide them.`);
         for (const faction of allKnownFactions.filter(f => f != playerGang))
@@ -603,7 +606,7 @@ async function monitorStudies(ns, stat, requirement) {
 }
 
 /** @param {NS} ns */
-export async function waitForFactionInvite(ns, factionName, maxWaitTime = 20000) {
+export async function waitForFactionInvite(ns, factionName, maxWaitTime = 25000) {
     ns.print(`Waiting for invite from faction "${factionName}"...`);
     let waitTime = maxWaitTime;
     do {

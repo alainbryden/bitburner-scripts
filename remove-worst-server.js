@@ -21,5 +21,5 @@ export async function main(ns) {
     if (success)
         ns.tprint(`Deleted ${minServer.name} which had ${formatRam(minServer.ram)} of RAM (${purchasedServers.length - 1} servers remaining).`);
     else
-        ns.tprint(`Failed to delete ${minServer.name} (${formatRam(minServer.ram)} of RAM) - scripts are likely still running`);
+        ns.tprint(`Waiting to delete ${minServer.name} (${formatRam(minServer.ram)} of RAM) - scripts are still running...`);
 }
