@@ -200,7 +200,7 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
 	// Select the stat fragment with most potential placements as the first fragment,
 	// to get the biggest reduction of search space
 	const statFragsKeys = [...statFrags]
-		.sort((a, b) => statFragsPlacements.get(b.id).length - statFragsPlacements.get(a.id).length)
+		//.sort((a, b) => statFragsPlacements.get(b.id).length - statFragsPlacements.get(a.id).length)
 		.map(frag => statFragsPlacements.get(frag.id).map(placement => placement.key));
 	statFragsKeys[0] = statFragsKeys[0].filter(key =>
 		width == height ? statPlacements[key].rot == 0 : (statPlacements[key].rot == 0 || statPlacements[key].rot == 1));
@@ -259,7 +259,8 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 			if (boosterStatAdjacencies[i] === 0)
 				blockedBoosters[i]--;
 
-		if (addBoostersBestResult > bestResult) bestResult = addBoostersBestResult;
+		if (addBoostersBestResult > bestResult)
+			bestResult = addBoostersBestResult;
 	}
 	// If there are fragments left to place, recurse to see if we can improve the score by placing more
 	if (statFragsKeys.length > 0) {
@@ -282,7 +283,8 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 			// Find and score best plan that includes this fragment placement
 			const recursiveBestResult = await planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
 				blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies);
-			if (recursiveBestResult > bestResult) bestResult = recursiveBestResult;
+			if (recursiveBestResult > bestResult)
+				bestResult = recursiveBestResult;
 
 			// Undo the changes
 			plan.stats.pop();
