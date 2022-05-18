@@ -163,7 +163,7 @@ export async function main(ns) {
 				const shouldHit = options['use-basic-strategy'] ? highCount < 17 : shouldHitAdvanced(ns, txtCount);
 				if (options['enable-logging']) log(ns, `INFO: Count is ${highCount}, we will ${shouldHit ? 'Hit' : 'Stay'}`);
 				await click(shouldHit ? btnHit : btnStay);
-				await ns.sleep(1); // Yeild for an instant so the UI can update and process events
+				await ns.sleep(1); // Yield for an instant so the UI can update and process events
 			}
 		} while (won === null);
 		if (won === null) continue; // Only possible if we tied and broke out early. Start a new hand.
@@ -178,7 +178,7 @@ export async function main(ns) {
  * @param {NS} ns */
 async function reload(ns) {
 	eval("window").onbeforeunload = null; // Disable the unsaved changes warning before reloading
-	await ns.sleep(options['save-sleep-time']); // Yeild execution for an instant incase the game needs to finish a save or something
+	await ns.sleep(options['save-sleep-time']); // Yield execution for an instant incase the game needs to finish a save or something
 	location.reload(); // Force refresh the page without saving           
 	await ns.asleep(10000); // Keep the script alive to be safe. Presumably the page reloads before this completes.
 }
