@@ -1,48 +1,48 @@
 const FragmentType = {
-  HackingChance: 2,
-  HackingSpeed: 3,
-  HackingMoney: 4,
-  HackingGrow: 5,
-  Hacking: 6,
-  Strength: 7,
-  Defense: 8,
-  Dexterity: 9,
-  Agility: 10,
-  Charisma: 11,
-  HacknetMoney: 12,
-  HacknetCost: 13,
-  Rep: 14,
-  WorkMoney: 15,
-  Crime: 16,
-  Bladeburner: 17,
-  Booster: 18,
+	HackingChance: 2,
+	HackingSpeed: 3,
+	HackingMoney: 4,
+	HackingGrow: 5,
+	Hacking: 6,
+	Strength: 7,
+	Defense: 8,
+	Dexterity: 9,
+	Agility: 10,
+	Charisma: 11,
+	HacknetMoney: 12,
+	HacknetCost: 13,
+	Rep: 14,
+	WorkMoney: 15,
+	Crime: 16,
+	Bladeburner: 17,
+	Booster: 18,
 }
- 
+
 const FragmentId = {
-  Hacking1: 0,
-  Hacking2: 1,
-  HackingSpeed: 5,
-  HackingMoney: 6,
-  HackingGrow: 7,
-  Strength: 10,
-  Defense: 12,
-  Dexterity: 14,
-  Agility: 16,
-  Charisma: 18,
-  HacknetMoney: 20,
-  HacknetCost: 21,
-  Rep: 25,
-  WorkMoney: 27,
-  Crime: 28,
-  Bladeburner: 30,
-  //Booster1: 100,
-  //Booster2: 101,
-  //Booster3: 102,
-  //Booster4: 103,
-  //Booster5: 104,
-  //Booster6: 105,
-  //Booster7: 106,
-  //Booster8: 107,
+	Hacking1: 0,
+	Hacking2: 1,
+	HackingSpeed: 5,
+	HackingMoney: 6,
+	HackingGrow: 7,
+	Strength: 10,
+	Defense: 12,
+	Dexterity: 14,
+	Agility: 16,
+	Charisma: 18,
+	HacknetMoney: 20,
+	HacknetCost: 21,
+	Rep: 25,
+	WorkMoney: 27,
+	Crime: 28,
+	Bladeburner: 30,
+	//Booster1: 100,
+	//Booster2: 101,
+	//Booster3: 102,
+	//Booster4: 103,
+	//Booster5: 104,
+	//Booster6: 105,
+	//Booster7: 106,
+	//Booster8: 107,
 };
 
 let planStatsCount = 0;
@@ -73,21 +73,27 @@ export async function main(ns) {
 
 
 	// 1. Pick dimensions
-	const height = 5; //ns.stanek.giftHeight()
+	const height = 6; //ns.stanek.giftHeight()
 	const width = 6; //ns.stanek.giftWidth(); // NOTE: Width is always the same, or one more than height.
 
 	// 2. 
 	//const targetTypes = ns.args.map(arg => FragmentType[arg]);
-	const targetTypes = [FragmentType.Rep, FragmentType.Hacking];
+	// Note boosters are automatically included, they shouldn't be specified in the list of fragment ids
+	const targetIds = [
+		FragmentId.Rep, FragmentId.Hacking1, FragmentId.Hacking2 // Basics, always want
+		, FragmentId.HackingSpeed, // Priority 2, improve hack EXP gain and income?
+		, FragmentId.HacknetMoney, FragmentId.HacknetCost // Priority 3, hacknet good for lots of things?
+		//, FragmentId.HackingGrow, FragmentId.HackingMoney // Priority 4, improves growth, income for RAM from hacking?
+
+	];
 	const allFragments = ns.stanek.fragmentDefinitions();
-	// Note boosters are automatically included, they shouldn't be specified in the list of fragment types
+	const statFrags = allFragments.filter(frag => targetIds.includes(frag.id));
 	const boosterFrags = allFragments.filter(frag => frag.type == FragmentType.Booster);
-	const statFrags = allFragments.filter(frag => frag.type != FragmentType.Booster && targetTypes.includes(frag.type));
 
 	const [score, plan] = await planFragments(ns, width, height, statFrags, boosterFrags);
-
 	ns.tprint(score);
 	//ns.tprint(plan);
+
 	const strFragments = [];
 	for (const elem of [...plan.stats, ...plan.boosters])
 		strFragments.push(`{"id":${elem.fragment.id},"x":${elem.x},"y":${elem.y},"rotation":${elem.rot}}`);
@@ -99,6 +105,7 @@ function tlog(ns, prefix, format, ...args) {
 	ns.tprintf(prefix + ": " + format, ...args);
 }
 
+
 /** @param {NS} ns
  *  @param {number} width
  *  @param {number} height
@@ -106,42 +113,49 @@ function tlog(ns, prefix, format, ...args) {
  *  @param {Fragment[]} boosterFrags */
 async function planFragments(ns, width, height, statFrags, boosterFrags) {
 	const t0 = performance.now();
-	/** @type {Map<number, number[]>} */
-	const statFragsKeys = new Map(statFrags.map(frag => [frag.id, []]));
-	/** @type {Map<number, number[]>} */
-	const boosterFragsKeys = new Map(boosterFrags.map(frag => [frag.id, []]));
 	/** @type {Placement[]} */
 	const placements = [];
+	/** @type {Placement[]} */
+	const statPlacements = [];
+	/** @type {Placement[]} */
+	const boosterPlacements = [];
+	/** @type {Map<number, Placement[]>} */
+	const statFragsPlacements = new Map(statFrags.map(frag => [frag.id, []]));
+	/** @type {Map<number, Placement[]>} */
+	const boosterFragsPlacements = new Map(boosterFrags.map(frag => [frag.id, []]));
 	/** @type {number[][][]} */
-	const overlapping = [...new Array(width)].map(() => [...new Array(height)].map(() => []));
+	//const overlapping = [...new Array(width)].map(() => [...new Array(height)].map(() => []));
 
-	let seqn = 0;
+	let statSeqn = 0, boosterSeqn = 0;
 	for (let x = 0; x < width; x++) {
 		for (let y = 0; y < height; y++) {
 			for (let rot = 0; rot < 4; rot++) {
 				for (const frag of [...statFrags, ...boosterFrags]) {
 					const coords = coverage(x, y, rot, frag)
 					if (coords.every(([x, y]) => x < width && y < height)) {
-						const key = seqn++; //`${frag.id}@${x}-${y}-${rot}`;
+						const key = frag.type == FragmentType.Booster ? boosterSeqn++ : statSeqn++; //`${frag.id}@${x}-${y}-${rot}`;
 						const placement = {
 							key, fragment: frag, x, y, rot,
 							coords, adjacent: adjacents(width, height, coords)
 						};
 
-						statFragsKeys.get(frag.id)?.push(key); // Only stat fragments
-						boosterFragsKeys.get(frag.id)?.push(key); // Only booster fragments
-						placements[key] = placement;
+						placements.push(placement);
+						if (frag.type == FragmentType.Booster) {
+							boosterPlacements[key] = placement;
+							boosterFragsPlacements.get(frag.id).push(placement);
+						}
+						else {
+							statPlacements[key] = placement;
+							statFragsPlacements.get(frag.id).push(placement);
+						}
 
-						coords.forEach(([x, y]) => overlapping[x][y].push(key));
+						//coords.forEach(([x, y]) => overlapping[x][y].push(key));
 					}
 				}
 			}
 		}
 	}
 	ns.tprint(`Placements: ${placements.length}`)
-
-	/** @type {Int8Array} */
-	const isBoosterFrag = Int8Array.from(placements.map(placement => placement.fragment.type == FragmentType.Booster ? 0 : 1));
 
 	// Canonise coordinate arrays so we can use equality comparisons on them
 	const canonicalCoords = [...new Array(width)].map((_, x) => [...new Array(height)].map((_, y) => [x, y]));
@@ -152,54 +166,58 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
 
 	// Pre-compute all adjacencies
 	for (const placement of placements) {
-		placement.adjacentTo = [];
-		placement.adjacentToBoosters = [];
-		placement.adjacentToStats = [];
-		placement.isAdjacentTo = new Int8Array(placements.length);
-		placement.overlapWith = [];
+		placement.adjacentBoosters = [];
+		placement.adjacentStats = [];
 		placement.overlapWithBoosters = [];
 		placement.overlapWithStats = [];
-		for (const other of placements) {
-			if (placement.coords.some(coord => other.adjacent.includes(coord))) {
-				placement.isAdjacentTo[other.key] = 1;
-				placement.adjacentTo.push(other.key);
-				if (other.fragment.type == FragmentType.Booster)
-					placement.adjacentToBoosters.push(other.key);
-				else
-					placement.adjacentToStats.push(other.key);
-			}
+		for (const other of boosterPlacements) {
+			if (placement.coords.some(coord => other.adjacent.includes(coord)))
+				placement.adjacentBoosters.push(other.key);
 			if (placement.coords.some(coord => other.coords.includes(coord))) {
-				placement.overlapWith.push(other.key);
-				if (other.fragment.type == FragmentType.Booster)
-					placement.overlapWithBoosters.push(other.key);
-				else
-					placement.overlapWithStats.push(other.key);
+				placement.overlapWithBoosters.push(other.key);
+			}
+		}
+		for (const other of statPlacements) {
+			if (placement.coords.some(coord => other.adjacent.includes(coord)))
+				placement.adjacentStats.push(other.key);
+			if (placement.coords.some(coord => other.coords.includes(coord))) {
+				placement.overlapWithStats.push(other.key);
 			}
 		}
 	}
 
 	// Turn arrays to fixed type, now that we know their contents
 	for (const placement of placements) {
-		placement.adjacentTo = Int16Array.from(placement.adjacentTo);
-		placement.adjacentToBoosters = Int16Array.from(placement.adjacentToBoosters);
-		placement.adjacentToStats = Int16Array.from(placement.adjacentToStats);
-		placement.overlapWith = Int16Array.from(placement.overlapWith);
+		placement.adjacentBoosters = Int16Array.from(placement.adjacentBoosters);
+		placement.adjacentStats = Int16Array.from(placement.adjacentStats);
 		placement.overlapWithBoosters = Int16Array.from(placement.overlapWithBoosters);
 		placement.overlapWithStats = Int16Array.from(placement.overlapWithStats);
 	}
 
+	// Exclude rotational symmetries from search by only using
+	// - rot 0 placements if the board is square
+	// - rot 0 and rot 1 placements if the board is non-square
+	// of the first fragment
+	// Select the stat fragment with most potential placements as the first fragment,
+	// to get the biggest reduction of search space
+	const statFragsKeys = [...statFrags]
+		.sort((a, b) => statFragsPlacements.get(b.id).length - statFragsPlacements.get(a.id).length)
+		.map(frag => statFragsPlacements.get(frag.id).map(placement => placement.key));
+	statFragsKeys[0] = statFragsKeys[0].filter(key =>
+		width == height ? statPlacements[key].rot == 0 : (statPlacements[key].rot == 0 || statPlacements[key].rot == 1));
+
 	/// Compute stat fragment layout that maximises potential stat-booster fragment adjacencies
-	const available0 = new Uint8Array(placements.length);
-	const availableBoosters0 = Uint8Array.from(isBoosterFrag);
-	const adjacentStats0 = new Uint8Array(placements.length);
+	const blockedStats0 = new Uint8Array(statPlacements.length);
+	const blockedBoosters0 = new Uint8Array(boosterPlacements.length);
+	const boosterStatAdjacencies0 = new Uint8Array(boosterPlacements.length);
 	const plan0 = { stats: [], boosters: [] };
 	const bestResult0 = [-Infinity, { stats: [...plan0.stats], boosters: [...plan0.boosters] }];
 
 	planStatsCount = 0;
 	planBoostersCount = 0;
 	const t1 = performance.now();
-	const [score, plan] = planStats(ns, placements, statFrags, statFragsKeys,
-		available0, plan0, bestResult0, availableBoosters0, adjacentStats0);
+	const [score, plan] = planStats(ns, statPlacements, boosterPlacements, statFragsKeys,
+		blockedStats0, plan0, bestResult0, blockedBoosters0, boosterStatAdjacencies0);
 	const t2 = performance.now();
 
 	tlog(ns, "DEBUG", "Computed Stanek plan. Prep work %.3fmsec, layout search %.3fmsec, %d planStats calls, %d planBoosters calls",
@@ -209,113 +227,113 @@ async function planFragments(ns, width, height, statFrags, boosterFrags) {
 }
 
 /** @param {NS} ns
- *  @param {Placement[]} placements
- *  @param {Fragment[]} statFrags
- *  @param {Map<number, number[]>} statFragsKeys
- *  @param {Uint8Array} available
+ *  @param {Placement[]} statPlacements
+ *  @param {Placement[]} boosterPlacements
+ *  @param {number[][]} statFragsKeys
+ *  @param {Uint8Array} blockedStats
  *  @param {Plan} plan
  *  @param {[number, Plan]} bestResult
- *  @param {Uint8Array} availableBoosters
- *  @param {Uint8Array} adjacentStats
- *  @return {[number, Plan]} */
-function planStats(ns, placements, statFrags, statFragsKeys, available, plan, bestResult, availableBoosters, adjacentStats) {
+ *  @param {Uint8Array} blockedBoosters
+ *  @param {Uint8Array} boosterStatAdjacencies
+ *  @return {[number, Plan, Uint8Array, Uint8Array]} */
+function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies) {
 	planStatsCount++;
-	if (statFrags.length == 0) {
+	if (statFragsKeys.length == 0) {
 		// Mark boosters that are not blocked, but also not adjacent to a stat fragment as unavailable
 		// and count the remaining available boosters
 		let availableBoostersCount = 0;
-		for (let i = 0; i < availableBoosters.length; i++) {
-			if (adjacentStats[i] === 0) // No stats adjacent => mark unavailable
-				availableBoosters[i]++;
-			else if (availableBoosters[i] === 0)
+		for (let i = 0; i < blockedBoosters.length; i++) {
+			if (boosterStatAdjacencies[i] === 0) // No adjacent stat fragments => block
+				blockedBoosters[i]++;
+			else if (blockedBoosters[i] === 0) // Has adjacent stat fragments, and not blocked
 				availableBoostersCount++;
 		}
 
-		const result = planBoosters(plan, placements, availableBoosters, availableBoostersCount, 0, bestResult);
+		const result = planBoosters(plan, boosterPlacements, boosterStatAdjacencies,
+			blockedBoosters, availableBoostersCount, 0, bestResult);
 
 		// Undo changes
-		for (let i = 0; i < availableBoosters.length; i++)
-			if (adjacentStats[i] === 0)
-				availableBoosters[i]--;
+		for (let i = 0; i < blockedBoosters.length; i++)
+			if (boosterStatAdjacencies[i] === 0)
+				blockedBoosters[i]--;
 
 		return result;
 	}
 
-	for (const key of statFragsKeys.get(statFrags[0].id)) {
-		if (available[key] !== 0) continue;
-		const placement = placements[key];
-		const adjacentToBoosters = placement.adjacentToBoosters;
+	for (const key of statFragsKeys[0]) {
+		if (blockedStats[key] !== 0) continue;
+		const placement = statPlacements[key];
+		const adjacentBoosters = placement.adjacentBoosters;
 		const overlapWithBoosters = placement.overlapWithBoosters;
 		const overlapWithStats = placement.overlapWithStats;
 
 		// Add the fragment placement to plan and update usability in-place to account for the new blocks
 		plan.stats.push(placement);
 		for (let i = 0; i < overlapWithStats.length; i++)
-			available[overlapWithStats[i]]++;
+			blockedStats[overlapWithStats[i]]++;
 		for (let i = 0; i < overlapWithBoosters.length; i++)
-			availableBoosters[overlapWithBoosters[i]]++;
-		for (let i = 0; i < adjacentToBoosters.length; i++)
-			adjacentStats[adjacentToBoosters[i]]++;
+			blockedBoosters[overlapWithBoosters[i]]++;
+		for (let i = 0; i < adjacentBoosters.length; i++)
+			boosterStatAdjacencies[adjacentBoosters[i]]++;
 
 		// Find and score best plan that includes this fragment placement
-		bestResult = planStats(ns, placements, statFrags.slice(1), statFragsKeys,
-			available, plan, bestResult, availableBoosters, adjacentStats);
+		bestResult = planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
+			blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies);
 
 		// Undo the changes
 		plan.stats.pop();
 		for (let i = 0; i < overlapWithStats.length; i++)
-			available[overlapWithStats[i]]--;
+			blockedStats[overlapWithStats[i]]--;
 		for (let i = 0; i < overlapWithBoosters.length; i++)
-			availableBoosters[overlapWithBoosters[i]]--;
-		for (let i = 0; i < adjacentToBoosters.length; i++)
-			adjacentStats[adjacentToBoosters[i]]--;
+			blockedBoosters[overlapWithBoosters[i]]--;
+		for (let i = 0; i < adjacentBoosters.length; i++)
+			boosterStatAdjacencies[adjacentBoosters[i]]--;
 	}
 
 	return bestResult;
 }
 
 /** @param {Plan} plan
- *  @param {Placement[]} placements
- *  @param {Uint8Array} available
+ *  @param {Placement[]} boosterPlacements
+ *  @param {Uint8Array} boosterStatAdjacencies
+ *  @param {Uint8Array} blockedBoosters
  *  @param {number} availableCount
  *  @param {number} startIdx
  *  @param {[number, Plan]} bestResult
  *  @return {[number, Plan]} */
-function planBoosters(plan, placements, available, availableCount, startIdx, bestResult) {
+function planBoosters(plan, boosterPlacements, boosterStatAdjacencies, blockedBoosters, availableCount, startIdx, bestResult) {
 	planBoostersCount++;
 	if (availableCount == 0) {
-		let score = 0;
 		const { stats, boosters } = plan;
-		for (let i = 0; i < stats.length; i++) {
-			const isAdjacentTo = stats[i].isAdjacentTo;
-			for (let j = 0; j < boosters.length; j++)
-				if (isAdjacentTo[boosters[j].key] !== 0)
-					score += 1;
-		}
+
+		let score = 0;
+		for (let i = 0; i < boosters.length; i++)
+			score += boosterStatAdjacencies[boosters[i].key];
 		score = stats.length * (1 + 0.1 * score); // piecesPlaced*(1+0.1*numAdjacencies)
+
 		if (score > bestResult[0])
-			return [score, { stats: [...plan.stats], boosters: [...plan.boosters] }]; // Clone plan
+			return [score, { stats: [...stats], boosters: [...boosters] }]; // Clone plan
 		else
 			return bestResult;
 	}
 
-	for (let i = startIdx; i < available.length; i++) {
-		if (available[i] !== 0) continue;
-		const placement = placements[i];
+	for (let i = startIdx; i < blockedBoosters.length; i++) {
+		if (blockedBoosters[i] !== 0) continue;
+		const placement = boosterPlacements[i];
 		const overlapWithBoosters = placement.overlapWithBoosters;
 
 		// Add the fragment placement to plan and update usability in-place to account for the new blocks
 		plan.boosters.push(placement);
 		for (let j = 0; j < overlapWithBoosters.length; j++)
-			if ((available[overlapWithBoosters[j]]++) === 0) availableCount--; // Placement became blocked?
+			if ((blockedBoosters[overlapWithBoosters[j]]++) === 0) availableCount--; // Placement became blocked?
 
 		// Find and score best plan that includes this fragment placement
-		bestResult = planBoosters(plan, placements, available, availableCount, i + 1, bestResult);
+		bestResult = planBoosters(plan, boosterPlacements, boosterStatAdjacencies, blockedBoosters, availableCount, i + 1, bestResult);
 
 		// Undo the changes
 		plan.boosters.pop();
 		for (let j = 0; j < overlapWithBoosters.length; j++)
-			if ((--available[overlapWithBoosters[j]]) === 0) availableCount++; // Placement became free?
+			if ((--blockedBoosters[overlapWithBoosters[j]]) === 0) availableCount++; // Placement became free?
 	}
 
 	return bestResult;
