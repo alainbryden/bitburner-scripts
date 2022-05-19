@@ -239,6 +239,10 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 	planStatsCount++;
 	if (planStatsCount % 100000 == 0)
 		await ns.sleep(0); // Don't hang the game
+
+	let [currentBestScore, _] = bestResult;
+	currentBestScore = currentBestScore || 0;
+
 	// If at least one fragment has been placed, see what the best score is we can get by adding boosters
 	if (plan.stats.length > 0) {
 		// Mark boosters that are not blocked, but also not adjacent to a stat fragment as unavailable
@@ -259,8 +263,11 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 			if (boosterStatAdjacencies[i] === 0)
 				blockedBoosters[i]--;
 
-		if (addBoostersBestResult > bestResult)
+		const [addBoosterBestScore, _] = addBoostersBestResult;
+		if (addBoosterBestScore || 0 > currentBestScore) {
 			bestResult = addBoostersBestResult;
+			currentBestScore = addBoosterBestScore;
+		}
 	}
 	// If there are fragments left to place, recurse to see if we can improve the score by placing more
 	if (statFragsKeys.length > 0) {
@@ -283,7 +290,8 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 			// Find and score best plan that includes this fragment placement
 			const recursiveBestResult = await planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
 				blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies);
-			if (recursiveBestResult > bestResult)
+			const [recursiveBestScore, _] = recursiveBestResult;
+			if (recursiveBestScore || 0 > currentBestScore)
 				bestResult = recursiveBestResult;
 
 			// Undo the changes
