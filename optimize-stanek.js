@@ -255,7 +255,7 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 				availableBoostersCount++;
 		}
 
-		const addBoostersBestResult = planBoosters(plan, boosterPlacements, boosterStatAdjacencies,
+		const [boosterScore, boosterPlan] = planBoosters(plan, boosterPlacements, boosterStatAdjacencies,
 			blockedBoosters, availableBoostersCount, 0, bestResult);
 
 		// Undo changes
@@ -263,10 +263,9 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 			if (boosterStatAdjacencies[i] === 0)
 				blockedBoosters[i]--;
 
-		const [addBoosterBestScore, _] = addBoostersBestResult;
-		if (addBoosterBestScore || 0 > currentBestScore) {
-			bestResult = addBoostersBestResult;
-			currentBestScore = addBoosterBestScore;
+		if (boosterScore || 0 > currentBestScore) {
+			bestResult = [boosterScore, boosterPlan];
+			currentBestScore = boosterScore;
 		}
 	}
 	// If there are fragments left to place, recurse to see if we can improve the score by placing more
@@ -288,11 +287,10 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 				boosterStatAdjacencies[adjacentBoosters[i]]++;
 
 			// Find and score best plan that includes this fragment placement
-			const recursiveBestResult = await planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
+			const [bestPlanScore, bestPlan] = await planStats(ns, statPlacements, boosterPlacements, statFragsKeys.slice(1),
 				blockedStats, plan, bestResult, blockedBoosters, boosterStatAdjacencies);
-			const [recursiveBestScore, _] = recursiveBestResult;
-			if (recursiveBestScore || 0 > currentBestScore)
-				bestResult = recursiveBestResult;
+			if (bestPlanScore || 0 > currentBestScore)
+				bestResult = [bestPlanScore, bestPlan];
 
 			// Undo the changes
 			plan.stats.pop();
