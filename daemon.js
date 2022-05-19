@@ -242,6 +242,7 @@ export async function main(ns) {
             shouldRun: () => 4 in dictSourceFiles && reqRam(256 / (2 ** dictSourceFiles[4]) && !studying) // Higher SF4 levels result in lower RAM requirements
         },
         { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && (playerStats.bitNodeN == 6 || playerStats.bitNodeN == 7) && !studying }, // Script to create manage bladeburner for us
+        { name: "infiltrator.js", tail: false }, // Service to automate infiltrations
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
     // Add any additional scripts to be run provided by --run-script arguments
