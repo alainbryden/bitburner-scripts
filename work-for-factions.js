@@ -272,6 +272,11 @@ async function mainLoop(ns) {
         ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
     } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
 
+    if (!(9 in dictSourceFiles)) {
+        priorityFactions.splice(priorityFactions.findIndex(c => c == "Netburners"), 1);
+        ns.print(`Skipping netburners because upgraded hashnet servers are not active.`);
+    }
+
     // Strategy 1: Tackle a consolidated list of desired faction order, interleaving simple factions and megacorporations
     const factionWorkOrder = firstFactions.concat(priorityFactions.filter(f => // Remove factions from our initial "work order" if we've bought all desired augmentations.
         !firstFactions.includes(f) && !skipFactions.includes(f) && !softCompletedFactions.includes(f)));
