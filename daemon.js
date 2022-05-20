@@ -818,7 +818,7 @@ class Server {
     getExpPerSecond() { return dictServerProfitInfo ? dictServerProfitInfo[this.name]?.expRate ?? 0 : (1 / dictServerMinSecurityLevels[this.name] ?? 0); }
     getMoney() { return this.ns.getServerMoneyAvailable(this.name); }
     getSecurity() { return this.ns.getServerSecurityLevel(this.name); }
-    canCrack() { return getNumPortCrackers(ns) >= this.portsRequired; }
+    canCrack() { return getNumPortCrackers(this.ns) >= this.portsRequired; }
     canHack() { return this.requiredHackLevel <= playerHackSkill(); }
     shouldHack() {
         return this.getMaxMoney() > 0 && this.name !== "home" && !this.name.startsWith('hacknet-node-') &&
