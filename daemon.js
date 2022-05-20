@@ -121,7 +121,7 @@ let recoveryThreadPadding = 1; // How many multiples to increase the weaken/grow
 
 let _ns = null; // Globally available ns reference, for convenience
 let daemonHost = null; // the name of the host of this daemon, so we don't have to call the function more than once.
-let playerStats = null; // stores ultipliers for player abilities and other player info
+let playerStats; // stores multipliers for player abilities and other player info
 let hasFormulas = true;
 let currentTerminalServer; // Periodically updated when intelligence farming, the current connected terminal server.
 let dictSourceFiles; // Available source files
@@ -135,8 +135,11 @@ let highUtilizationIterations = 0;
 let lastShareTime = 0; // Tracks when share was last invoked so we can respect the configured share-cooldown
 let allTargetsPrepped = false;
 
+/** @param {NS} ns
+ * @returns {Promise<Player>} */
+async function getPlayerStats(ns) { return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt'); }
 /** @returns {Promise<Player>} */
-async function updatePlayerStats() { return playerStats = await getNsDataThroughFile(_ns, `ns.getPlayer()`, '/Temp/player-info.txt'); }
+async function updatePlayerStats(ns = null) { return playerStats = await getPlayerStats(ns || _ns); }
 
 function playerHackSkill() { return playerStats.hacking; }
 
@@ -191,7 +194,7 @@ export async function main(ns) {
     lowUtilizationIterations = highUtilizationIterations = 0;
     allHostNames = [], _allServers = [], psCache = [];
 
-    await updatePlayerStats();
+    playerStats = await updatePlayerStats(ns);
     dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     log(ns, "The following source files are active: " + JSON.stringify(dictSourceFiles));
 
@@ -241,7 +244,10 @@ export async function main(ns) {
             name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
             shouldRun: () => 4 in dictSourceFiles && reqRam(256 / (2 ** dictSourceFiles[4]) && !studying) // Higher SF4 levels result in lower RAM requirements
         },
-        { name: "bladeburner.js", tail: openTailWindows, shouldRun: () => 7 in dictSourceFiles && (playerStats.bitNodeN == 6 || playerStats.bitNodeN == 7) && !studying }, // Script to create manage bladeburner for us
+        {   // Script to create manage bladeburner for us
+            name: "bladeburner.js", tail: openTailWindows,
+            shouldRun: () => 7 in dictSourceFiles && (playerStats.bitNodeN == 6 || playerStats.bitNodeN == 7 || playerStats.inBladeburner) && !studying // TODO: Don't let studying stop us of we have Simulacrum
+        },
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
     // Add any additional scripts to be run provided by --run-script arguments
