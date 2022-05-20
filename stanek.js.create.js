@@ -48,12 +48,21 @@ export async function main(ns) {
 		log(ns, `ERROR: Failed to place one or more fragments. The layout may be invalid.`, true, 'error');
 }
 
-// DISCLAIMER: These layouts are decidedly hack focused.
+// DISCLAIMER: These layouts are mostly hack focused, but bring in additional important stats as there is room
 const layouts = [ // NOTE: Width appears to be always the same as, or one more than height.
 	{
+		"height": 2, "width": 3, "fragments": [ // BN 13.1 is this small
+			{ "id": 0, "x": 0, "y": 0, "rotation": 0 } // Hacking Mult
+		]
+	}, {
 		"height": 3, "width": 3, "fragments": [
 			{ "id": 1, "x": 0, "y": 0, "rotation": 3 }, // Hacking Mult
 			{ "id": 25, "x": 1, "y": 0, "rotation": 3 }, // Reputation
+		]
+	}, {
+		"height": 3, "width": 4, "fragments": [ // Note: Possible to fit 3 fragments, see "alternative layouts" below
+			{ "id": 0, "x": 0, "y": 0, "rotation": 1 },
+			{ "id": 1, "x": 2, "y": 0, "rotation": 1 }
 		]
 	}, {
 		"height": 4, "width": 4, "fragments": [ // Note: Possible to fit 4 fragments, but have to sacrifice a hacking mult piece
@@ -130,3 +139,32 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 		]
 	}
 ];
+
+// These alternative layouts are more "well-counded", favour fitting more stat pieces vs. boosting most important stats
+const alternativeLayouts = [
+	{
+		"height": 3, "width": 4, "fragments": [
+			{ "id": 0, "x": 1, "y": 0, "rotation": 0 }, // Hacking Chance
+			{ "id": 25, "x": 0, "y": 0, "rotation": 1 }, // Reputation
+			{ "id": 28, "x": 1, "y": 1, "rotation": 0 }, // Crime Money
+		]
+	}, {
+		"height": 4, "width": 4, "fragments": [
+			{ "id": 0, "x": 0, "y": 2, "rotation": 2 }, // Hacking Chance
+			{ "id": 7, "x": 2, "y": 1, "rotation": 3 }, // Grow power
+			{ "id": 25, "x": 0, "y": 0, "rotation": 1 }, // Reputation
+			{ "id": 30, "x": 1, "y": 0, "rotation": 0 }, // Bladeburner
+		]
+	}, {
+		"height": 6, "width": 6, "fragments": [
+			{ "id": 0, "x": 0, "y": 2, "rotation": 0 }, // Hacking Chance
+			{ "id": 1, "x": 0, "y": 4, "rotation": 0 }, // Hacking Chance
+			{ "id": 5, "x": 2, "y": 1, "rotation": 0 }, // Hacking Speed
+			{ "id": 6, "x": 2, "y": 0, "rotation": 0 }, // Hack power
+			{ "id": 7, "x": 2, "y": 3, "rotation": 2 }, // Grow power
+			{ "id": 20, "x": 5, "y": 1, "rotation": 1 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 3, "y": 4, "rotation": 0 }, // Reputation
+		]
+	}
+]
