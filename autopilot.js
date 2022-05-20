@@ -327,7 +327,7 @@ async function checkOnRunningScripts(ns, player) {
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
 		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
 	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
-	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) && !stanekRunning && !daemon.args.includes("--xp-only")) {
+	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
 		if (player.hacking >= hackThreshold && !(player.bitNodeN == 8))
 			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
