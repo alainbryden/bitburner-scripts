@@ -155,7 +155,7 @@ export async function main(ns) {
 				const txtCount = await findRetry(ns, "//p[contains(text(), 'Count:')]", true, 20);
 				if (!txtCount) { // If we can't find the count, we've either been kicked out, or maybe routed to another screen.
 					return await checkForFocusScreen() /* Detect the case where we started working/training */ ?
-						log("ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.", true) :
+						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Please try again.", true) :
 						await onCompletion(ns); // Otherwise, assume we've been kicked out of the casino for having stolen the max 10b
 				}
 				const allCounts = txtCount.querySelectorAll('span');
