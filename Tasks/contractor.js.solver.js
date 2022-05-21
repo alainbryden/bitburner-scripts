@@ -543,7 +543,7 @@ const codingContractTypesMetadata = [{
 },
 {
     //Taken from https://github.com/danielyxie/bitburner/blob/dev/src/utils/HammingCodeTools.ts and converted to js by Discord: H3draut3r#6722
-    name: 'HammingCodes: Integer to encoded Binary',
+    name: 'HammingCodes: Integer to Encoded Binary',
     solver: function (value) {
         // Calculates the needed amount of parityBits 'without' the "overall"-Parity
         const HammingSumOfParity = lengthOfDBits => lengthOfDBits == 0 ? 0 : lengthOfDBits < 3 ? lengthOfDBits + 1 :
