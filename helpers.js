@@ -210,7 +210,7 @@ export async function runCommand(ns, command, fileName, args = [], verbose = fal
  **/
 export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand_Custom"');
-    if (!Array.isArray(args)) throw Error(`args specified were a ${typeof args}, but an array is required.`);
+    if (!Array.isArray(args)) throw new Error(`args specified were a ${typeof args}, but an array is required.`);
     if (!verbose) disableLogs(ns, ['asleep']);
     let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
         `export async function main(ns) { try { ` +
@@ -272,7 +272,7 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
     if (fnIsAlive(pid)) {
         let errorMessage = `run-command pid ${pid} is running much longer than expected. Max retries exceeded.`;
         ns.print(errorMessage);
-        throw Error(errorMessage);
+        throw new Error(errorMessage);
     }
 }
 
@@ -287,7 +287,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             const result = await fnFunctionThatMayFail()
             const error = typeof errorContext === 'string' ? errorContext : errorContext();
             if (!fnSuccessCondition(result))
-                throw typeof error === 'string' ? Error(error) : error;
+                throw (typeof error === 'string' ? new Error(error) : error);
             return result;
         }
         catch (error) {
@@ -395,7 +395,7 @@ let cachedStockSymbols; // Cache of stock symbols since these never change
 
 /** Helper function to get the total value of stocks using as little RAM as possible.
  * @param {NS} ns
- * @param {Player} player - If you have previously retrieve player info, you can provide that here to save some time.
+ * @param {Player} player - If you have previously retrieved player info, you can provide that here to save some time.
  * @param {string[]} stockSymbols - If you have previously retrieved a list of all stock symbols, you can provide that here to save some time. */
 export async function getStocksValue(ns, player = null, stockSymbols = null) {
     if (!(player || await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt')).hasTixApiAccess) return 0;
@@ -419,7 +419,7 @@ export async function getStocksValue(ns, player = null, stockSymbols = null) {
 /** @param {NS} ns 
  * Returns a helpful error message if we forgot to pass the ns instance to a function */
 export function checkNsInstance(ns, fnName = "this function") {
-    if (!ns.print) throw Error(`The first argument to ${fnName} should be a 'ns' instance.`);
+    if (!ns.print) throw new Error(`The first argument to ${fnName} should be a 'ns' instance.`);
     return ns;
 }
 
@@ -445,9 +445,9 @@ export function getConfiguration(ns, argsSchema) {
                 const matchIndex = overriddenSchema.findIndex(o => o[0] == key);
                 const match = matchIndex === -1 ? null : overriddenSchema[matchIndex];
                 if (!match)
-                    throw Error(`Unrecognized key "${key}" does not match of this script's options: ` + JSON.stringify(argsSchema.map(a => a[0])));
+                    throw new Error(`Unrecognized key "${key}" does not match of this script's options: ` + JSON.stringify(argsSchema.map(a => a[0])));
                 else if (override === undefined)
-                    throw Error(`The key "${key}" appeared in the config with no value. Some value must be provided. Try null?`);
+                    throw new Error(`The key "${key}" appeared in the config with no value. Some value must be provided. Try null?`);
                 else if (match && JSON.stringify(match[1]) != JSON.stringify(override)) {
                     if (typeof (match[1]) !== typeof (override))
                         log(ns, `WARNING: The "${confName}" overriding "${key}" value: ${JSON.stringify(override)} has a different type (${typeof override}) than the ` +
