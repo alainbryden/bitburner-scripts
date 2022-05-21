@@ -312,21 +312,23 @@ async function checkOnRunningScripts(ns, player) {
 	const daemon = findScript('daemon.js');
 	// If player hacking level is about 8000, run in "start-tight" mode
 	const hackThreshold = options['high-hack-threshold'];
-	const daemonArgs = player.hacking < hackThreshold ? ["--stock-manipulation"] :
+	const daemonArgs = (player.hacking < hackThreshold || player.bitNodeN == 8) ? ["--stock-manipulation"] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
 		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
 			"--stock-manipulation-focus", "--silent-misfires", "--no-share",
 			// Use recovery thread padding sparingly until our hack level is significantly higher
 			"--recovery-thread-padding", 1.0 + (player.hacking - hackThreshold) / 1000.0];
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
+	// Hacking earns no money in BN8, so prioritize XP
+	if (player.bitNodeN == 8) daemonArgs.push("--xp-only");
 	// By default, don't join bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
 	if (options['enable-bladeburner']) daemonArgs.push('--run-script', getFilePath('bladeburner.js'));
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
 		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
 	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
-	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) && !stanekRunning) {
-		if (player.hacking >= hackThreshold)
+	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
+		if (player.hacking >= hackThreshold && !(player.bitNodeN == 8))
 			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
 		daemonStartTime = Date.now();
