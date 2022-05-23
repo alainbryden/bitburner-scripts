@@ -23,7 +23,8 @@ export async function main(ns) {
                 ns.toast(message, 'success');
                 ns.tprint(message);
             } else {
-                notice = `ERROR: Wrong answer for ${contractInfo.contract} on ${contractInfo.hostname}: ${JSON.stringify(answer)}`;
+                notice = `ERROR: Wrong answer for contract type "${contractInfo.type}" (${contractInfo.contract} on ${contractInfo.hostname}):` +
+                    `\nIncorrect Answer Given: ${JSON.stringify(answer)}\nContract Info: ${JSON.stringify(contractInfo)}`;
             }
         } else {
             notice = `WARNING: No solver available for contract type "${contractInfo.type}"\nFull info: ${JSON.stringify(contractInfo)})`;
@@ -207,8 +208,8 @@ const codingContractTypesMetadata = [{
             return a[0] - b[0]
         })
         const result = []
-        let  start = intervals[0][0]
-        let  end = intervals[0][1]
+        let start = intervals[0][0]
+        let end = intervals[0][1]
         for (const interval of intervals) {
             if (interval[0] <= end) {
                 end = Math.max(end, interval[1])
@@ -226,7 +227,7 @@ const codingContractTypesMetadata = [{
 {
     name: 'Generate IP Addresses',
     solver: function (data) {
-        const  ret = []
+        const ret = []
         for (let a = 1; a <= 3; ++a) {
             for (let b = 1; b <= 3; ++b) {
                 for (let c = 1; c <= 3; ++c) {
@@ -291,15 +292,15 @@ const codingContractTypesMetadata = [{
 {
     name: 'Algorithmic Stock Trader IV',
     solver: function (data) {
-        const  k = data[0]
-        const  prices = data[1]
-        const  len = prices.length
+        const k = data[0]
+        const prices = data[1]
+        const len = prices.length
         if (len < 2) {
             return 0
         }
         if (k > len / 2) {
-            let  res = 0
-            for (let  i = 1; i < len; ++i) {
+            let res = 0
+            for (let i = 1; i < len; ++i) {
                 res += Math.max(prices[i] - prices[i - 1], 0)
             }
             return res
@@ -385,20 +386,20 @@ const codingContractTypesMetadata = [{
         const height = data.length;
         const dstY = height - 1;
         const dstX = width - 1;
-  
+
         const distance = new Array(height);
         //const prev: [[number, number] | undefined][] = new Array(height);
         const queue = [];
-  
+
         for (let y = 0; y < height; y++) {
             distance[y] = new Array(width).fill(Infinity);
             //prev[y] = new Array(width).fill(undefined) as [undefined];
         }
-  
+
         function validPosition(y, x) {
             return y >= 0 && y < height && x >= 0 && x < width && data[y][x] == 0;
         }
-  
+
         // List in-bounds and passable neighbors
         function* neighbors(y, x) {
             if (validPosition(y - 1, x)) yield [y - 1, x]; // Up
@@ -406,7 +407,7 @@ const codingContractTypesMetadata = [{
             if (validPosition(y, x - 1)) yield [y, x - 1]; // Left
             if (validPosition(y, x + 1)) yield [y, x + 1]; // Right
         }
-  
+
         // Prepare starting point
         distance[0][0] = 0;
 
@@ -435,7 +436,7 @@ const codingContractTypesMetadata = [{
         while (queue.length > 0) {
             const [y, x] = queue.shift()
             for (const [yN, xN] of neighbors(y, x)) {
-                if (distance[yN][xN] == Infinity){
+                if (distance[yN][xN] == Infinity) {
                     queue.push([yN, xN])
                     distance[yN][xN] = distance[y][x] + 1
                 }
@@ -448,27 +449,27 @@ const codingContractTypesMetadata = [{
         //trace a path back to start
         let path = ""
         let [yC, xC] = [dstY, dstX]
-        while (xC != 0 || yC != 0){
+        while (xC != 0 || yC != 0) {
             const dist = distance[yC][xC];
             for (const [yF, xF] of neighbors(yC, xC)) {
-                if (distance[yF][xF] == dist - 1){
-                    path = ( xC == xF  ? (yC == yF + 1 ? "D" : "U") : (xC == xF + 1 ? "R" : "L") ) + path;                    
+                if (distance[yF][xF] == dist - 1) {
+                    path = (xC == xF ? (yC == yF + 1 ? "D" : "U") : (xC == xF + 1 ? "R" : "L")) + path;
                     [yC, xC] = [yF, xF]
                     break
                 }
-            }            
+            }
         }
-        
+
         return path;
     }
 },
 {
     name: 'Sanitize Parentheses in Expression',
     solver: function (data) {
-        let  left = 0
-        let  right = 0
+        let left = 0
+        let right = 0
         const res = []
-        for (let  i = 0; i < data.length; ++i) {
+        for (let i = 0; i < data.length; ++i) {
             if (data[i] === '(') {
                 ++left
             } else if (data[i] === ')') {
@@ -675,41 +676,41 @@ const codingContractTypesMetadata = [{
     solver: function (compr) {
         let plain = "";
 
-        for (let i = 0; i < compr.length; ) {
-          const literal_length = compr.charCodeAt(i) - 0x30;
-      
-          if (literal_length < 0 || literal_length > 9 || i + 1 + literal_length > compr.length) {
-            return null;
-          }
-      
-          plain += compr.substring(i + 1, i + 1 + literal_length);
-          i += 1 + literal_length;
-      
-          if (i >= compr.length) {
-            break;
-          }
-          const backref_length = compr.charCodeAt(i) - 0x30;
-      
-          if (backref_length < 0 || backref_length > 9) {
-            return null;
-          } else if (backref_length === 0) {
-            ++i;
-          } else {
-            if (i + 1 >= compr.length) {
-              return null;
-            }
-      
-            const backref_offset = compr.charCodeAt(i + 1) - 0x30;
-            if ((backref_length > 0 && (backref_offset < 1 || backref_offset > 9)) || backref_offset > plain.length) {
-              return null;
-            }
-      
-            for (let j = 0; j < backref_length; ++j) {
-              plain += plain[plain.length - backref_offset];
+        for (let i = 0; i < compr.length;) {
+            const literal_length = compr.charCodeAt(i) - 0x30;
+
+            if (literal_length < 0 || literal_length > 9 || i + 1 + literal_length > compr.length) {
+                return null;
             }
 
-            i += 2;
-          }
+            plain += compr.substring(i + 1, i + 1 + literal_length);
+            i += 1 + literal_length;
+
+            if (i >= compr.length) {
+                break;
+            }
+            const backref_length = compr.charCodeAt(i) - 0x30;
+
+            if (backref_length < 0 || backref_length > 9) {
+                return null;
+            } else if (backref_length === 0) {
+                ++i;
+            } else {
+                if (i + 1 >= compr.length) {
+                    return null;
+                }
+
+                const backref_offset = compr.charCodeAt(i + 1) - 0x30;
+                if ((backref_length > 0 && (backref_offset < 1 || backref_offset > 9)) || backref_offset > plain.length) {
+                    return null;
+                }
+
+                for (let j = 0; j < backref_length; ++j) {
+                    plain += plain[plain.length - backref_offset];
+                }
+
+                i += 2;
+            }
         }
 
         return plain;
