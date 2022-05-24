@@ -235,7 +235,7 @@ async function checkIfBnIsComplete(ns, player) {
 
 	// Use the new special singularity function to automate entering a new BN
 	pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
-		'/Temp/singularity-destroyW0r1dD43m0n.js', [options['next-bn'], ns.getScriptName()]);
+		'/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
 	if (pid) {
 		await waitForProcessToComplete(ns, pid);
 		await ns.sleep(10000);
