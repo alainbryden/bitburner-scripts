@@ -113,7 +113,7 @@ export async function main(ns) {
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
     const sf4Level = playerData.bitNodeN == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
     if (sf4Level == 0)
-        return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'ERROR');
+        return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'error');
     else if (sf4Level < 3)
         log(ns, `WARNING: This script makes heavy use of singularity functions, which are quite expensive before you have SF4.3. ` +
             `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
