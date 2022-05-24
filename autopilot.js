@@ -7,10 +7,11 @@ import {
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
 const casinoFlagFile = "/Temp/ran-casino.txt";
+const defaultBnOrder = [4.3, 1.3, 5.1, 10.1, 2.1, 9.2, 8.2, 10.3, 9.3, 11.3, 13.3, 5.3, 7.1, 6.3, 7.3, 2.3, 8.3, 3.3, 12.999];
 
 let options = null; // The options used at construction time
 const argsSchema = [ // The set of all command line arguments
-	['next-bn', 12], // If we destroy the current BN, the next BN to start
+	['next-bn', 0], // If we destroy the current BN, the next BN to start
 	['disable-auto-destroy-bn', false], // Set to true if you do not want to auto destroy this BN when done
 	['install-at-aug-count', 11], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
 	['install-at-aug-plus-nf-count', 14], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
@@ -43,7 +44,7 @@ let reservedPurchase; // Flag to indicate whether we've reservedPurchase money a
 let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let lastScriptsCheck; // Last time we got a listing of all running scripts
 let killScripts; // A list of scripts flagged to be restarted due to changes in priority
-let dictOwnedSourceFiles, unlockedSFs, bitnodeMults; // Info for the current bitnode
+let dictOwnedSourceFiles, unlockedSFs, bitnodeMults, nextBn; // Info for the current bitnode
 let installedAugmentations, playerInstalledAugCount, stanekLaunched; // Info for the current ascend
 let daemonStartTime; // The time we personally launched daemon.
 let installCountdown; // Start of a countdown before we install augmentations.
@@ -105,6 +106,19 @@ async function startUp(ns) {
 	}
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns, player);
+
+	// Decide what the next-up bitnode should be
+	const getSFLevel = bn => Number(bn + "." + ((dictOwnedSourceFiles[player.bitNodeN] || 0) + (player.bitNodeN == bn ? 1 : 0)));
+	const nextSfEarned = getSFLevel(player.bitNodeN);
+	const nextRecommendedSf = defaultBnOrder.find(v => v - Math.floor(v) > getSFLevel(Math.floor(v)) - Math.floor(v));
+	const nextRecommendedBn = Math.floor(nextRecommendedSf);
+	nextBn = options['next-bn'] || nextRecommendedBn;
+	log(ns, `INFO: After the current BN (${nextSfEarned}), the next recommended BN is ${nextRecommendedBn} until you have SF ${nextRecommendedSf}.` +
+		`\nYou are currently earning SF${nextSfEarned}, and you already own the following source files: ` +
+		Object.keys(dictOwnedSourceFiles).map(bn => `${bn}.${dictOwnedSourceFiles[bn]}`).join(", "));
+	if (nextBn != nextRecommendedBn)
+		log(ns, `WARN: The next recommended BN is ${nextRecommendedBn}, but the --next-bn parameter is set to override this with ${nextBn}.`, true, 'warning');
+
 	return true;
 }
 
