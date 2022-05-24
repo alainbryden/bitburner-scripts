@@ -108,7 +108,7 @@ async function startUp(ns) {
 		await initializeNewBitnode(ns, player);
 
 	// Decide what the next-up bitnode should be
-	const getSFLevel = bn => Number(bn + "." + ((dictOwnedSourceFiles[player.bitNodeN] || 0) + (player.bitNodeN == bn ? 1 : 0)));
+	const getSFLevel = bn => Number(bn + "." + ((dictOwnedSourceFiles[bn] || 0) + (player.bitNodeN == bn ? 1 : 0)));
 	const nextSfEarned = getSFLevel(player.bitNodeN);
 	const nextRecommendedSf = defaultBnOrder.find(v => v - Math.floor(v) > getSFLevel(Math.floor(v)) - Math.floor(v));
 	const nextRecommendedBn = Math.floor(nextRecommendedSf);
