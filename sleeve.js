@@ -55,7 +55,7 @@ export async function main(ns) {
             log(ns, `WARNING: sleeve.js Caught (and suppressed) an unexpected error in the main loop:\n` +
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
-        await ns.asleep(interval);
+        await ns.sleep(interval);
     }
 }
 

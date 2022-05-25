@@ -49,7 +49,7 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
-    disableLogs(ns, ['asleep'])
+    disableLogs(ns, ['sleep'])
     player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
     // Ensure we have access to bladeburner
     ownedSourceFiles = await getActiveSourceFiles(ns);
@@ -71,7 +71,7 @@ export async function main(ns) {
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
         const nextTaskComplete = currentTaskEndTime - Date.now();
-        await ns.asleep(Math.min(options['update-interval'], nextTaskComplete > 0 ? nextTaskComplete : Number.MAX_VALUE));
+        await ns.sleep(Math.min(options['update-interval'], nextTaskComplete > 0 ? nextTaskComplete : Number.MAX_VALUE));
     }
 }
 
@@ -377,7 +377,7 @@ async function spendSkillPoints(ns) {
         else
             log(ns, `WARNING: Something went wrong while trying to upgrade Bladeburner skill ${skillToUpgrade}. ` +
                 `Currently have ${unspent} SP, upgrade should cost ${skillCosts[skillToUpgrade]} SP.`, false, 'warning');
-        await ns.asleep(10);
+        await ns.sleep(10);
     }
 }
 
@@ -428,7 +428,7 @@ async function beingInBladeburner(ns) {
             log(ns, `WARNING: bladeburner.js Caught (and suppressed) an unexpected error while waiting to join bladeburner, but will keep going:\n` +
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
-        await ns.asleep(5000);
+        await ns.sleep(5000);
     }
     log(ns, "INFO: We are in Bladeburner. Starting main loop...")
     // If not disabled, launch an external script to spend hashes on bladeburner rank

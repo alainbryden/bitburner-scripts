@@ -211,7 +211,7 @@ export async function runCommand(ns, command, fileName, args = [], verbose = fal
 export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand_Custom"');
     if (!Array.isArray(args)) throw new Error(`args specified were a ${typeof args}, but an array is required.`);
-    if (!verbose) disableLogs(ns, ['asleep']);
+    if (!verbose) disableLogs(ns, ['sleep']);
     let script = `import { formatMoney, formatNumberShort, formatDuration, parseShortNumber, scanAllServers } fr` + `om '${getFilePath('helpers.js')}'\n` +
         `export async function main(ns) { try { ` +
         (verbose ? `let output = ${command}; ns.tprint(output)` : command) +
@@ -258,14 +258,14 @@ export async function waitForProcessToComplete(ns, pid, verbose) {
  **/
 export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose) {
     checkNsInstance(ns, '"waitForProcessToComplete_Custom"');
-    if (!verbose) disableLogs(ns, ['asleep']);
+    if (!verbose) disableLogs(ns, ['sleep']);
     // Wait for the PID to stop running (cheaper than e.g. deleting (rm) a possibly pre-existing file and waiting for it to be recreated)
     let start = Date.now();
     let sleepMs = 1;
     for (var retries = 0; retries < 1000; retries++) {
         if (!fnIsAlive(pid)) break; // Script is done running
         if (verbose && retries % 100 === 0) ns.print(`Waiting for pid ${pid} to complete... (${formatDuration(Date.now() - start)})`);
-        await ns.asleep(sleepMs);
+        await ns.sleep(sleepMs);
         sleepMs = Math.min(sleepMs * 2, 200);
     }
     // Make sure that the process has shut down and we haven't just stopped retrying
@@ -295,7 +295,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed` +
                 (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`), fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
-            await ns.asleep(retryDelayMs);
+            await ns.sleep(retryDelayMs);
             retryDelayMs *= backoffRate;
         }
     }

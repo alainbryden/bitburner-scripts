@@ -74,7 +74,7 @@ export async function main(ns) {
 			log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:\n` +
 				(typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
 		}
-		await ns.asleep(options['interval']);
+		await ns.sleep(options['interval']);
 	}
 }
 
@@ -417,7 +417,7 @@ async function maybeDoCasino(ns, player) {
 	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
 	if (pid) {
 		await waitForProcessToComplete(ns, pid);
-		await ns.asleep(1000); // Give time for this script to be killed if the game is being restarted by casino.js
+		await ns.sleep(1000); // Give time for this script to be killed if the game is being restarted by casino.js
 		// If we didn't get killed, see if casino.js discovered it was already previously kicked out
 		if (ns.read(casinoFlagFile)) return ranCasino = true;
 		// Otherwise, something went wrong
@@ -510,7 +510,7 @@ async function maybeInstallAugmentations(ns, player) {
 	let pid = launchScriptHelper(ns, 'ascend.js', ascendArgs);
 	if (pid) {
 		await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down (Ascend should get killed as it does, since the BN will be rebooting)
-		await ns.asleep(1000); // If we've been scheduled to be killed, awaiting an NS function should trigger it?
+		await ns.sleep(1000); // If we've been scheduled to be killed, awaiting an NS function should trigger it?
 		errLog = `ERROR: ascend.js ran, but we're still here. Something must have gone wrong. Will try again later`;
 		log(ns, errLog, true, 'error');
 	} else
