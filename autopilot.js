@@ -38,7 +38,7 @@ export function autocomplete(data, args) {
 }
 
 let playerInGang, rushGang; // Tells us whether we're should be trying to work towards getting into a gang
-let wdAvailable; // A flag indicating whether the BN is completable on this reset
+let wdHack; // If the WD server is available (i.e. TRP is installed), caches the required hack level
 let ranCasino; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
 let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
@@ -48,6 +48,7 @@ let dictOwnedSourceFiles, unlockedSFs, bitnodeMults, nextBn; // Info for the cur
 let installedAugmentations, playerInstalledAugCount, stanekLaunched; // Info for the current ascend
 let daemonStartTime; // The time we personally launched daemon.
 let installCountdown; // Start of a countdown before we install augmentations.
+let bnCompletionSuppressed; // Flag if we've detected that we've won the BN, but are suppressing a restart
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -83,9 +84,10 @@ async function startUp(ns) {
 	await persistConfigChanges(ns);
 
 	// Reset global state
-	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable = stanekLaunched = false;
-	playerInstalledAugCount = wdAvailable = null;
-	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
+	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable =
+		bnCompletionSuppressed = stanekLaunched = false;
+	playerInstalledAugCount = wdHack = null;
+	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase;
 	installedAugmentations = killScripts = [];
 
 	// Collect and cache some one-time data
@@ -163,7 +165,7 @@ async function mainLoop(ns) {
 async function checkOnDaedalusStatus(ns, player, stocksValue) {
 	// Logic below is for rushing a daedalus invite.
 	// We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
-	if (daedalusUnavailable || wdAvailable == true) return reserveForDaedalus = false;
+	if (daedalusUnavailable || (wdHack || 0) > 0) return reserveForDaedalus = false;
 	if (player.hacking < 2500) return reserveForDaedalus = false;
 	if (player.factions.includes("Daedalus")) {
 		if (reserveForDaedalus) {
@@ -195,21 +197,26 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
  * @param {NS} ns 
  * @param {Player} player */
 async function checkIfBnIsComplete(ns, player) {
-	if (wdAvailable === false) return false;
-	const wdHack = await getNsDataThroughFile(ns,
-		'ns.scan("The-Cave").includes("w0r1d_d43m0n") ? ns.getServerRequiredHackingLevel("w0r1d_d43m0n"): -1',
-		'/Temp/wd-hackingLevel.txt');
-	if (wdHack == -1) return !(wdAvailable = false);
-	wdAvailable = true; // WD is available this bitnode. Are we ready to hack it yet?
-	if (player.hacking < wdHack)
-		return false; // We can't hack it yet, but soon!
-	const text = `BN ${player.bitNodeN}.${dictOwnedSourceFiles[player.bitNodeN] + 1} completed at ${formatDuration(player.playtimeSinceLastBitnode)}`;
+	if (bnCompletionSuppressed) return true;
+	if (wdHack === null) { // If we haven't checked yet, see if w0r1d_d43m0n (server) has been unlocked and get its required hack level
+		wdHack = await getNsDataThroughFile(ns, 'ns.scan("The-Cave").includes("w0r1d_d43m0n") ? ' +
+			'ns.getServerRequiredHackingLevel("w0r1d_d43m0n"): -1',
+			'/Temp/wd-hackingLevel.txt');
+		if (wdHack == -1) wdHack = Number.POSITIVE_INFINITY; // Cannot stringify infinity, so use -1 in transit
+	}
+	// Detect if a BN win condition has been met
+	let bnComplete = player.hacking >= wdHack;
+	if (!bnComplete && player.inBladeburner) // Detect the BB win condition
+		bnComplete = await getNsDataThroughFile(ns,
+			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus')`,
+			'/Temp/bladeburner-completed.txt');
+	if (!bnComplete) return false; // No win conditions met
+
+	const text = `BN ${player.bitNodeN}.${dictOwnedSourceFiles[player.bitNodeN] + 1} completed at ` +
+		`${formatDuration(player.playtimeSinceLastBitnode)} ` +
+		`(${(player.hacking >= wdHack ? `hack (${wdHack})` : 'bladeburner')} win condition)`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
-
-	// Clean out our temp folder and flags so we don't have any stale data when the next BN starts.
-	let pid = launchScriptHelper(ns, 'cleanup.js');
-	if (pid) await waitForProcessToComplete(ns, pid);
 
 	// Run the --on-completion-script if specified
 	if (options['on-completion-script']) {
@@ -225,13 +232,17 @@ async function checkIfBnIsComplete(ns, player) {
 			log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.` +
 				`\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
 				`\nNOTE: You can ONLY buy sleeves/memory from The Covenant in BN10, which is why it's important to do this before you leave.`);
-			return wdAvailable = false;
+			return bnCompletionSuppressed = true;
 		}
 	}
 	if (options['disable-auto-destroy-bn']) {
 		log(ns, `--disable-auto-destroy-bn is set, you can manually exit the bitnode when ready.`, true);
-		return wdAvailable = false;
+		return bnCompletionSuppressed = true;
 	}
+
+	// Clean out our temp folder and flags so we don't have any stale data when the next BN starts.
+	let pid = launchScriptHelper(ns, 'cleanup.js');
+	if (pid) await waitForProcessToComplete(ns, pid);
 
 	// Use the new special singularity function to automate entering a new BN
 	pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
@@ -241,7 +252,7 @@ async function checkIfBnIsComplete(ns, player) {
 		await ns.sleep(10000);
 	}
 	log(ns, `ERROR: Tried destroy the bitnode, but we're still here...`, true, 'error')
-	return true;
+	return bnCompletionSuppressed = true;
 }
 
 /** Helper to get a list of all scripts running (on home)
