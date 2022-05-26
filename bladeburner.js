@@ -20,7 +20,7 @@ const costAdjustments = {
 
 // Some bladeburner info gathered at startup and cached
 let skillNames, generalActionNames, contractNames, operationNames, remainingBlackOpsNames, blackOpsRanks;
-let inFaction, haveSimulacrum, lastBlackOpReady, lowStaminaTriggered, timesTrained, currentTaskEndTime, maxRankNeeded, lastAssignedTask;
+let inFaction, haveSimulacrum, lastBlackOpComplete, lowStaminaTriggered, timesTrained, currentTaskEndTime, maxRankNeeded, lastAssignedTask;
 let player, ownedSourceFiles;
 let options;
 const argsSchema = [
@@ -110,7 +110,7 @@ async function gatherBladeburnerInfo(ns) {
         await getNsDataThroughFile(ns, `ns.getOwnedAugmentations().includes("${simulacrumAugName}")`, '/Temp/bladeburner-hasSimulacrum.txt');
     // Initialize some flags that may change over time
     lastAssignedTask = null;
-    lastBlackOpReady = false; // Flag will track whether we've notified the user that the last black-op is ready
+    lastBlackOpComplete = false; // Flag will track whether we've notified the user that the last black-op is ready
     lowStaminaTriggered = false; // Flag will track whether we've previously switched to stamina recovery to reduce noise
     timesTrained = 0; // Count of how many times we've trained (capped at --training-limit)
     currentTaskEndTime = 0; // When set to a date, we will not assign new tasks until that date.
@@ -139,22 +139,33 @@ async function mainLoop(ns) {
     // If any blackops have been completed, remove them from the list of remaining blackops
     const blackOpsToBeDone = await getBBDictByActionType(ns, 'getActionCountRemaining', "blackops", remainingBlackOpsNames);
     remainingBlackOpsNames = remainingBlackOpsNames.filter(n => blackOpsToBeDone[n] === 1);
+    const nextBlackOp = remainingBlackOpsNames.length === 0 ? null : remainingBlackOpsNames[0];
+    // If we have completed the last bladeburner operation notify the user that they can leave the BN
+    if (nextBlackOp == null && !lastBlackOpComplete) {
+        const time = (await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).playtimeSinceLastBitnode;
+        const msg = `Bladeburner has completed the last BlackOp! (At ${formatDuration(time)}). ` +
+            `You can destroy the Bitnode on the Bladeburner > BlackOps tab.`;
+        log(ns, `SUCCESS: ${msg}`, true, 'success');
+        ns.alert(msg);
+        lastBlackOpComplete = true;
+    }
 
     // Gather the count of available contracts / operations
-    const nextBlackOp = remainingBlackOpsNames[0];
     const contractCounts = await getBBDictByActionType(ns, 'getActionCountRemaining', "contract", contractNames);
     const operationCounts = await getBBDictByActionType(ns, 'getActionCountRemaining', "operation", operationNames);
     // Define a helper that gets the count for an action based only on the name (type is auto-determined)
     const getCount = actionName => contractNames.includes(actionName) ? contractCounts[actionName] :
         operationNames.includes(actionName) ? operationCounts[actionName] :
-            generalActionNames.includes(actionName) ? Number.POSITIVE_INFINITY : remainingBlackOpsNames.includes(actionName) ? 1 : 0;
+            generalActionNames.includes(actionName) ? Number.POSITIVE_INFINITY :
+                remainingBlackOpsNames.includes(actionName) ? 1 : 0;
     // Create some quick-reference collections of action names that are limited in count and/or reserved for special purpose
-    const limitedActions = [nextBlackOp].concat(operationNames).concat(contractNames);
+    const limitedActions = operationNames.concat(contractNames);
+    if (nextBlackOp) limitedActions.unshift(nextBlackOp);
     const populationActions = ["Undercover Operation", "Investigation", "Tracking"];
     const reservedActions = ["Raid", "Stealth Retirement Operation"].concat(populationActions
         // Only reserve these actions if their count is below the configured reserve amount, scaled down as we approach our final rank (stop reserving at 99% of max rank)
         .filter(a => getCount(a) <= (options['reserved-action-count'] * (1 - rank / (0.99 * maxRankNeeded)))));
-    if (rank < blackOpsRanks[nextBlackOp]) reservedActions.push(nextBlackOp); // Remove blackop from "available actions" if we have insufficient rank.
+    if (nextBlackOp && rank < blackOpsRanks[nextBlackOp]) reservedActions.push(nextBlackOp); // Remove blackop from "available actions" if we have insufficient rank.
     const unreservedActions = limitedActions.filter(o => !reservedActions.includes(o));
     //log(ns, 'Unreserved Action Counts: ' + unreservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
     //log(ns, 'Reserved Action Counts: ' + reservedActions.map(a => `${a}: ${getCount(a)}`).join(", ")); // Debug log to see what unreserved actions remain
@@ -212,7 +223,7 @@ async function mainLoop(ns) {
     // Gather the success chance of contracts (based on our current city)
     const contractChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "contract", contractNames);
     const operationChances = await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "operation", operationNames);
-    const blackOpsChance = rank < blackOpsRanks[nextBlackOp] ? [0, 0] : // Insufficient rank for blackops means chance is zero
+    const blackOpsChance = nextBlackOp === null || rank < blackOpsRanks[nextBlackOp] ? [0, 0] : // Insufficient rank for blackops means chance is zero
         (await getBBDictByActionType(ns, 'getActionEstimatedSuccessChance', "blackops", [nextBlackOp]))[nextBlackOp];
     // Define some helpers for determining min/max chance for each action
     const getChance = actionName => contractNames.includes(actionName) ? contractChances[actionName] :
@@ -258,16 +269,6 @@ async function mainLoop(ns) {
         candidateActions = populationUncertain ? populationActions : unreservedActions;
         // Filter out candidates with no contract counts remaining
         candidateActions = candidateActions.filter(a => getCount(a) > 0);
-        // SPECIAL CASE: If we can complete the last bladeburner operation, leave it to the user (they may not be ready to leave the BN).
-        if (remainingBlackOpsNames.length == 1 && minChance(nextBlackOp) > options['success-threshold']) {
-            if (!lastBlackOpReady) { // If this is our first time discovering this, alert the user
-                const time = (await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).playtimeSinceLastBitnode;
-                log(ns, `SUCCESS: Bladeburner is ready to undertake the last BlackOp! (At ${formatDuration(time)})`, true, 'success');
-                ns.alert("Bladeburner is ready to undertake the last BlackOp (ends the bitnode)");
-                lastBlackOpReady = true;
-            }
-            candidateActions = candidateActions.filter(a => a != nextBlackOp);
-        }
         //log(ns, `The following actions are available: ${candidateActions}`); // Debug log to see what candidate actions are
 
         // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
