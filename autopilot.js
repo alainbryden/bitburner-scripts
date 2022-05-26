@@ -87,7 +87,7 @@ async function startUp(ns) {
 	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable =
 		bnCompletionSuppressed = stanekLaunched = false;
 	playerInstalledAugCount = wdHack = null;
-	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase;
+	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
 	installedAugmentations = killScripts = [];
 
 	// Collect and cache some one-time data
