@@ -4,9 +4,11 @@ If you manually `nano git-pull.js` from the terminal and copy the [contents of t
 
 # Running scripts
 
-Scripts can mostly be run on their own, but are primarily designed to be orchestrated by `daemon.js`. If you `run daemon.js` from the terminal, it will start several other scripts.
+If you `run autopilot.js` from the terminal, it will start several other scripts.
 
-Note that a new "master orchestrator" script named `autopilot.js` is also in the works. On top of running `daemon.js` and its suite of scripts, it will monitor your progress throughout the game and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
+You can think of this as the "master orchestrator" script. It will kick off `daemon.js` (you primary hacking script), which in turn kicks off several other helper-scripts. It will monitor your progress throughout the game and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
+
+Most scripts can also be run on their own, but are primarily designed to be orchestrated by `autopilot.js` or `daemon.js`.
 
 ## Manually run scripts
 
@@ -17,7 +19,7 @@ You will also see an error-version of this dialog if you make a mistake in how y
 
 If you have personal preference and wish to "permanently" change the configuration of one of my scripts, you can do so without sacrificing your ability to "git-pull.js" the latest - simply [create a custom `config.txt`](https://github.com/alainbryden/bitburner-scripts/edit/main/README.md#config-files) file for the script.
 
-_Note:_ `daemon.js` will already run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the daemon's version or simply run with your desired arguments before starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
+_Note:_ `autopilot.js` (and in turn, `daemon.js`) will already run many instances of scripts with default arguments. If you wish to run them with special arguments, you must either kill the default version or simply run scripts with your desired arguments **before** starting daemon.js. Daemon.js will only start scripts that are not already running (regardless of the arguments of the currently running instance.)
 
 ## Brief description of Scripts
 
@@ -25,7 +27,7 @@ Here are scripts that you may want to manually run, roughly in the order in whic
 
 - `git-pull.js` - Hopefully you used this to download the scripts. Run it whenever you want to update.
 - `scan.js` - Shows you the entire server network and important information about each server. A nice replacement for the built-in `scan` and/or `scan-analyze` commands, with support for unlimited depth.
-- `autopilot.js` - Plays the game for you (more or less), but is a work in progress.
+- `autopilot.js` - Plays the game for you (more or less).
 - `daemon.js` - Automates hacking and infrastructure, and kicking off various scripts to take advantage of other mechanics in the game as you unlock them.
 - `casino.js` - The first time you run this may come as a surprise, it will play blackjack and reload the game if it loses (automated save-scumming). Once you win 10b, you cannot enter the casino any more. Great way to boost your progress once you make the initial 200k needed to travel to Aevum and use the casino. For best performance, run `kill-all-scripts.js` before you run this, since other running scripts slow down the game's load time.
 - `reserve.js` - A simple way to reserve money across all scripts, in case you wanted to be certain to save up for something. e.g. `run reserve.js 200k` will reserve the $200,000 needed to get `casino.js` going.
@@ -56,9 +58,9 @@ You may find it useful to set up one or more aliases with the default options yo
 
 - `alias git-pull="run git-pull.js"`
   - Makes auto-updating just a little easier.
-- `alias start="run daemon.js -v --stock-manipulation --tail"`
-  - This way I can just enter `start` in the terminal after each reset, and the rest is handled automatically.
-- `alias stop="home; kill daemon.js -v --stock-manipulation; run kill-all-scripts.js"`
+- `alias start="run autopilot.js"`
+- `alias stop="home; kill autopilot.js ; kill daemon.js ; run kill-all-scripts.js"`
+  - Quick way to start/stop the system. I personally now use `auto` instead of `start` for this alias (auto => autopilot.js).
 - `alias sscan="home; run scan.js"`
   - Makes it a little quicker to run this custom-scan routine, which shows the entire network, stats about servers, and provides handy links for jumping to servers or backdooring them.
 - `alias do="run run-command.js"`

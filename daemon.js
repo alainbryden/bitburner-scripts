@@ -20,8 +20,9 @@ let options;
 const argsSchema = [
     ['h', false], // Do nothing but hack, no prepping (drains servers to 0 money, if you want to do that for some reason)
     ['hack-only', false], // Same as above
-    ['s', false], // Enable Stock Manipulation
-    ['stock-manipulation', false], // Same as above
+    ['s', true], // Enable Stock Manipulation. This is now true for default, but left as a valid argument for backwards-compatibility.
+    ['stock-manipulation', true], // Same as above
+    ['disable-stock-manipulation', false], // You must now opt *out* of stock-manipulation mode by enabling this flag.
     ['stock-manipulation-focus', false], // Stocks are main source of income - kill any scripts that would do them harm (TODO: Enable automatically in BN8)
     ['v', false], // Detailed logs about batch scheduling / tuning
     ['verbose', false], // Same as above
@@ -188,9 +189,10 @@ export async function main(ns) {
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
     const competingDaemons = ns.ps("home").filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
-    if (competingDaemons.length > 0) {
+    if (competingDaemons.length > 0) { // We expect only 1, due to this logic, but just in case, generalize the code below to support multiple.
         const daemonPids = competingDaemons.map(p => p.pid);
-        log(ns, `WARN: Detected ${competingDaemons.length} other '${scriptName}' instance is running at home (pids: ${daemonPids}) - shutting it down...`, true, 'warning')
+        log(ns, `Info: Restarting another '${scriptName}' instance running on home (pid: ${daemonPids} args: ` +
+            `[${competingDaemons[0].args.join(", ")}]) with new args ([${ns.args.join(", ")}])...`, true)
         const killPid = await killProcessIds(ns, daemonPids);
         await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), killPid);
         await ns.sleep(loopInterval); // The game can be slow to kill scripts, give it an extra bit of time.
@@ -214,8 +216,8 @@ export async function main(ns) {
     options = runOptions;
     hackOnly = options.h || options['hack-only'];
     xpOnly = options.x || options['xp-only'];
-    stockMode = options.s || options['stock-manipulation'] || options['stock-manipulation-focus'];
-    stockFocus = options['stock-manipulation-focus'];
+    stockMode = (options.s || options['stock-manipulation'] || options['stock-manipulation-focus']) && !options['disable-stock-manipulation'];
+    stockFocus = options['stock-manipulation-focus'] && !options['disable-stock-manipulation'];
     useHacknetNodes = options.n || options['use-hacknet-nodes'];
     verbose = options.v || options['verbose'];
     runOnce = options.o || options['run-once'];
@@ -224,12 +226,12 @@ export async function main(ns) {
     // Log which flaggs are active
     if (hackOnly) log(ns, '-h - Hack-Only mode activated!');
     if (xpOnly) log(ns, '-x - Hack XP Grinding mode activated!');
-    if (stockMode) log(ns, '-s - Stock market manipulation mode activated!');
-    if (stockMode && !playerInfo.hasTixApiAccess) log(ns, "WARNING: Ran with '--stock-manipulation' flag, but this will have no effect until you buy access to the stock market API then restart or manually run stockmaster.js");
-    if (stockFocus) log(ns, '--stock-manipulation-focus - Stock market manipulation is the main priority');
     if (useHacknetNodes) log(ns, '-n - Using hacknet nodes to run scripts!');
     if (verbose) log(ns, '-v - Verbose logging activated!');
     if (runOnce) log(ns, '-o - Run-once mode activated!');
+    if (stockMode) log(ns, 'Stock market manipulation mode is active (now enabled by default)');
+    if (!stockMode) log(ns, "--disable-stock-manipulation - Stock manipulation has been disabled.");
+    if (stockFocus) log(ns, '--stock-manipulation-focus - Stock market manipulation is the main priority');
     if (loopingMode) {
         log(ns, '--looping-mode - scheduled remote tasks will loop themselves');
         cycleTimingDelay = 0;
@@ -496,7 +498,8 @@ async function exec(ns, script, host, numThreads, ...args) {
         //if (firstRun) await ns.sleep(5); // Reports have come in that putting a brief sleep after the calls to exec works around the issue
         return p;
     }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${host} with ${numThreads} threads. ` +
-        `This is likely due to having insufficient RAM. Args were: [${args}]`));
+        `This is likely due to having insufficient RAM. Args were: [${args}]`),
+        undefined, undefined, undefined, verbose, !verbose);
     return pid; // Caller is responsible for handling errors if final pid returned is 0 (indicating failure)
 }
 

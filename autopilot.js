@@ -326,7 +326,7 @@ async function checkOnRunningScripts(ns, player) {
 	const daemon = findScript('daemon.js');
 	// If player hacking level is about 8000, run in "start-tight" mode
 	const hackThreshold = options['high-hack-threshold'];
-	const daemonArgs = (player.hacking < hackThreshold || player.bitNodeN == 8) ? ["--stock-manipulation"] :
+	const daemonArgs = (player.hacking < hackThreshold || player.bitNodeN == 8) ? [] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
 		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
 			"--stock-manipulation-focus", "--silent-misfires", "--no-share",
@@ -581,7 +581,7 @@ function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = tru
 	if (!pid)
 		log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
 	else
-		log(ns, `INFO: Launched ${baseScriptName} (pid: ${pid}) with args: [${args.join(", ")}]`, true, 'info');
+		log(ns, `INFO: Launched ${baseScriptName} (pid: ${pid}) with args: [${args.join(", ")}]`, true);
 	return pid;
 }
 
