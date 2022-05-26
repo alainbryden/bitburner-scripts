@@ -132,11 +132,12 @@ async function mainLoop(ns) {
         // Start the clock, this sleeve should stick to this task for minTaskWorkTime
         lastReassignTime[i] = Date.now();
         // Set the sleeve's new task if it's not the same as what they're already doing.
+        let assignSuccess = true;
         if (task[i] != designatedTask)
-            await setSleeveTask(ns, playerInfo, i, designatedTask, command, args);
+            assignSuccess = await setSleeveTask(ns, playerInfo, i, designatedTask, command, args);
 
         // For certain tasks, log a periodic status update.
-        if (statusUpdate && Date.now() - (lastStatusUpdateTime[i] ?? 0) > minTaskWorkTime) {
+        if (assignSuccess && statusUpdate && (Date.now() - (lastStatusUpdateTime[i] ?? 0) > minTaskWorkTime)) {
             log(ns, `INFO: Sleeve ${i} is ${statusUpdate} `);
             lastStatusUpdateTime[i] = Date.now();
         }
@@ -213,8 +214,13 @@ async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
     lastReassignTime[i] = 0;
     // If working for a faction, it's possible he current work isn't supported, so try the next one.
     if (designatedTask.startsWith('work for faction')) {
-        log(ns, `WARN: Failed to ${strAction} - work type may not be supported.`, false, 'warning');
-        workByFaction[playerInfo.currentWorkFactionName] = (workByFaction[playerInfo.currentWorkFactionName] || 0) + 1;
+        const nextWorkIndex = (workByFaction[playerInfo.currentWorkFactionName] || 0) + 1;
+        if (nextWorkIndex >= works.length) {
+            log(ns, `WARN: Failed to ${strAction}. None of the ${works.length} work types appear to be supported. Will loop back and try again.`, true, 'warning');
+            nextWorkIndex = 0;
+        } else
+            log(ns, `INFO: Failed to ${strAction} - work type may not be supported. Trying the next work type (${works[nextWorkIndex]})`);
+        workByFaction[playerInfo.currentWorkFactionName] = nextWorkIndex;
     } else
         log(ns, `ERROR: Failed to ${strAction} `, true, 'error');
     return false;
