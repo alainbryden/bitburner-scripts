@@ -8,7 +8,7 @@ const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
 
 let cachedCrimeStats, workByFaction; // Cache of crime statistics and which factions support which work
 let task, lastStatusUpdateTime, lastPurchaseTime, lastPurchaseStatusUpdate, availableAugs, cacheExpiry, lastReassignTime; // State by sleeve
-let numSleeves, ownedSourceFiles, playerInGang;
+let numSleeves, ownedSourceFiles, playerInGang, bladeburnerCityChaos;
 let options;
 
 const argsSchema = [
@@ -107,6 +107,10 @@ async function mainLoop(ns) {
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
+    if (playerInfo.inBladeburner) {
+        const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
+        bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
+    }
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
     let sleeveStats = await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getSleeveStats(i))`, '/Temp/sleeve-stats.txt', [...Array(numSleeves).keys()]);
@@ -187,9 +191,10 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
     }
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
     if (playerInfo.inBladeburner && playerInGang) {
-        // TODO: Temporary, pretend like we set the task, currently there is no API to do so
-        //task[i] = "Bladeburner";
-        //return [`Bladeburner`, `false`, [i], `doing bladeburner things`];
+        const action = bladeburnerCityChaos > 10 ? "Diplomacy" : "Infiltrate synthoids"
+        const contractName = "";
+        return [`Bladeburner`, `ns.sleeve.setToBladeburnerAction(ns.args[0], ns.args[1], ns.args[2])`, [i, action, contractName],
+        /*   */ `doing ${action} in bladeburner.`];
     }
     // Finally, do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
     // TODO: This is less useful after gangs are unlocked, can we think of better things to do afterwards?
