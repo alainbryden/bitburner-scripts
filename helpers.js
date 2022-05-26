@@ -153,7 +153,8 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     fName = fName || `/Temp/${commandHash}-data.txt`;
     const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
     // Defend against stale data by pre-writing the file with invalid data TODO: Remove if this condition is never encountered
-    await ns.write(fName, "<Insufficient RAM>", 'w');
+    const initialContents = "<Insufficient RAM>";
+    await ns.write(fName, initialContents, 'w');
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
@@ -170,19 +171,19 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     let lastRead;
     try {
         const fileData = await autoRetry(ns, () => ns.read(fName),
-            f => (lastRead = f) !== undefined && f !== "" && f !== "<Insufficient RAM>" && !(typeof f == "string" && f.startsWith("ERROR: ")),
+            f => (lastRead = f) !== undefined && f !== "" && f !== initialContents && !(typeof f == "string" && f.startsWith("ERROR: ")),
             () => `\nns.read('${fName}') returned a bad result: "${lastRead}".` +
                 `\n  Script:  ${fNameCommand}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
                 (lastRead == undefined ? '\nThe developer has no idea how this could have happend. Please post a screenshot of this error on discord.' :
-                    lastRead == "<Insufficient RAM>" ? `\nThe script that ran this will likely recover and try again later once you have more free ram.` :
+                    lastRead == initialContents ? `\nThe script that ran this will likely recover and try again later once you have more free ram.` :
                         lastRead == "" ? `\nThe file appears to have been deleted before a result could be retrieved. Perhaps there is a conflicting script.` :
                             `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
-            maxRetries, retryDelayMs, undefined, verbose);
+            maxRetries, retryDelayMs, undefined, verbose, !verbose);
         if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
         return JSON.parse(fileData); // Deserialize it back into an object/array and return
     } finally {
-        // If we failed to run the command, clear the "stale" contents we created earlier. Ideally, we would remove the file entirely, but this is not free.
-        if (lastRead == "STALE") await ns.write(fName, "", 'w');
+        // If we failed to run the command, clear the initial contents we created earlier. Ideally, we would remove the file entirely, but this is not free.
+        if (lastRead == initialContents) await ns.write(fName, "", 'w');
     }
 }
 
@@ -217,25 +218,27 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
         (verbose ? `let output = ${command}; ns.tprint(output)` : command) +
         `; } catch(err) { ns.tprint(String(err)); throw(err); } }`;
     fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
-    // To improve performance avoid various issues, we try to avoid overwriting temp scripts with different contents.
-    const oldContents = ns.read(fileName);
-    if (oldContents != script) {
-        if (oldContents)
-            ns.tprint(`WARNING: Had to overwrite temp script ${fileName}\nOld Contents:\n${oldContents}\nNew Contents:\n${script}` +
-                `\nThis warning is generated as part of an effort to switch over to using only 'immutable' temp scripts. ` +
-                `Please paste a screenshot in Discord at https://discord.com/channels/415207508303544321/935667531111342200`);
-        await ns.write(fileName, script, "w");
-    }
-    // Wait for the script to appear (game can be finicky on actually completing the write)
-    await autoRetry(ns, () => ns.read(fileName), contents => contents == script,
-        () => `Temporary script ${fileName} is not available, despite having written it. (Did a competing process delete or overwrite it?)`,
-        maxRetries, retryDelayMs, undefined, verbose);
-    // Run the script, now that we're sure it is in place
-    return await autoRetry(ns, () => fnRun(fileName, 1 /* Always 1 thread */, ...args), temp_pid => temp_pid !== 0,
-        () => `Run command returned no pid (command likely failed to run).` +
-            `\n  Command: ${command}\n  Temp Script: ${fileName}` +
-            `\nEnsure you have sufficient free RAM to run this temporary script.`,
-        maxRetries, retryDelayMs, undefined, verbose);
+    // It's possible for the file to be deleted while we're trying to execute it, so even wrap writing the file in a retry
+    return await autoRetry(ns, async () => {
+        // To improve performance, don't re-write the temp script if it's already in place with the correct contents.
+        const oldContents = ns.read(fileName);
+        if (oldContents != script) {
+            if (oldContents) // Create some noise if temp scripts are being created with the same name but different contents
+                ns.tprint(`WARNING: Had to overwrite temp script ${fileName}\nOld Contents:\n${oldContents}\nNew Contents:\n${script}` +
+                    `\nThis warning is generated as part of an effort to switch over to using only 'immutable' temp scripts. ` +
+                    `Please paste a screenshot in Discord at https://discord.com/channels/415207508303544321/935667531111342200`);
+            await ns.write(fileName, script, "w");
+            // Wait for the script to appear and be readable (game can be finicky on actually completing the write)
+            await autoRetry(ns, () => ns.read(fileName), c => c == script, () => `Temporary script ${fileName} is not available, ` +
+                `despite having written it. (Did a competing process delete or overwrite it?)`, maxRetries, retryDelayMs, undefined, verbose, !verbose);
+        }
+        // Run the script, now that we're sure it is in place
+        return fnRun(fileName, 1 /* Always 1 thread */, ...args);
+    }, pid => pid !== 0,
+        () => `The temp script was not run (likely due to insufficient RAM).` +
+            `\n  Script:  ${fileName}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
+            `\nThe script that ran this will likely recover and try again later once you have more free ram.`,
+        maxRetries, retryDelayMs, undefined, verbose, !verbose);
 }
 
 /**
@@ -279,7 +282,7 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
  * @param {NS} ns - The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
-    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false) {
+    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true) {
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs, attempts = 0;
     while (attempts++ <= maxRetries) {
@@ -293,7 +296,8 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         catch (error) {
             const fatal = attempts >= maxRetries;
             log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} to run temp script failed` +
-                (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`), fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
+                (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`),
+                tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
             await ns.sleep(retryDelayMs);
             retryDelayMs *= backoffRate;
