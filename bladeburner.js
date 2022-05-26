@@ -396,16 +396,19 @@ async function tryJoinFaction(ns, rank) {
         log(ns, `WARNING: Failed to join the Bladeburner faction despite rank of ${rank.toFixed(1)}`, false, 'warning');
 }
 
+let lastCanWorkCheckIdle = true;
+
 /** @param {NS} ns 
  * Helper to see if we are able to do bladeburner work */
 async function canDoBladeburnerWork(ns) {
     if (options['ignore-busy-status'] || haveSimulacrum) return true;
     // Check if the player is busy doing something else
     const busy = await getNsDataThroughFile(ns, 'ns.isBusy()', '/Temp/isBusy.txt');
-    if (!busy) return true;
-    log(ns, `WARNING: Cannot perform Bladeburner actions because the player is busy ` +
-        `and hasn't installed the augmentation "${simulacrumAugName}"...`, false, 'warning');
-    return false;
+    if (!busy) return lastCanWorkCheckIdle = true;
+    if (lastCanWorkCheckIdle)
+        log(ns, `WARNING: Cannot perform Bladeburner actions because the player is busy ` +
+            `and hasn't installed the augmentation "${simulacrumAugName}"...`, false, 'warning');
+    return lastCanWorkCheckIdle = false;
 }
 
 /** @param {NS} ns 
