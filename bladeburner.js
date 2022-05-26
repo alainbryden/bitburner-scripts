@@ -84,7 +84,7 @@ const getBBInfo = async (ns, strFunction, ...args) =>
 // The strFunction should contain a '%' sign indicating where the elements from the list should be mapped to a single call.
 const getBBDict = async (ns, strFunction, elements, ...args) => await getNsDataThroughFile(ns,
     `Object.fromEntries(JSON.parse(ns.args[0]).map(e => [e, ns.bladeburner.${strFunction.replace('%', 'e')}]))`,
-    `/Temp/bladeburner-${strFunction.split('(')[0]}.txt`, [JSON.stringify(elements), ...args]);
+    `/Temp/bladeburner-${strFunction.split('(')[0]}-all.txt`, [JSON.stringify(elements), ...args]);
 // Helper for dual-parameter bladeburner functions e.g. getActionCountRemaining(actionType, action)
 const getBBDictByActionType = async (ns, strFunction, actionType, elements) =>
     await getBBDict(ns, `${strFunction}(ns.args[1], %)`, elements, actionType);
