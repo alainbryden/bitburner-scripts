@@ -8,9 +8,9 @@ const simulacrumAugName = "The Blade's Simulacrum"; // This augmentation lets yo
 // we use the following configuration to change their relative cost. Higher number means lower priority
 // Note: Ideally we could emphasize Tracer "early-game" and Digital Observer "late-game", but this is too much of a pain to solve for
 const costAdjustments = {
+    "Overclock": 0.8, // Speed up contracts/operations. More important now that sleeves remove the operation count bottleneck
     "Reaper": 1.2, // Combat boost. Early effect is paltry (because stats are so low), will get plenty of points late game
     "Evasive Systems": 1.2, // Dex/Agi boost. Mildly deprioritized for same reasoning as above.
-    "Overclock": 1.2, // While useful when playing manually, in practice, constant automation makes us not notice/care about completion times
     "Cloak": 1.5, // Cheap, and stealth ends up with plenty of boost, so we don't need to invest in Cloak as much.
     "Hyperdrive": 2, // Improves stats gained, but not Rank gained. Less useful if training outside of BB
     "Tracer": 2, // Only boosts Contract success chance, which are relatively easy to begin with. 
@@ -253,6 +253,8 @@ async function mainLoop(ns) {
         let populationUncertain = candidateActions.some(a => maxChance(a) > options['success-threshold'] && minChance(a) < options['success-threshold']);
         // If current population uncertainty is such that some actions have a maxChance of ~100%, but not a minChance of ~100%,
         //   focus on actions that improve the population estimate, otherwise, reserve these actions for later
+        // TODO: "Field Analysis" is the only population action that scales with player stats, so we should calculate and sort by
+        //       "effectiveness per second" of each and see which is the most worthwhile way of improving the population estimate.
         candidateActions = populationUncertain ? populationActions : unreservedActions;
         // Filter out candidates with no contract counts remaining
         candidateActions = candidateActions.filter(a => getCount(a) > 0);
@@ -266,14 +268,16 @@ async function mainLoop(ns) {
             }
             candidateActions = candidateActions.filter(a => a != nextBlackOp);
         }
+        //log(ns, `The following actions are available: ${candidateActions}`); // Debug log to see what candidate actions are
 
-        //log(ns, 'The following actions are available: ' + candidateActions); // Debug log to see what candidate actions are
         // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
-        bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
+        if (!populationUncertain)
+            bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
+        else // Special case for when population uncertainty is high - proceed so long as max chance is high enough
+            bestActionName = candidateActions.filter(a => maxChance(a) > options['success-threshold'])[0];
+
         if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
             bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'])[0];
-        if (!bestActionName) // For actions that improve the population estimate, we're willing to risk the low min chance if it means avoiding Field Analysis
-            bestActionName = candidateActions.filter(a => populationActions.includes(a) && maxChance(a) > options['success-threshold'])[0];
         if (bestActionName) // If we found something to do, log details about its success chance range
             reason = actionSummaryString(bestActionName);
 
@@ -439,5 +443,4 @@ async function beingInBladeburner(ns) {
         log(ns, `INFO: Launched '${fPath}' to gain Bladeburner Rank and Skill Points more quickly (Can be disabled with --disable-spending-hashes)`)
     else
         log(ns, `WARNING: Failed to launch '${fPath}' (already running?)`)
-
 }
