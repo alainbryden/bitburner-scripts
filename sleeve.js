@@ -196,9 +196,9 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
     if (playerInfo.inBladeburner && playerInGang) {
         // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
-        const bbTasks = [/*0*/["Take on contracts", "Tracking"], /*1*/["Take on contracts", "Bounty Hunter"],
-            /*2*/["Take on contracts", "Retirement"], /*3*/["Infiltrate synthoids"], /*4*/["Diplomacy"],
-            /*5*/["Field Analysis"], /*6*/["Recruitment"], /*7*/["Support main sleeve"]];
+        const bbTasks = [/*0*/["Support main sleeve"], /*1*/["Take on contracts", "Retirement"],
+            /*2*/["Take on contracts", "Bounty Hunter"], /*3*/["Take on contracts", "Tracking"], /*4*/["Infiltrate synthoids"],
+            /*5*/["Diplomacy"], /*6*/["Field Analysis"], /*7*/["Recruitment"]];
         let [action, contractName] = bladeburnerCityChaos > 50 ? ["Diplomacy"] : bbTasks[i];
         // If the sleeve is performing an action with a chance of failure, fallback to another task
         if (sleeve.location.includes("%") && !sleeve.location.includes("100%"))
