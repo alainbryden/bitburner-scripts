@@ -8,7 +8,7 @@ const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
 
 let cachedCrimeStats, workByFaction; // Cache of crime statistics and which factions support which work
 let task, lastStatusUpdateTime, lastPurchaseTime, lastPurchaseStatusUpdate, availableAugs, cacheExpiry, lastReassignTime; // State by sleeve
-let numSleeves, ownedSourceFiles, playerInGang, bladeburnerCityChaos;
+let numSleeves, ownedSourceFiles, playerInGang, bladeburnerCityChaos, bladeburnerTaskFailed;
 let options;
 
 const argsSchema = [
@@ -42,7 +42,8 @@ export async function main(ns) {
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['getServerMoneyAvailable']);
     // Ensure the global state is reset (e.g. after entering a new bitnode)
-    task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [], cacheExpiry = [], lastReassignTime = [];
+    task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [],
+        cacheExpiry = [], lastReassignTime = [], bladeburnerTaskFailed = [];
     workByFaction = {}, cachedCrimeStats = {};
     // Ensure we have access to sleeves
     ownedSourceFiles = await getActiveSourceFiles(ns);
@@ -53,7 +54,7 @@ export async function main(ns) {
         try { await mainLoop(ns); }
         catch (err) {
             log(ns, `WARNING: sleeve.js Caught (and suppressed) an unexpected error in the main loop:\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+                (err?.stack || '') + (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
         }
         await ns.sleep(interval);
     }
@@ -116,10 +117,13 @@ async function mainLoop(ns) {
     }
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
-    let sleeveStats = await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getSleeveStats(i))`, '/Temp/sleeve-stats.txt', [...Array(numSleeves).keys()]);
-    let sleeveInfo = await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getInformation(i))`, '/Temp/sleeve-information.txt', [...Array(numSleeves).keys()]);
+    let dictSleeveCommand = async (command) => await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.${command}(i))`,
+        `/Temp/sleeve-${command}-all.txt`, [...Array(numSleeves).keys()]);
+    let sleeveStats = await dictSleeveCommand('getSleeveStats',);
+    let sleeveInfo = await dictSleeveCommand('getInformation');
+    let sleeveTasks = await dictSleeveCommand('getTask');
     for (let i = 0; i < numSleeves; i++) {
-        let sleeve = { ...sleeveStats[i], ...sleeveInfo[i] }; // For convenience, merge all sleeve stats/info into one object
+        let sleeve = { ...sleeveStats[i], ...sleeveInfo[i], ...sleeveTasks[i] }; // For convenience, merge all sleeve stats/info into one object
         // MANAGE SLEEVE AUGMENTATIONS
         if (sleeve.shock == 0) // No augs are available augs until shock is 0
             budget -= await manageSleeveAugs(ns, i, budget);
@@ -155,7 +159,7 @@ async function mainLoop(ns) {
 /** Picks the best task for a sleeve, and returns the information to assign and give status updates for that task.
  * @param {NS} ns 
  * @param {Player} playerInfo
- * @param {SleeveSkills | SleeveInformation} sleeve */
+ * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve */
 async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
     // Must synchronize first iif you haven't maxed memory on every sleeve.
     if (sleeve.sync < 100)
@@ -193,11 +197,24 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
         /*   */ `helping earn rep with company ${playerInfo.companyName}.`];
     }
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
-    if (playerInfo.inBladeburner && playerInGang && (bladeburnerCityChaos !== undefined)) {
-        const action = bladeburnerCityChaos > 10 ? "Diplomacy" : "Infiltrate synthoids"
-        const contractName = "";
-        return [`Bladeburner`, `ns.sleeve.setToBladeburnerAction(ns.args[0], ns.args[1], ns.args[2])`, [i, action, contractName],
-        /*   */ `doing ${action} in bladeburner.`];
+    if (playerInfo.inBladeburner && playerInGang) {
+        // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
+        const bbTasks = [/*0*/["Take on contracts", "Tracking"], /*1*/["Take on contracts", "Bounty Hunter"],
+            /*2*/["Take on contracts", "Retirement"], /*3*/["Infiltrate synthoids"], /*4*/["Diplomacy"],
+            /*5*/["Field Analysis"], /*6*/["Recruitment"], /*7*/["Support main sleeve"]];
+        let [action, contractName] = bladeburnerCityChaos > 50 ? ["Diplomacy"] : bbTasks[i];
+        // If the sleeve is performing an action with a chance of failure, fallback to another task
+        if (sleeve.location.includes("%") && !sleeve.location.includes("100%"))
+            bladeburnerTaskFailed[i] = Date.now(); // If not, don't re-attempt this assignment for a while
+        // As current city chaos gets progressively bad, assign more and more sleeves to Diplomacy to help get it under control
+        if (bladeburnerCityChaos > (10 - i) * 10) // Later sleeves are first to get assigned, sleeve 0 is last at 100 chaos.
+            [action, contractName] = ["Diplomacy"]; // Fall-back to something long-term useful
+        // If a prior attempt to assign a sleeve a default task failed, use a fallback
+        else if (Date.now() - bladeburnerTaskFailed[i] < 5 * 60 * 1000) // 5 minutes seems reasonable for now
+            [action, contractName] = ["Infiltrate synthoids"]; // Fall-back to something long-term useful
+        return [`Bladeburner ${action} ${contractName || ''}`.trimEnd(),
+        /*   */ `ns.sleeve.setToBladeburnerAction(ns.args[0], ns.args[1], ns.args[2])`, [i, action, contractName || ""],
+        /*   */ `doing ${action}${contractName ? ` - ${contractName}` : ''} in Bladeburner.`];
     }
     // Finally, do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
     // TODO: This is less useful after gangs are unlocked, can we think of better things to do afterwards?
@@ -213,11 +230,13 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
  * @param {Player} playerInfo */
 async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
     let strAction = `Set sleeve ${i} to ${designatedTask} `;
-    if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
-        task[i] = designatedTask;
-        log(ns, `SUCCESS: ${strAction} `);
-        return true;
-    }
+    try { // Assigning a task can throw an error rather than simply returning false. We must suppress this
+        if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
+            task[i] = designatedTask;
+            log(ns, `SUCCESS: ${strAction} `);
+            return true;
+        }
+    } catch { }
     // If assigning the task failed...
     lastReassignTime[i] = 0;
     // If working for a faction, it's possible he current work isn't supported, so try the next one.
@@ -229,6 +248,8 @@ async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
         } else
             log(ns, `INFO: Failed to ${strAction} - work type may not be supported. Trying the next work type (${works[nextWorkIndex]})`);
         workByFaction[playerInfo.currentWorkFactionName] = nextWorkIndex;
+    } else if (designatedTask.startsWith('Bladeburner')) { // Bladeburner action may be out of operations
+        bladeburnerTaskFailed[i] = Date.now(); // There will be a cooldown before this task is assigned again.
     } else
         log(ns, `ERROR: Failed to ${strAction} `, true, 'error');
     return false;
