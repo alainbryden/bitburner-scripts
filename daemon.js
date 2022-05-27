@@ -499,7 +499,7 @@ async function exec(ns, script, host, numThreads, ...args) {
         return p;
     }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${host} with ${numThreads} threads. ` +
         `This is likely due to having insufficient RAM. Args were: [${args}]`),
-        undefined, undefined, undefined, verbose, !verbose);
+        undefined, undefined, undefined, verbose, verbose);
     return pid; // Caller is responsible for handling errors if final pid returned is 0 (indicating failure)
 }
 
