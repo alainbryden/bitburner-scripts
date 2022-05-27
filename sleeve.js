@@ -108,8 +108,11 @@ async function mainLoop(ns) {
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
     if (playerInfo.inBladeburner) {
-        const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
-        bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
+        ownedSourceFiles = await getActiveSourceFiles(ns);
+        if (7 in ownedSourceFiles) {
+            const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
+            bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
+        }
     }
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
@@ -190,7 +193,7 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
         /*   */ `helping earn rep with company ${playerInfo.companyName}.`];
     }
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
-    if (playerInfo.inBladeburner && playerInGang) {
+    if (playerInfo.inBladeburner && playerInGang && (bladeburnerCityChaos !== undefined)) {
         const action = bladeburnerCityChaos > 10 ? "Diplomacy" : "Infiltrate synthoids"
         const contractName = "";
         return [`Bladeburner`, `ns.sleeve.setToBladeburnerAction(ns.args[0], ns.args[1], ns.args[2])`, [i, action, contractName],
