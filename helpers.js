@@ -228,7 +228,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
     else disableLogs(ns, ['sleep']);
     // Auto-import any helpers that the temp script attempts to use
     const required = getExports(ns).filter(e => command.includes(`${e}(`));
-    let script = (required.length > 0 ? `import { ${required.join(", ")} } from '${getFilePath('helpers.js')}'\n` : '') +
+    let script = (required.length > 0 ? `import { ${required.join(", ")} } from 'helpers.js'\n` : '') +
         `export async function main(ns) { ${command} }`;
     fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
     // It's possible for the file to be deleted while we're trying to execute it, so even wrap writing the file in a retry
