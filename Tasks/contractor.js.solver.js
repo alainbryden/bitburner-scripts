@@ -660,7 +660,7 @@ const codingContractTypesMetadata = [{
         while (!oddCycleFound && solution.some(e => e === undefined)) {
             traverse(solution.indexOf(undefined), 0)
         }
-        if (oddCycleFound) return []
+        if (oddCycleFound) return "[]"; // TODO: Bug #3755 in bitburner requires a string literal. Will this be fixed?
         return solution
     },
 },
