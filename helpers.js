@@ -57,13 +57,15 @@ export function formatDuration(duration) {
     if (!isFinite(duration)) return 'forever (Infinity)'
     const portions = [];
     const msInHour = 1000 * 60 * 60;
-    const hours = Math.trunc(duration / msInHour);
+    let hours = Math.trunc(duration / msInHour);
+    hours = hours.toFixed(0);
     if (hours > 0) {
         portions.push(hours + 'h');
         duration -= (hours * msInHour);
     }
     const msInMinute = 1000 * 60;
-    const minutes = Math.trunc(duration / msInMinute);
+    let minutes = duration / msInMinute;
+    minutes = minutes.toFixed(0);
     if (minutes > 0) {
         portions.push(minutes + 'm');
         duration -= (minutes * msInMinute);
