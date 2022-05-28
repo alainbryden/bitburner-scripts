@@ -248,11 +248,13 @@ async function checkIfBnIsComplete(ns, player) {
 	pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
 		'/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
 	if (pid) {
+		log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
 		await waitForProcessToComplete(ns, pid);
+		log(ns, `WARNING: Process is done running, why am I still here? Sleeping 10 seconds...`, true, 'error')
 		await ns.sleep(10000);
 	}
-	log(ns, `ERROR: Tried destroy the bitnode, but we're still here...`, true, 'error')
-	return bnCompletionSuppressed = true;
+	await persist_log(ns, log(ns, `ERROR: Tried destroy the bitnode (pid=${pid}), but we're still here...`, true, 'error'));
+	//return bnCompletionSuppressed = true; // Don't suppress bn Completion, try again on our next loop.
 }
 
 /** Helper to get a list of all scripts running (on home)
@@ -510,8 +512,7 @@ async function maybeInstallAugmentations(ns, player) {
 
 	// Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
 	const resetLog = `Invoking ascend.js at ${formatDuration(player.playtimeSinceLastAug).padEnd(11)} since last aug to install: ${augSummary}`;
-	log(ns, `INFO: ${resetLog}`, true, 'info');
-	await persist_log(ns, resetLog);
+	await persist_log(ns, log(ns, resetLog, true, 'info'));
 
 	// Kick off ascend.js
 	let errLog;
@@ -523,11 +524,10 @@ async function maybeInstallAugmentations(ns, player) {
 		await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down (Ascend should get killed as it does, since the BN will be rebooting)
 		await ns.sleep(1000); // If we've been scheduled to be killed, awaiting an NS function should trigger it?
 		errLog = `ERROR: ascend.js ran, but we're still here. Something must have gone wrong. Will try again later`;
-		log(ns, errLog, true, 'error');
 	} else
 		errLog = `ERROR: Failed to launch ascend.js (pid == 0). Will try again later`;
 	// If we got this far, something went wrong
-	await persist_log(ns, errLog);
+	await persist_log(ns, log(ns, errLog, true, 'error'));
 }
 
 /** Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit
