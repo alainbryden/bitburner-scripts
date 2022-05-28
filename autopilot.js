@@ -208,13 +208,13 @@ async function checkIfBnIsComplete(ns, player) {
 	let bnComplete = player.hacking >= wdHack;
 	if (!bnComplete && player.inBladeburner) // Detect the BB win condition
 		bnComplete = await getNsDataThroughFile(ns,
-			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus')`,
+			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
 			'/Temp/bladeburner-completed.txt');
 	if (!bnComplete) return false; // No win conditions met
 
 	const text = `BN ${player.bitNodeN}.${dictOwnedSourceFiles[player.bitNodeN] + 1} completed at ` +
 		`${formatDuration(player.playtimeSinceLastBitnode)} ` +
-		`(${(player.hacking >= wdHack ? `hack (${wdHack})` : 'bladeburner')} win condition)`;
+		`(${(player.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 
