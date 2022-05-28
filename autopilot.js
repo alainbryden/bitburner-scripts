@@ -425,7 +425,8 @@ async function maybeDoCasino(ns, player) {
 	// Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
 	await killScript(ns, 'work-for-factions.js');
 	// Kill any action, in case we are studying or working out, as it might steal focus or funds before we can bet it at the casino.
-	await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
+	if (4 in unlockedSFs) // No big deal if we can't, casino.js has logic to find the stop button and click it.
+		await getNsDataThroughFile(ns, `ns.stopAction()`, '/Temp/stop-action.txt');
 
 	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
 	if (pid) {
