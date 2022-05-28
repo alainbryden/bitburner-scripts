@@ -206,7 +206,7 @@ async function checkIfBnIsComplete(ns, player) {
 	}
 	// Detect if a BN win condition has been met
 	let bnComplete = player.hacking >= wdHack;
-	if (!bnComplete && player.inBladeburner) // Detect the BB win condition
+	if (!bnComplete && player.inBladeburner && (7 in unlockedSFs)) // Detect the BB win condition
 		bnComplete = await getNsDataThroughFile(ns,
 			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
 			'/Temp/bladeburner-completed.txt');
