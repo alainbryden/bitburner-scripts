@@ -105,7 +105,7 @@ async function tryToBuyBestServerPossible(ns) {
     const totalMaxRam = rootedServers.reduce((t, s) => t + ns.getServerMaxRam(s), 0);
     const totalUsedRam = rootedServers.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
     const utilizationRate = totalUsedRam / totalMaxRam;
-    setStatus(ns, `Using ${Math.round(totalUsedRam).toLocaleString()}/${formatRam(totalMaxRam)} (` +
+    setStatus(ns, `Using ${Math.round(totalUsedRam).toLocaleString('en')}/${formatRam(totalMaxRam)} (` +
         `${(utilizationRate * 100).toFixed(1)}%) across ${rootedServers.length} servers ` +
         `(Triggers at ${options['utilization-trigger'] * 100}%, ${purchasedServers.length} bought so far)`);
 
