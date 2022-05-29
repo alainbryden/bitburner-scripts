@@ -3,5 +3,5 @@ import { parseShortNumber } from './helpers.js'
 export async function main(ns) {
     let parsed = parseShortNumber(ns.args[0]);
     await ns.write('reserve.txt', parsed, "w");
-    ns.tprint(`Set to reserve ${parsed.toLocaleString()}`);
+    ns.tprint(`Set to reserve ${parsed.toLocaleString('en')}`);
 }
