@@ -108,6 +108,19 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 103, "x": 0, "y": 4, "rotation": 2 }, // Booster
 			{ "id": 104, "x": 2, "y": 0, "rotation": 1 } // Booster
 		]
+	}, {
+		"height": 6, "width": 7, "fragments": [
+			{ "id": 0, "x": 1, "y": 1, "rotation": 2 }, // Hacking Mult
+			{ "id": 1, "x": 1, "y": 3, "rotation": 2 }, // Hacking Mult
+			{ "id": 5, "x": 4, "y": 3, "rotation": 0 }, // Hacking Speed
+			{ "id": 6, "x": 2, "y": 0, "rotation": 0 }, // Hack power
+			{ "id": 7, "x": 1, "y": 4, "rotation": 0 }, // Grow power
+			{ "id": 20, "x": 0, "y": 2, "rotation": 3 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 5, "y": 0, "rotation": 3 }, // Reputation
+			{ "id": 28, "x": 4, "y": 4, "rotation": 0 }, // Crime Money TODO: Find a way to swap this for a booster
+			{ "id": 105, "x": 3, "y": 1, "rotation": 2 }, // Booster
+		]
 	}, { // Note: Late BN12, as Stanek gets bigger, Bladeburner also becomes a faster win condition, so we start adding those stats
 		"height": 7, "width": 7, "fragments": [
 			{ "id": 0, "x": 1, "y": 5, "rotation": 2 }, // Hacking Mult
