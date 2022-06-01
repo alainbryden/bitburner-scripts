@@ -24,7 +24,7 @@ let lastTerritoryPower = 0;
 let lastOtherGangInfo = null;
 let lastLoopTime = null;
 
-// Crime activity-related variables TODO all tasks list to evaluate
+// Crime activity-related variables
 const crimes = ["Mug People", "Deal Drugs", "Strongarm Civilians", "Run a Con", "Armed Robbery", "Traffick Illegal Arms", "Threaten & Blackmail", "Human Trafficking", "Terrorism",
     "Ransomware", "Phishing", "Identity Theft", "DDoS Attacks", "Plant Virus", "Fraud & Counterfeiting", "Money Laundering", "Cyberterrorism"];
 let pctTraining = 0.20;

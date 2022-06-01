@@ -215,7 +215,6 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
         /*   */ `doing ${action}${contractName ? ` - ${contractName}` : ''} in Bladeburner.`];
     }
     // Finally, do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
-    // TODO: This is less useful after gangs are unlocked, can we think of better things to do afterwards?
     var crime = options.crime || (await calculateCrimeChance(ns, sleeve, "homicide")) >= options['homicide-chance-threshold'] ? 'homicide' : 'mug';
     return [`commit ${crime} `, `ns.sleeve.setToCommitCrime(ns.args[0], ns.args[1])`, [i, crime],
     /*   */ `committing ${crime} with chance ${((await calculateCrimeChance(ns, sleeve, crime)) * 100).toFixed(2)}% ` +

@@ -22,8 +22,7 @@ export function autocomplete(data, args) {
  * Will try to download a fresh version of every file on the current server.
  * You are responsible for:
  * - Backing up your save / scripts first (try `download *` in the terminal)
- * - Ensuring you have no local changes that you don't mind getting overwritten
- * TODO: Some way to list all files in the repository and/or download them all. **/
+ * - Ensuring you have no local changes that you don't mind getting overwritten **/
 export async function main(ns) {
     options = ns.flags(argsSchema);
     if (options.subfolder && !options.subfolder.startsWith('/'))

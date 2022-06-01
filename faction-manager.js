@@ -176,7 +176,7 @@ export async function main(ns) {
     // Create the table of all augmentations, and the breakdown of what we can afford
     await manageUnownedAugmentations(ns, omitAugs);
 
-    /* TODO: Currently, an exploit lets us accept Stanek's gift after purchasing other augs. Once that stops working, we should put this back
+    /* Currently, an exploit lets us accept Stanek's gift after purchasing other augs. If that stops working, we may need to put this back
     if (options.purchase && ownedAugmentations.length <= 1 && 13 in ownedSourceFiles && !ownedAugmentations.includes(staneksGift) && !options['ignore-stanek'])
         log(ns, `WARNING: You have not yet accepted Stanek's Gift from the church in Chongqing. Purchasing augs will ` +
             `prevent you from doing so for the rest of this BN. (Run with '--ignore-stanek' to bypass this warning.)`, true);
@@ -577,7 +577,8 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         }
     } while (restart);
 
-    // TODO: Stanek Exploit, may be patched in the future. We can "accept Stanek's Gift" by buying this aug at any time, even after buying other augs.
+    // Stanek Exploit, may be patched in the future. We can "accept Stanek's Gift" by buying this aug at any time, even after buying other augs.
+    //   but when using the UIs, Stanek's Gift must be the first augmentation purchased (and it is insta-installed)
     if (!options['ignore-stanek'] && !ownedAugmentations.includes(staneksGift) && staneksGift in augmentationData) {
         const giftAug = augmentationData[staneksGift];
         giftAug.joinedFactionsWithAug = giftAug.getFromJoined = () => "Church of the Machine God"; // We can buy it from them, even if not technically joined
@@ -808,7 +809,7 @@ function displayFactionSummary(ns, sortBy, unique, overrideFinishedFactions, exc
     // Creates the string to display a single faction's stats in the table
     let getFactionSummary = faction => {
         const totalMults = faction.totalUnownedMults();
-        return `\n ${faction.joined ? '✓' : faction.invited ? '✉' : '✗'} ${faction.name} `.padEnd(32) + // TODO: Display faction rep / max aug rep
+        return `\n ${faction.joined ? '✓' : faction.invited ? '✉' : '✗'} ${faction.name} `.padEnd(32) +
             `${String(faction.unownedAugmentations().length).padStart(2)} / ${String(faction.augmentations.length).padEnd(2)} ` +
             relevantAugStats.map(key => (totalMults[key] === undefined ? '-' : totalMults[key].toPrecision(3)).padStart(Math.max(shorten(key).length, 4))).join(' ');
     };

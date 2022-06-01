@@ -30,8 +30,6 @@ export async function main(ns) {
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');
     ns.disableLog('sleep');
 
-    // TODO: Additional sanity checks: Make sure it's a good time to reset
-    // - We should be able to install ~10 augs or so after maxing home ram purchases?
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
     // Kill every script except this one, since it can interfere with out spending
@@ -70,8 +68,6 @@ export async function main(ns) {
         await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
     };
     if (!options['prioritize-augmentations']) await spendOnHomeRam();
-
-    // TODO: (SF13) If Stanek is unlocked, and we have not yet accepted Stanek's gift, now's our last chance to do it (before purchasing augs)
 
     // STEP 3: Buy as many desired augmentations as possible
     log(ns, 'Purchasing augmentations...', true, 'info');
@@ -129,7 +125,6 @@ export async function main(ns) {
     }
 
     // TODO: If in corporation, and buyback shares is available, buy as many as we can afford
-    // TODO: Anything to do for Bladeburner?
 
     // WAIT: For money to stop decreasing, so we know that external scripts have bought what they could.
     log(ns, 'Waiting for purchasing to stop...', true, 'info');

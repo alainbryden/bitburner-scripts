@@ -461,7 +461,7 @@ async function tryRunTool(ns, tool) {
         return true;
     }
     const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
-    const runResult = await arbitraryExecution(ns, tool, 1, args, tool.requiredServer || "home"); // TODO: Allow actually requiring a server
+    const runResult = await arbitraryExecution(ns, tool, 1, args, tool.requiredServer || "home");
     if (runResult) {
         runningOnServer = whichServerIsRunning(ns, tool.name, false);
         if (verbose) log(ns, `Ran tool: ${tool.name} ` + (args.length > 0 ? `with args ${JSON.stringify(args)} ` : '') + (runningOnServer ? `on server ${runningOnServer}.` : 'but it shut down right away.'));
@@ -487,15 +487,10 @@ let dictScriptsRun = {}; // Keep a cache of every script run on every host, and 
  * @returns — Returns the PID of a successfully started script, and 0 otherwise.
  * Workaround a current bitburner bug by yeilding briefly to the game after executing something. **/
 async function exec(ns, script, host, numThreads, ...args) {
-    // The Bitburner "does not have a main function" bug (https://github.com/danielyxie/bitburner/issues/1714) appears to only happen the first time a script is called after the game has been started, or the script has been saved / copied
-    // TODO: Remove if workaround is no longer necessary
-    /* const key = `${host}|${script}`;
-    const firstRun = !(key in dictScriptsRun);
-    dictScriptsRun[key] = true; */
     // Try to run the script with auto-retry if it fails to start
+    // TODO: It probably doesn't make sense to auto-retry H/G/W attempts, only attempt to run other scripts
     const pid = await autoRetry(ns, async () => {
         const p = ns.exec(script, host, numThreads, ...args)
-        //if (firstRun) await ns.sleep(5); // Reports have come in that putting a brief sleep after the calls to exec works around the issue
         return p;
     }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${host} with ${numThreads} threads. ` +
         `This is likely due to having insufficient RAM. Args were: [${args}]`),
@@ -597,7 +592,7 @@ async function doTargetingLoop(ns) {
                     else if (server.isPrepping())
                         cantHackButPrepping.push(server);
                 } else if (server.isTargeting()) { // Note servers already being targeted from a prior loop
-                    targeting.push(server); // TODO: While targeting, we should keep queuing more batches
+                    targeting.push(server); // TODO: Switch to continuously queing batches in the seconds leading up instead of far in advance with large delays
                 } else if (server.isPrepping()) { // Note servers already being prepped from a prior loop
                     prepping.push(server);
                 } else if (isWorkCapped() || xpOnly) { // Various conditions for which we'll postpone any additional work on servers
@@ -645,7 +640,7 @@ async function doTargetingLoop(ns) {
                     return diff != 0.0 ? diff : b.getMoneyPerRamSecond() - a.getMoneyPerRamSecond(); // Break ties by sorting by max-money
                 });
                 // Try to prep them all unless one of our capping rules are hit
-                // TODO: Something is not working right here, so until we figure it out, never look at more than the first unhackable server.
+                // TODO: Something was not working right here (might be working now that prep code is fixed) so we can probably start prepping more than 1 server again.
                 for (var j = 0; j < 1 /*cantHack.length*/; j++) {
                     const server = cantHack[j];
                     if (isWorkCapped()) break;
@@ -932,13 +927,7 @@ class Server {
             maxRam = Math.max(0, maxRam - homeReservedRam); // Complete HACK: but for most planning purposes, we want to pretend home has less ram to leave room for temp scripts to run
         return maxRam;
     }
-    usedRam() {
-        let usedRam = this.ns.getServerUsedRam(this.name);
-        // TODO: Uncertain whether reserved ram is best done by pretending home has less RAM, or pretending it has more ram in use.
-        //if (this.name == "home")
-        //    usedRam = Math.min(this.totalRam(), usedRam + homeReservedRam);
-        return usedRam;
-    }
+    usedRam() { return this.ns.getServerUsedRam(this.name); }
     ramAvailable() { return this.totalRam() - this.usedRam(); }
     growDelay() { return this.timeToWeaken() - this.timeToGrow() + cycleTimingDelay; }
     hackDelay() { return this.timeToWeaken() - this.timeToHack(); }
@@ -969,7 +958,7 @@ function getTotalNetworkUtilization() {
 }
 
 // return a "performance snapshot" (Ram required for the cycle) to compare against optimal, or another snapshot
-// TODO: Better gaugue of performance is money stolen per (RAM * time) cost - we can schedule as many cycles as we want if done smart
+// TODO: Better gauge of performance might be money stolen per (RAM * time) cost
 function getPerformanceSnapshot(currentTarget, networkStats) {
     // The total RAM cost of running one weaken/hack/grow cycle to steal `currentTarget.percentageToSteal` of `currentTarget.money`
     const weaken1Cost = currentTarget.getWeakenThreadsNeededAfterTheft() * getTool("weak").cost;
@@ -1270,7 +1259,6 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
     // IDEA: "home" is more effective at grow() and weaken() than other nodes (has multiple cores) (TODO: By how much?)
     //       so if this is one of those tools, put it at the front of the list of preferred candidates, otherwise keep home ram free if possible
     //       TODO: This effort is wasted unless we also scale down the number of threads "needed" when running on home. We will overshoot grow/weaken
-    //             Disable this for now, and enable it once we have solved for reducing grow/weak threads
     var home = preferredServerOrder.splice(preferredServerOrder.findIndex(i => i.name == "home"), 1)[0];
     if (tool.shortName == "grow" || tool.shortName == "weak" || preferredServerName == "home")
         preferredServerOrder.unshift(home); // Send to front
@@ -1472,7 +1460,6 @@ async function farmHackXp(ns, percentOfFreeRamToConsume = 1, verbose = false, ta
         etas.push(lastSchedulingResult = (await scheduleHackExpCycle(ns, targetsByExp[i], percentOfFreeRamToConsume, verbose, tryAdvanceMode, jobHosts[i], singleServerMode)) || Number.MAX_SAFE_INTEGER);
         if (lastSchedulingResult == Number.MAX_SAFE_INTEGER) break; // Stop scheduling targets if the last attempt failed
     }
-    // TODO: waitForCycleEnd - if any targets are within 200ms? (one game tick) of the end of their cycle, wait for it to end and trigger the next cycle immediately?
     // Wait for all job scheduling threads to return, and sleep for the smallest cycle time remaining
     return Math.max(0, Math.min(...etas));
 }

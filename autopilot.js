@@ -326,8 +326,7 @@ async function checkOnRunningScripts(ns, player) {
 		}
 	}
 
-	// TODO: Take charge to stanek.acceptGift and place fragments before installing augs and ascending for the first time
-	// Once stanek's gift is accepted and not charged, launch it first
+	// Once stanek's gift is accepted, launch it once per reset (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
 	let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
 	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
 		stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
@@ -492,7 +491,7 @@ async function maybeInstallAugmentations(ns, player) {
 	}
 	// If we want to reset, but there is a reason to delay, don't reset
 	if (await shouldDelayInstall(ns, player)) // If we're currently in a state where we should not be resetting, skip reset logic
-		return reservedPurchase = 0; // TODO: A slick way to not have to reset this flag on every early-return statement.
+		return reservedPurchase = 0;
 
 	// Ensure the money needed for the above augs doesn't get ripped out from under us by reserving it and waiting one more loop
 	if (reservedPurchase < reserveNeeded) {

@@ -21,7 +21,7 @@ export function formatNumberShort(num, maxSignificantFigures = 6, maxDecimalPlac
     if (Math.abs(num) > 10 ** (3 * symbols.length)) // If we've exceeded our max symbol, switch to exponential notation
         return num.toExponential(Math.min(maxDecimalPlaces, maxSignificantFigures - 1));
     for (var i = 0, sign = Math.sign(num), num = Math.abs(num); num >= 1000 && i < symbols.length; i++) num /= 1000;
-    // TODO: A number like 9.999 once rounted to show 3 sig figs, will become 10.00, which is now 4 sig figs.
+    // TODO: A number like 9.999 once rounded to show 3 sig figs, will become 10.00, which is now 4 sig figs.
     return ((sign < 0) ? "-" : "") + num.toFixed(Math.max(0, Math.min(maxDecimalPlaces, maxSignificantFigures - Math.floor(1 + Math.log10(num))))) + symbols[i];
 }
 
@@ -152,7 +152,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
     const commandHash = hashCode(command);
     fName = fName || `/Temp/${commandHash}-data.txt`;
     const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
-    // Defend against stale data by pre-writing the file with invalid data TODO: Remove if this condition is never encountered
+    // Pre-write contents to the file that will allow us to detect if our temp script never got run
     const initialContents = "<Insufficient RAM>";
     await ns.write(fName, initialContents, 'w');
     // Prepare a command that will write out a new file containing the results of the command
@@ -327,6 +327,7 @@ export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = 
     if (alsoPrintToTerminal) {
         ns.tprint(message);
         // TODO: Find a way write things logged to the terminal to a "permanent" terminal log file, preferably without this becoming an async function.
+        //       Perhaps we copy logs to a port so that a separate script can optionally pop and append them to a file.
         //ns.write("log.terminal.txt", message + '\n', 'a'); // Note: we should get away with not awaiting this promise since it's not a script file
     }
     return message;
