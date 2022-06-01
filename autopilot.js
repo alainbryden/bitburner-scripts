@@ -1,6 +1,6 @@
 import {
 	log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
-	getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue,
+	getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
 	formatMoney, formatDuration
 } from './helpers.js'
 
@@ -61,7 +61,7 @@ export async function main(ns) {
 	const flagsSet = ['disable-auto-destroy-bn', 'enable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs'].filter(f => options[f]);
 	for (const flag of flagsSet)
 		log(ns, `WARNING: You have previously enabled the flag "--${flag}". Because of the way this script saves its run settings, the ` +
-			`only way to now turn this back off will be to manually edit or delete the file ${getFilePath(ns.getScriptName())}.config.txt`, true);
+			`only way to now turn this back off will be to manually edit or delete the file ${ns.getScriptName()}.config.txt`, true);
 
 	let startUpRan = false;
 	while (true) {
@@ -220,7 +220,7 @@ async function checkIfBnIsComplete(ns, player) {
 
 	// Run the --on-completion-script if specified
 	if (options['on-completion-script']) {
-		pid = launchScriptHelper(ns, options['on-completion-script'], options['on-completion-script-args'], false);
+		pid = launchScriptHelper(ns, options['on-completion-script'], unEscapeArrayArgs(options['on-completion-script-args']), false);
 		if (pid) await waitForProcessToComplete(ns, pid);
 	}
 
@@ -326,18 +326,8 @@ async function checkOnRunningScripts(ns, player) {
 		}
 	}
 
-	// Once stanek's gift is accepted, launch it once per reset (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
-	let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
-	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
-		stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
-		launchScriptHelper(ns, 'stanek.js');
-		stanekRunning = true;
-	}
-
-	// Ensure daemon.js is running in some form
-	const daemon = findScript('daemon.js');
-	// If player hacking level is about 8000, run in "start-tight" mode
-	const hackThreshold = options['high-hack-threshold'];
+	// Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.	
+	const hackThreshold = options['high-hack-threshold']; // If player hacking level is about 8000, run in "start-tight" mode
 	const daemonArgs = (player.hacking < hackThreshold || player.bitNodeN == 8) ? [] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
 		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
@@ -352,7 +342,19 @@ async function checkOnRunningScripts(ns, player) {
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
 		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
+
+	// Once stanek's gift is accepted, launch it once per reset (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
+	let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
+	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
+		stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
+		const stanekArgs = ["--on-completion-script", getFilePath('daemon.js')]
+		if (daemonArgs.length >= 0) stanekArgs.push("--on-completion-script-args", JSON.stringify(daemonArgs)); // Pass in all the args we wanted to run daemon.js with
+		launchScriptHelper(ns, 'stanek.js', stanekArgs);
+		stanekRunning = true;
+	}
+
 	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
+	const daemon = findScript('daemon.js');
 	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
 		if (player.hacking >= hackThreshold && !(player.bitNodeN == 8))
 			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);

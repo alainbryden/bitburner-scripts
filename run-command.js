@@ -1,5 +1,7 @@
 import { runCommand } from './helpers.js'
 
+const escapeChars = ['"', "'", "`"];
+
 /** @param {NS} ns 
  * The argument can consist of multiple commands to run. The output of the first command will automatically be printed
  * unless a subsequent command includes '; output = ...' - in which case that result will be printed instead. **/
@@ -13,8 +15,8 @@ export async function main(ns) {
         silent = true;
         args = args.slice(args.indexOf('-s'), 1);
     }
-    let firstArg = String(args[0]);
-    let escaped = firstArg.startsWith('"') && firstArg.endsWith('"') || firstArg.startsWith("'") && firstArg.endsWith("'") || firstArg.startsWith("`") && firstArg.endsWith("`");
+    const firstArg = String(args[0]);
+    const escaped = escapeChars.some(c => firstArg.startsWith(c) && firstArg.endsWith(c));
     let command = args == escaped ? args[0] : args.join(" "); // If args weren't escaped, join them together
     //3.6 return await runCommand(ns.run, ns.write, command, `/Temp/terminal-command.js`, !silent);
     await ns.write(`/Temp/terminal-command.js`, "", "w"); // Clear the previous command file to avoid a warning about re-using temp script names. This is the one exception.
