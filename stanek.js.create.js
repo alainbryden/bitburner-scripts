@@ -137,18 +137,18 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 		]
 	}, {
 		"height": 7, "width": 8, "fragments": [
-			{ "id": 0, "x": 0, "y": 1, "rotation": 3 }, // Hacking Mult
-			{ "id": 1, "x": 2, "y": 0, "rotation": 1 }, // Hacking Mult
-			{ "id": 5, "x": 0, "y": 0, "rotation": 0 }, // Hacking Speed
-			{ "id": 6, "x": 0, "y": 3, "rotation": 3 }, // Hack power
-			{ "id": 7, "x": 6, "y": 3, "rotation": 3 }, // Grow power
-			{ "id": 10, "x": 3, "y": 4, "rotation": 3 }, // Strength TODO: Would rather Dex than Str (to boost BB mission time)
-			{ "id": 16, "x": 4, "y": 3, "rotation": 1 }, // Agility
-			{ "id": 20, "x": 4, "y": 6, "rotation": 2 }, // Hacknet Production
-			{ "id": 21, "x": 1, "y": 5, "rotation": 3 }, // Hacknet Cost Reduction
-			{ "id": 25, "x": 6, "y": 2, "rotation": 1 }, // Reputation
-			{ "id": 30, "x": 4, "y": 1, "rotation": 1 }, // Bladeburner Stats
-			{ "id": 103, "x": 4, "y": 0, "rotation": 2 }, // Booster
+			{ "id": 0, "x": 4, "y": 1, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 4, "y": 4, "rotation": 3 }, // Hacking Mult
+			{ "id": 5, "x": 0, "y": 2, "rotation": 0 }, // Hacking Speed
+			{ "id": 6, "x": 3, "y": 0, "rotation": 2 }, // Hack power
+			{ "id": 7, "x": 2, "y": 0, "rotation": 0 }, // Grow power
+			{ "id": 14, "x": 0, "y": 3, "rotation": 1 }, // Dexterity
+			{ "id": 16, "x": 5, "y": 5, "rotation": 2 }, // Agility
+			{ "id": 20, "x": 0, "y": 6, "rotation": 0 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 6, "y": 0, "rotation": 3 }, // Reputation
+			{ "id": 30, "x": 2, "y": 4, "rotation": 0 }, // Bladeburner Stats
+			{ "id": 103, "x": 4, "y": 3, "rotation": 0 }, // Booster
 			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
 		]
 	}
