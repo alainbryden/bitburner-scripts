@@ -97,8 +97,8 @@ You may find it useful to set up one or more aliases with the default options yo
   - Runs daemon in a way that focuses on earning hack XP income as quickly as possible. Only practical when you have a lot of home-ram.
 - `alias start-tight="run daemon.js --looping-mode --recovery-thread-padding 30 --cycle-timing-delay 2000 --queue-delay 10 --stock-manipulation-focus --tail --silent-misfires --initial-max-targets 64"`
   - Let this be a hint as to how customizable some of these scripts are (without editing the source code). The above alias is powerful when you are end-of-bn and your hacking skill is very high (8000+), so hack/grow/weaken times are very fast (milliseconds). You can greatly increase productivity and reduce lag by switching to this `--looping-mode` which creates long-lived hack/grow/weaken scripts that run in a loop. This, in addition to the tighter cycle-timing makes them more vulnerable to misfiring (completing out-of-order), but adding recovery thread padding (a multiple on the number of grow/weaken threads to use) can quickly recover from misfires. Note that if you don't yet have enough home-ram to support such a high recovery-thread multiple, you can start lower (5 or 10) then buy more home ram and work your way up.
-- `alias ascend="run ascend.js --prioritize-augmentations --reset"`
-  - A good way to finish your node. I personally `--prioritize-augmentations` when resetting, because I have all SF bonuses unlocked, but until you have SF11.3 for aug cost reduction, you may want to leave the default which prioritizes upgrading home RAM as much as possible first.
+- `alias ascend="run ascend.js --install-augmentations"`
+  - A good way to finish your node. I personally prioritize augmentations when resetting, because I have all SF bonuses unlocked, but until you have SF11.3 for aug cost reduction, you may want to use the `--prioritize-home-ram` flag which prioritizes upgrading home RAM as much as possible before buying as many augmentations as possible.
 
 ## Config Files
 
