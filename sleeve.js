@@ -108,11 +108,11 @@ async function mainLoop(ns) {
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
-    if (playerInfo.inBladeburner && 7 in ownedSourceFiles) {
+    if (playerInfo.inBladeburner && (7 in ownedSourceFiles)) {
         const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
     } else
-        bladeburnerCityChaos = null;
+        bladeburnerCityChaos = 0;
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
     let dictSleeveCommand = async (command) => await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.${command}(i))`,
@@ -205,7 +205,7 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
         if (sleeve.location.includes("%") && !sleeve.location.includes("100%"))
             bladeburnerTaskFailed[i] = Date.now(); // If not, don't re-attempt this assignment for a while
         // As current city chaos gets progressively bad, assign more and more sleeves to Diplomacy to help get it under control
-        if (bladeburnerCityChaos && bladeburnerCityChaos > (10 - i) * 10) // Later sleeves are first to get assigned, sleeve 0 is last at 100 chaos.
+        if (bladeburnerCityChaos > (10 - i) * 10) // Later sleeves are first to get assigned, sleeve 0 is last at 100 chaos.
             [action, contractName] = ["Diplomacy"]; // Fall-back to something long-term useful
         // If a prior attempt to assign a sleeve a default task failed, use a fallback
         else if (Date.now() - bladeburnerTaskFailed[i] < 5 * 60 * 1000) // 5 minutes seems reasonable for now
