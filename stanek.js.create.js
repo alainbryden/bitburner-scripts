@@ -154,7 +154,29 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 	}
 ];
 
-// These alternative layouts are more "well-counded", favour fitting more stat pieces vs. boosting most important stats
+// Not used for anything, but captures our rough priorities when designing the above layouts
+const priorities = [
+	{ id: 25, weight: 13.0 }, /* Faction Rep */
+	{ id: 0, weight: 12.0 }, /* Hack Mult */
+	{ id: 1, weight: 11.0 }, /* Hack Mult */
+	// Generally prefer adding one of these stats over triple-boosting the above
+	{ id: 5, weight: 1.15 }, /* Hack Speed */
+	{ id: 20, weight: 1.14 }, /* Hacknet Prod */
+	{ id: 21, weight: 1.13 }, /* Hacknet Cost */
+	{ id: 6, weight: 1.12 }, /* Hack Power */
+	{ id: 7, weight: 1.11 }, /* Grow Power */
+	{ id: 30, weight: 1.10 }, /* Bladeburner */
+	{ id: 16, weight: 1.09 }, /* Agi */
+	{ id: 14, weight: 1.08 }, /* Dex */
+	// Generally prefer additional boost over the below
+	{ id: 28, weight: 0.99 }, /* Crime Money */
+	{ id: 18, weight: 0.98 }, /* Cha */
+	{ id: 10, weight: 0.97 }, /* Str */
+	{ id: 12, weight: 0.96 }, /* Def */
+	{ id: 28, weight: 0.95 }, /* Work Money */
+]
+
+// Not used, but these alternative layouts favour fitting more stat pieces vs. boosting most important stats, use if you please
 const alternativeLayouts = [
 	{
 		"height": 3, "width": 4, "fragments": [
