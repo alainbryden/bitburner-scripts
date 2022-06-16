@@ -77,7 +77,7 @@ export async function main(ns) {
             `early on, and less later on. Experimental and not tested by me. Have fun!`);
     else
         log(ns, `INFO: --reserve-percent is set to ${pctReservedMoney * 100}%: ` +
-            `This means we will spend more than ${((1 - pctReservedMoney) * 100).toFixed(1)}% of current Money on a new server.`);
+            `This means we will spend no more than ${((1 - pctReservedMoney) * 100).toFixed(1)}% of current Money on a new server.`);
     // Start the main loop (or run once)
     if (!keepRunning)
         log(ns, `host-manager will run once. Run with argument "-c" to run continuously.`)
