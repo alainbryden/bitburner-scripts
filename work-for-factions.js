@@ -163,8 +163,7 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 async function loadStartupData(ns) {
-    const bitNodeMultipliers = await tryGetBitNodeMultipliers(ns);
-    repToDonate = bitNodeMultipliers === null ? 150 : 150 * bitNodeMultipliers.RepToDonateToFaction;
+    repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
     const playerInfo = await getPlayerInfo(ns);
     const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
 
