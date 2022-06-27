@@ -488,7 +488,10 @@ let dictScriptsRun = {}; // Keep a cache of every script run on every host, and 
  * Workaround a current bitburner bug by yeilding briefly to the game after executing something. **/
 async function exec(ns, script, host, numThreads, ...args) {
     // Try to run the script with auto-retry if it fails to start
-    // TODO: It probably doesn't make sense to auto-retry H/G/W attempts, only attempt to run other scripts
+    // It doesn't make sense to auto-retry hack tools, only add error handling to other scripts
+    if (hackTools.some(h => h.name === script))
+        return ns.exec(script, host, numThreads, ...args);
+    // Otherwise, run with auto-retry to handle e.g. temporary ram issues
     const pid = await autoRetry(ns, async () => {
         const p = ns.exec(script, host, numThreads, ...args)
         return p;
@@ -748,7 +751,8 @@ async function doTargetingLoop(ns) {
             const expectedDeletedHostPhrase = "Invalid hostname: ";
             let expectedErrorPhraseIndex = errorMessage.indexOf(expectedDeletedHostPhrase);
             if (expectedErrorPhraseIndex == -1) {
-                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${err?.stack || errorMessage}`, true, 'warning');
+                if (err?.stack) errorMessage += '\n' + err.stack;
+                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
                 continue;
             }
             let start = expectedErrorPhraseIndex + expectedDeletedHostPhrase.length;
