@@ -226,7 +226,7 @@ async function checkIfBnIsComplete(ns, player) {
 
 	// Check if there is some reason not to automatically destroy this BN
 	if (player.bitNodeN == 10) { // Suggest the user doesn't reset until they buy all sleeves and max memory
-		const shouldHaveSleeveCount = Math.max(8, 6 + dictOwnedSourceFiles[10]);
+		const shouldHaveSleeveCount = Math.min(8, 6 + dictOwnedSourceFiles[10]);
 		const numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
 		if (numSleeves < shouldHaveSleeveCount) {
 			log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.` +
