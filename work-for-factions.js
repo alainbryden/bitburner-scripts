@@ -409,30 +409,35 @@ async function earnFactionInvite(ns, factionName) {
     }
     // Check on physical stat requirements
     const physicalStats = ["strength", "defense", "dexterity", "agility"];
+    // Establish some helper functions used to determine how fast we can train a stat
     const title = s => s && s[0].toUpperCase() + s.slice(1); // Annoyingly bitnode multis capitalize the first letter physical stat name
+    const heuristic = (stat, trainingBitnodeMult) =>
+        Math.sqrt(player[`${stat}_mult`] * bitnodeMultipliers[`${title(stat)}LevelMultiplier`] *
+            /* */ player[`${stat}_exp_mult`] * trainingBitnodeMult);
+    const crimeHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.CrimeExpGain); // When training with crime
+    const classHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.ClassGymExpGain); // When training in university
+    // Check which stats need to be trained up
     requirement = requiredCombatByFaction[factionName];
     let deficientStats = !requirement ? [] : physicalStats.map(stat => ({ stat, value: player[stat] })).filter(stat => stat.value < requirement);
     // Hash for special-case factions (just 'Daedalus' for now) requiring *either* hacking *or* combat
-    if (reqHackingOrCombat.includes(factionName) && (
-        requiredHackByFaction[factionName] / Math.sqrt(player.hacking_exp * bitnodeMultipliers.HackingLevelMultiplier *
-            /*                                      */ player.hacking_exp_mult * bitnodeMultipliers.ClassGymExpGain) < // Would use uni for hacking
-        // HACK: Compare to Agility since it's typically the least-boosted physical stat (TODO: evaluate them all and compare to the lowest)
-        requiredCombatByFaction[factionName] / Math.sqrt(player.agility_exp * bitnodeMultipliers.AgilityLevelMultiplier *
-            /*                                        */ player.agility_exp_mult * bitnodeMultipliers.CrimeExpGain))) // Would use crime for physical stats
+    if (reqHackingOrCombat.includes(factionName) && deficientStats.length > 0 && (
+        // Compare roughly how long it will take to train up our hacking stat
+        (requiredHackByFaction[factionName] - player.hacking) / classHeuristic('hacking') <
+        // To the slowest time it will take to train up our deficient physical stats
+        Math.min(...deficientStats.map(s => (requiredCombatByFaction[factionName] - s.value) / crimeHeuristic(s.stat)))))
         ns.print(`Ignoring combat requirement for ${factionName} as we are more likely to unlock them via hacking stats.`);
     else if (deficientStats.length > 0) {
         ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, Have ` +
             physicalStats.map(s => `${s.slice(0, 3)}: ${player[s]}`).join(", "));
         const em = requirement / options['training-stat-per-multi-threshold'];
         // Hack: Create a rough heuristic suggesting how much multi we need to train physical stats in a reasonable amount of time. TODO: Be smarter
-        if (physicalStats.some(s => Math.sqrt(player[`${s}_mult`] * bitnodeMultipliers[`${title(s)}LevelMultiplier` *
-            /*                             */ player[`${s}_exp_mult` * bitnodeMultipliers.CrimeExpGain]]) < em))
+        if (deficientStats.map(s => s.stat).some(s => crimeHeuristic(s) < em))
             return ns.print("Some mults * exp_mults * bitnode mults appear to be too low to increase stats in a reasonable amount of time. " +
                 `You can control this with --training-stat-per-multi-threshold. Current sqrt(mult*exp_mult*bn_mult*bn_exp_mult) ` +
-                `should be ~${formatNumberShort(em, 2)}, have ` + physicalStats.map(s => `${s.slice(0, 3)}: ` +
-                    `${formatNumberShort(player[`${s}_mult`], 2)}*${formatNumberShort(player[`${s}_exp_mult`], 2)}*` +
-                    `${formatNumberShort(bitnodeMultipliers[`${title(s)}LevelMultiplier`], 2)}*` +
-                    `${formatNumberShort(bitnodeMultipliers.CrimeExpGain, 2)}`).join(", "));
+                `should be ~${formatNumberShort(em, 2)}, have ` + deficientStats.map(s => s.stat).map(s => `${s.slice(0, 3)}: sqrt(` +
+                    `${formatNumberShort(player[`${s}_mult`])}*${formatNumberShort(player[`${s}_exp_mult`])}*` +
+                    `${formatNumberShort(bitnodeMultipliers[`${title(s)}LevelMultiplier`])}*` +
+                    `${formatNumberShort(bitnodeMultipliers.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
         doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
     if (doCrime && options['no-crime'])
@@ -455,16 +460,14 @@ async function earnFactionInvite(ns, factionName) {
         !(reqHackingOrCombat.includes(factionName) && workedForInvite)) {
         ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.hacking}`);
         const em = requirement / options['training-stat-per-multi-threshold'];
-        const heuristic = Math.sqrt(player.hacking_mult * bitnodeMultipliers.HackingLevelMultiplier *
-            /*                   */ player.hacking_exp_mult * bitnodeMultipliers.ClassGymExpGain);
         if (options['no-studying'])
             return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
-        else if (heuristic < em)
+        else if (classHeuristic('hacking') < em)
             return ns.print(`Your combination of Hacking mult (${formatNumberShort(player.hacking_mult)}), exp_mult ` +
-                `(${formatNumberShort(player.hacking_exp_mult)}), and bitnode hacking / class exp mults ` +
+                `(${formatNumberShort(player.hacking_exp_mult)}), and bitnode hacking / study exp mults ` +
                 `(${formatNumberShort(bitnodeMultipliers.HackingLevelMultiplier)}) / (${formatNumberShort(bitnodeMultipliers.ClassGymExpGain)}) ` +
                 `are probably too low to increase hack from ${player.hacking} to ${requirement} in a reasonable amount of time ` +
-                `(${formatNumberShort(heuristic)} < ${formatNumberShort(em)} - configure with --training-stat-per-multi-threshold)`);
+                `(${formatNumberShort(classHeuristic('hacking'))} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
         let studying = false;
         if (player.money > options['pay-for-studies-threshold']) { // If we have sufficient money, pay for the best studies
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
