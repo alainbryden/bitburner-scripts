@@ -61,8 +61,8 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 		]
 	}, {
 		"height": 3, "width": 4, "fragments": [ // Note: Possible to fit 3 fragments, see "alternative layouts" below
-			{ "id": 0, "x": 0, "y": 0, "rotation": 1 },
-			{ "id": 1, "x": 2, "y": 0, "rotation": 1 }
+			{ "id": 0, "x": 0, "y": 0, "rotation": 1 }, // Hacking Mult
+			{ "id": 1, "x": 2, "y": 0, "rotation": 1 } // Hacking Mult
 		]
 	}, {
 		"height": 4, "width": 4, "fragments": [ // Note: Possible to fit 4 fragments, but have to sacrifice a hacking mult piece
@@ -75,7 +75,7 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 0, "x": 0, "y": 0, "rotation": 0 }, // Hacking Mult
 			{ "id": 1, "x": 0, "y": 2, "rotation": 0 }, // Hacking Mult
 			{ "id": 25, "x": 3, "y": 1, "rotation": 3 }, // Reputation
-			{ "id": 104, "x": 2, "y": 0, "rotation": 0 }, // Booster
+			{ "id": 104, "x": 2, "y": 0, "rotation": 0 }, // Booster *new*
 		]
 	}, {
 		"height": 5, "width": 5, "fragments": [
@@ -83,7 +83,7 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 1, "x": 1, "y": 2, "rotation": 0 }, // Hacking Mult
 			{ "id": 25, "x": 3, "y": 2, "rotation": 3 }, // Reputation
 			{ "id": 105, "x": 0, "y": 2, "rotation": 1 }, // Booster
-			{ "id": 100, "x": 2, "y": 0, "rotation": 0 }, // Booster
+			{ "id": 100, "x": 2, "y": 0, "rotation": 0 }, // Booster *new*
 		]
 	}, {
 		// NOTE: Things get pretty subjective after this. Should we prioritize boosting hacking multi or adding more stats?
@@ -91,9 +91,9 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 		"height": 5, "width": 6, "fragments": [
 			{ "id": 0, "x": 3, "y": 0, "rotation": 0 }, // Hacking Mult
 			{ "id": 1, "x": 3, "y": 3, "rotation": 0 }, // Hacking Mult
-			{ "id": 5, "x": 4, "y": 1, "rotation": 1 }, // Hacking Speed
-			{ "id": 20, "x": 0, "y": 4, "rotation": 0 }, // Hacknet Production
-			{ "id": 21, "x": 0, "y": 1, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 5, "x": 4, "y": 1, "rotation": 1 }, // Hacking Speed *new*
+			{ "id": 20, "x": 0, "y": 4, "rotation": 0 }, // Hacknet Production *new*
+			{ "id": 21, "x": 0, "y": 1, "rotation": 0 }, // Hacknet Cost Reduction *new*
 			{ "id": 25, "x": 0, "y": 0, "rotation": 2 }, // Reputation
 			{ "id": 102, "x": 0, "y": 2, "rotation": 2 } // Booster
 		]
@@ -106,15 +106,15 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
 			{ "id": 25, "x": 3, "y": 0, "rotation": 2 }, // Reputation
 			{ "id": 103, "x": 0, "y": 4, "rotation": 2 }, // Booster
-			{ "id": 104, "x": 2, "y": 0, "rotation": 1 } // Booster
+			{ "id": 104, "x": 2, "y": 0, "rotation": 1 } // Booster *new*
 		]
 	}, { // Special thanks to @Ansopedi (a.k.a. Zoëkeeper) for solving for this layout
 		"height": 6, "width": 7, "fragments": [
 			{ "id": 0, "x": 3, "y": 2, "rotation": 1 }, // Hacking Mult
 			{ "id": 1, "x": 1, "y": 3, "rotation": 0 }, // Hacking Mult
 			{ "id": 5, "x": 4, "y": 1, "rotation": 1 }, // Hacking Speed
-			{ "id": 6, "x": 0, "y": 0, "rotation": 0 }, // Hack power
-			{ "id": 7, "x": 4, "y": 0, "rotation": 2 }, // Grow power
+			{ "id": 6, "x": 0, "y": 0, "rotation": 0 }, // Hack power *new*
+			{ "id": 7, "x": 4, "y": 0, "rotation": 2 }, // Grow power *new*
 			{ "id": 20, "x": 6, "y": 2, "rotation": 1 }, // Hacknet Production
 			{ "id": 21, "x": 0, "y": 4, "rotation": 0 }, // Hacknet Cost Reduction
 			{ "id": 25, "x": 0, "y": 1, "rotation": 1 }, // Reputation
@@ -131,7 +131,7 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 20, "x": 1, "y": 0, "rotation": 2 }, // Hacknet Production
 			{ "id": 21, "x": 3, "y": 1, "rotation": 0 }, // Hacknet Cost Reduction
 			{ "id": 25, "x": 5, "y": 4, "rotation": 3 }, // Reputation
-			{ "id": 30, "x": 3, "y": 5, "rotation": 2 }, // Bladeburner Stats
+			{ "id": 30, "x": 3, "y": 5, "rotation": 2 }, // Bladeburner Stats *new*
 			{ "id": 101, "x": 5, "y": 0, "rotation": 3 }, // Booster
 			{ "id": 106, "x": 1, "y": 2, "rotation": 3 }, // Booster
 		]
@@ -142,14 +142,32 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 5, "x": 0, "y": 2, "rotation": 0 }, // Hacking Speed
 			{ "id": 6, "x": 3, "y": 0, "rotation": 2 }, // Hack power
 			{ "id": 7, "x": 2, "y": 0, "rotation": 0 }, // Grow power
-			{ "id": 14, "x": 0, "y": 3, "rotation": 1 }, // Dexterity
-			{ "id": 16, "x": 5, "y": 5, "rotation": 2 }, // Agility
+			{ "id": 14, "x": 0, "y": 3, "rotation": 1 }, // Dexterity *new*
+			{ "id": 16, "x": 5, "y": 5, "rotation": 2 }, // Agility *new*
 			{ "id": 20, "x": 0, "y": 6, "rotation": 0 }, // Hacknet Production
 			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
 			{ "id": 25, "x": 6, "y": 0, "rotation": 3 }, // Reputation
 			{ "id": 30, "x": 2, "y": 4, "rotation": 0 }, // Bladeburner Stats
 			{ "id": 103, "x": 4, "y": 3, "rotation": 0 }, // Booster
 			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
+		]
+	}, { // Adds Charisma, which even a small boost makes a huge difference (hours) in grinding company rep // TODO: Consider adding charisma boosts a little earlier on in the prior 2 layouts.
+		"height": 8, "width": 8, "fragments": [ // ~BN 12.50
+			{ "id": 0, "x": 4, "y": 1, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 4, "y": 4, "rotation": 0 }, // Hacking Mult
+			{ "id": 5, "x": 0, "y": 2, "rotation": 0 }, // Hacking Speed
+			{ "id": 6, "x": 3, "y": 0, "rotation": 2 }, // Hack power
+			{ "id": 7, "x": 2, "y": 0, "rotation": 0 }, // Grow power
+			{ "id": 14, "x": 1, "y": 5, "rotation": 1 }, // Dexterity
+			{ "id": 16, "x": 5, "y": 6, "rotation": 0 }, // Agility
+			{ "id": 18, "x": 3, "y": 4, "rotation": 1 }, // Charisma *new*
+			{ "id": 20, "x": 0, "y": 3, "rotation": 3 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Reputation
+			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Bladeburner Stats
+			{ "id": 101, "x": 6, "y": 2, "rotation": 1 }, // Booster
+			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
+			// TODO: There are 5 unused spaces, find a way to fit another booster
 		]
 	}
 ];
