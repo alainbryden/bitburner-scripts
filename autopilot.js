@@ -345,7 +345,6 @@ async function checkOnRunningScripts(ns, player) {
 	// By default, don't join bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
 	if (options['enable-bladeburner']) { daemonArgs.push('--run-script', getFilePath('bladeburner.js')) }
 	else { daemonArgs.push('--disable-script', getFilePath('bladeburner.js')) };
-	;
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
 		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
