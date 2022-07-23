@@ -78,6 +78,9 @@ export async function main(ns) {
     if (options['bypass-stanek-warning']) {
         log(ns, 'INFO: --bypass-stanek-warning was set, sending the --ignore-stanek argument to faction-manager.js')
         facmanArgs.push('--ignore-stanek');
+    } else if (playerData.bitNodeN == 8) {
+        log(ns, 'INFO: Staneks gift is useless in BN8, sending the --ignore-stanek argument to faction-manager.js')
+        facmanArgs.push('--ignore-stanek');
     }
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
