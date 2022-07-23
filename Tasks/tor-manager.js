@@ -17,7 +17,7 @@ export async function main(ns) {
             ns.toast(`Purchased the Tor router!`, 'success');
             break;
         }
-        ns.purchaseTor();
+        ns.singularity.purchaseTor();
         if (keepRunning)
             await ns.sleep(interval);
     }

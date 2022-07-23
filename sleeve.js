@@ -270,7 +270,7 @@ async function promptForTrainingBudget(ns) {
 async function calculateCrimeChance(ns, sleeve, crimeName) {
     // If not in the cache, retrieve this crime's stats
     const crimeStats = cachedCrimeStats[crimeName] ?? (cachedCrimeStats[crimeName] = (4 in ownedSourceFiles ?
-        await getNsDataThroughFile(ns, `ns.getCrimeStats(ns.args[0])`, '/Temp/get-crime-stats.txt', [crimeName]) :
+        await getNsDataThroughFile(ns, `ns.singularity.getCrimeStats(ns.args[0])`, '/Temp/get-crime-stats.txt', [crimeName]) :
         // Hack: To support players without SF4, hard-code values as of the current release
         crimeName == "homicide" ? { difficulty: 1, strength_success_weight: 2, defense_success_weight: 2, dexterity_success_weight: 0.5, agility_success_weight: 0.5 } :
             crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :

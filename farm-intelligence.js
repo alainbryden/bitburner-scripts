@@ -23,7 +23,7 @@ export async function main(ns) {
     const tempFile = '/Temp/farm-intelligence.js';
     await ns.write(tempFile, `export async function main(ns) {
         ns.disableLog('ALL');
-        ${JSON.stringify(ns.singularity.checkFactionInvitations())}.forEach(f => ns.joinFaction(f));
+        ${JSON.stringify(ns.singularity.checkFactionInvitations())}.forEach(f => ns.singularity.joinFaction(f));
         ns.singularity.softReset('${tempFile}');
     }`, "w");
     ns.run(tempFile)

@@ -41,7 +41,7 @@ export async function main(ns) {
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
     // Stop the current action so that we're no longer spending money (if training) and can collect rep earned (if working)
-    await getNsDataThroughFile(ns, 'ns.stopAction()', '/Temp/stop-player-action.txt');
+    await getNsDataThroughFile(ns, 'ns.singularity.stopAction()', '/Temp/stop-player-action.txt');
 
     // Clear any global reserve so that all money can be spent
     await ns.write(getFilePath('reserve.txt'), '0', "w");
@@ -84,8 +84,8 @@ export async function main(ns) {
 
     // Sanity check, if we are not slated to install any augmentations, ABORT
     // Get owned + purchased augmentations, then installed augmentations. Ensure there's a difference
-    let purchasedAugmentations = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt');
-    let installedAugmentations = await getNsDataThroughFile(ns, 'ns.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
+    let purchasedAugmentations = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt');
+    let installedAugmentations = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
     let noAugsToInstall = purchasedAugmentations.length == installedAugmentations.length;
     if (noAugsToInstall && !options['allow-soft-reset'])
         return log(ns, `ERROR: See above faction-manager.js logs - there are no new purchased augs. ` +
@@ -117,13 +117,13 @@ export async function main(ns) {
 
     // STEP 7: Buy whatever home CPU upgrades we can afford
     log(ns, 'Try Upgrade Home Cores...', true, 'info');
-    pid = await runCommand(ns, `while(ns.upgradeHomeCores()); { await ns.sleep(10); }`, '/Temp/upgrade-home-ram.js');
+    pid = await runCommand(ns, `while(ns.singularity.upgradeHomeCores()); { await ns.sleep(10); }`, '/Temp/upgrade-home-ram.js');
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
 
     // STEP 8: Join every faction we've been invited to (gives a little INT XP)
-    let invites = await getNsDataThroughFile(ns, 'ns.checkFactionInvitations()', '/Temp/faction-invitations.txt');
+    let invites = await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()', '/Temp/faction-invitations.txt');
     if (invites.length > 0) {
-        pid = await runCommand(ns, 'ns.args.forEach(f => ns.joinFaction(f))', '/Temp/join-factions.js', invites);
+        pid = await runCommand(ns, 'ns.args.forEach(f => ns.singularity.joinFaction(f))', '/Temp/join-factions.js', invites);
         await waitForProcessToComplete(ns, pid, true);
     }
 
@@ -160,9 +160,9 @@ export async function main(ns) {
             // Default script (if none is specified) is stanek.js if we have it (which in turn will spawn daemon.js when done)
             (purchasedAugmentations.includes(`Stanek's Gift - Genesis`) ? getFilePath('stanek.js') : getFilePath('daemon.js'));
         if (noAugsToInstall)
-            await runCommand(ns, `ns.softReset(ns.args[0])`, '/Temp/soft-reset.js', [resetScript]);
+            await runCommand(ns, `ns.singularity.softReset(ns.args[0])`, '/Temp/soft-reset.js', [resetScript]);
         else
-            await runCommand(ns, `ns.installAugmentations(ns.args[0])`, '/Temp/install-augmentations.js', [resetScript]);
+            await runCommand(ns, `ns.singularity.installAugmentations(ns.args[0])`, '/Temp/install-augmentations.js', [resetScript]);
     } else
         log(ns, `SUCCESS: Ready to ascend. In the future, you can run with --reset (or --install-augmentations) ` +
             `to actually perform the reset automatically.`, true, 'success');

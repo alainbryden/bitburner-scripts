@@ -22,7 +22,7 @@ async function legacyAutoCrime(ns, crime = "mug") {
     let interval = 100;
     while (true) {
         let maxBusyLoops = 100;
-        while ((await getNsDataThroughFile(ns, `ns.isBusy()`, '/Temp/isBusy.txt')) && maxBusyLoops-- > 0) {
+        while ((await getNsDataThroughFile(ns, `ns.singularity.isBusy()`, '/Temp/isBusy.txt')) && maxBusyLoops-- > 0) {
             await ns.sleep(interval);
             ns.print("Waiting to no longer be busy...");
         }
@@ -31,7 +31,7 @@ async function legacyAutoCrime(ns, crime = "mug") {
             return;
         }
         ns.tail(); // Force a tail window open when auto-criming, or else it's very difficult to stop if it was accidentally closed.
-        let wait = 10 + (await getNsDataThroughFile(ns, 'ns.commitCrime(ns.args[0])', '/Temp/commitCrime.txt', [crime]));
+        let wait = 10 + (await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0])', '/Temp/commitCrime.txt', [crime]));
         ns.print(`Karma: ${formatNumberShort(ns.heart.break())} Committing crime \"${crime}\" and sleeping for ${formatDuration(wait)}...`);
         await ns.sleep(wait);
     }

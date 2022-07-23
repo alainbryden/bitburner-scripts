@@ -89,7 +89,7 @@ export async function main(ns) {
     if (sf4Level == 0) {
         log(ns, `INFO: SF4 required to get owned faction rep and augmentation info. Ignoring the --reputation-threshold setting.`);
     } else {
-        const ownedAugmentations = await getNsDataThroughFile(ns, `ns.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
+        const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
         const awakeningOwned = ownedAugmentations.includes("Stanek's Gift - Awakening");
         const serenityOwned = ownedAugmentations.includes("Stanek's Gift - Serenity");
         shouldContinueForAug = (currentRep) => // return true if currentRep is high enough that we should keep grinding for the next unowned aug
@@ -140,7 +140,7 @@ async function getFragmentsToCharge(ns) {
         return undefined;
     }
     // If we have SF4, get our updated faction rep, and determine if we should continue past --max-charges to earn rep for the next augmentation
-    const churchRep = sf4Level ? await getNsDataThroughFile(ns, 'ns.getFactionRep("Church of the Machine God")', '/Temp/stanek-reputation.txt') : 0;
+    const churchRep = sf4Level ? await getNsDataThroughFile(ns, 'ns.singularity.getFactionRep("Church of the Machine God")', '/Temp/stanek-reputation.txt') : 0;
     const shouldContinue = shouldContinueForAug(churchRep);
 
     // Collect information about each fragment's charge status, and prepare a status update

@@ -22,15 +22,15 @@ export async function main(ns) {
         return log(ns, `ERROR: One of the arguments could not be parsed as a number: ${JSON.stringify(options)}`, true, 'error');
     // Quickly buy as many upgrades as we can within the budget
     do {
-        let cost = await getNsDataThroughFile(ns, `ns.getUpgradeHomeRamCost()`, `/Temp/getUpgradeHomeRamCost.txt`);
-        let currentRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
+        let cost = await getNsDataThroughFile(ns, `ns.singularity.getUpgradeHomeRamCost()`, `/Temp/getUpgradeHomeRamCost.txt`);
+        let currentRam = await getNsDataThroughFile(ns, `ns.singularity.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
         if (cost >= Number.MAX_VALUE || currentRam == max_ram)
             return log(ns, `INFO: We're at max home RAM (${formatRam(currentRam)})`);
         const nextRam = currentRam * 2;
         const upgradeDesc = `home RAM from ${formatRam(currentRam)} to ${formatRam(nextRam)}`;
         if (spendable < cost)
             return log(ns, `Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
-        if (!(await getNsDataThroughFile(ns, `ns.upgradeHomeRam()`, `/Temp/upgradeHomeRam.txt`)))
+        if (!(await getNsDataThroughFile(ns, `ns.singularity.upgradeHomeRam()`, `/Temp/upgradeHomeRam.txt`)))
             return log(ns, `ERROR: Failed to upgrade ${upgradeDesc} thinking we could afford it ` +
                 `(cost: ${formatMoney(cost)} cash: ${formatMoney(money)} budget: ${formatMoney(spendable)})`, true, 'error');
         // Otherwise, we've successfully upgraded home ram.

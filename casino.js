@@ -44,7 +44,7 @@ export async function main(ns) {
 	// Step 1: Go to Aevum if we aren't already there. (Must be done manually if you don't have SF4)
 	if (ns.getPlayer().city != "Aevum") {
 		try {
-			if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.travelToCity(ns.args[0])', '/Temp/travelToCity.txt', ["Aevum"])))
+			if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.singularity.travelToCity(ns.args[0])', '/Temp/travelToCity.txt', ["Aevum"])))
 				return tailAndLog(ns, "ERROR: Sorry, you need at least 200k to travel to the casino.");
 		} catch (err) {
 			return tailAndLog(ns, "ERROR: You must manually travel to to Aevum to use this script until you get SF4");
@@ -77,7 +77,7 @@ export async function main(ns) {
 				await click(await findRetry(ns, "//div[(@role = 'button') and (contains(., 'City'))]"));
 				await click(await findRetry(ns, "//span[@aria-label = 'Iker Molina Casino']"));
 			} catch { // Use SF4 as a fallback, it's more reliable.
-				try { await getNsDataThroughFile(ns, 'ns.goToLocation(ns.args[0])', '/Temp/goToLocation.txt', ["Iker Molina Casino"]); }
+				try { await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', '/Temp/goToLocation.txt', ["Iker Molina Casino"]); }
 				catch { return tailAndLog(ns, "ERROR: Failed to travel to the casino both using UI navigation and using SF4 as a fall-back."); }
 			}
 			// Step 2.3: Try to start the blackjack game

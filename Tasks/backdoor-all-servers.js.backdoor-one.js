@@ -2,7 +2,7 @@
 export async function main(ns) {
     let target = ns.args.length > 0 ? ns.args[0] : '(unspecified server)';
     try {
-        await ns.installBackdoor();
+        await ns.singularity.installBackdoor();
         ns.toast(`Backdoored ${target}`, 'success');
     }
     catch (err) {

@@ -39,7 +39,7 @@ export let main = async ns => {
             ns.print(`Hopping to ${server}`);
             anyConnected = true;
             for (let hop of routes[server])
-                ns.connect(hop);
+                ns.singularity.connect(hop);
             if (server === "w0r1d_d43m0n") {
                 ns.alert("Ready to hack w0r1d_d43m0n!");
                 while (true) await ns.sleep(10000); // Sleep forever so the script isn't run multiple times to create multiple overlapping alerts
@@ -50,12 +50,12 @@ export let main = async ns => {
             if (pid === 0)
                 return ns.print(`Couldn't initiate a new backdoor of "${server}"" (insufficient RAM?). Will try again later.`);
             await ns.sleep(spawnDelay); // Wait some time for the external backdoor script to initiate its backdoor of the current connected server
-            ns.connect("home");
+            ns.singularity.connect("home");
         }
     } catch (err) {
         ns.tprint(String(err));
     } finally {
         if (anyConnected)
-            ns.connect("home");
+            ns.singularity.connect("home");
     }
 };
