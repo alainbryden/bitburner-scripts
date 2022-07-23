@@ -89,17 +89,19 @@ export async function main(ns) {
             // Spend hashes normally on any/all user-specified purchases        
             await fnSpendHashes(toBuy, liquidate);
             // Determine if we should try to upgrade our hacknet capacity
-            if (capacity - ns.hacknet.numHashes() < reserve)
+            const remaining = capacity - ns.hacknet.numHashes();
+            if (remaining < reserve)
                 log(ns, `INFO: We're still at hash capacity (${formatNumberShort(capacity, 6, 3)}) after spending hashes as instructed. ` +
-                    `We currently have ${formatNumberShort(ns.hacknet.numHashes(), 6, 3)} hashes - which is ${capacity - ns.hacknet.numHashes()} away.`);
+                    `We currently have ${formatNumberShort(ns.hacknet.numHashes(), 6, 3)} hashes - which is ${remaining} away.`);
             else if (getMinCost(toBuy) > capacity - options['reserve-buffer'])
                 log(ns, `INFO: Our hash capacity is ${formatNumberShort(capacity, 6, 3)}, but the cheapest upgrade we wish to purchase ` +
                     `costs ${formatNumberShort(getMinCost(toBuy), 6, 3)} hashes. A capacity upgrade is needed before anything else is purchase.`);
             else // Current hash capacity suffices
                 continue;
             if (options['no-capacity-upgrades']) // Not allowed to upgrade hacknet capacity
-                log(ns, `WARNING: spend-hacknet-hashes.js cannot afford any of the desired upgrades (${toBuy.join(", ")}) at the current hash capacity, ` +
-                    `and --no-capacity-upgrades is set, so we cannot increase our hash capacity.`, false, atHashCapacity ? 'warning' : undefined);
+                log(ns, `WARNING: spend-hacknet-hashes.js cannot afford any of the desired upgrades (${toBuy.join(", ")}) at the ` +
+                    `current hash capacity (${formatNumberShort(capacity, 6, 3)}), and --no-capacity-upgrades is set, ` +
+                    `so we cannot increase our hash capacity.`, false, remaining < reserve ? 'warning' : undefined);
             else { // Try to upgrade hacknet capacity so we can save up for more upgrades
                 let lowestLevel = Number.MAX_SAFE_INTEGER, lowestIndex = null;
                 for (let i = 0; i < nodes; i++)
