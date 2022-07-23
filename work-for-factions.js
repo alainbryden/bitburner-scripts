@@ -638,7 +638,7 @@ export async function waitForFactionInvite(ns, factionName, maxWaitTime = waitFo
     ns.print(`Waiting for invite from faction "${factionName}"...`);
     let waitTime = maxWaitTime;
     do {
-        var invitations = checkFactionInvites(ns);
+        var invitations = await checkFactionInvites(ns);
         var joinedFactions = (await getPlayerInfo(ns)).factions;
         if (invitations.includes(factionName) || joinedFactions.includes(factionName))
             break;
