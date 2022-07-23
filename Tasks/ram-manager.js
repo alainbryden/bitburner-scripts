@@ -23,7 +23,7 @@ export async function main(ns) {
     // Quickly buy as many upgrades as we can within the budget
     do {
         let cost = await getNsDataThroughFile(ns, `ns.singularity.getUpgradeHomeRamCost()`, `/Temp/getUpgradeHomeRamCost.txt`);
-        let currentRam = await getNsDataThroughFile(ns, `ns.singularity.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
+        let currentRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
         if (cost >= Number.MAX_VALUE || currentRam == max_ram)
             return log(ns, `INFO: We're at max home RAM (${formatRam(currentRam)})`);
         const nextRam = currentRam * 2;
