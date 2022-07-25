@@ -36,7 +36,7 @@ const argsSchema = [
     ['l', false], // Stop any other running stockmaster.js instances and sell all stocks
     ['liquidate', false], // Long-form alias for the above flag.
     ['mock', false], // If set to true, will "mock" buy/sell but not actually buy/sell anything
-    ['noisy', false], // If set to true, tprints and announces each time stocks are bought/soldgetHostnames
+    ['noisy', false], // If set to true, tprints and announces each time stocks are bought/sold
     ['disable-shorts', false], // If set to true, will not short any stocks. Will be set depending on having SF8.2 by default.
     ['reserve', null], // A fixed amount of money to not spend
     ['fracB', 0.4], // Fraction of assets to have as liquid before we consider buying more stock
