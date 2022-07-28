@@ -176,11 +176,10 @@ export async function main(ns) {
     // Create the table of all augmentations, and the breakdown of what we can afford
     await manageUnownedAugmentations(ns, omitAugs);
 
-    /* Currently, an exploit lets us accept Stanek's gift after purchasing other augs. If that stops working, we may need to put this back
     if (options.purchase && ownedAugmentations.length <= 1 && 13 in ownedSourceFiles && !ownedAugmentations.includes(staneksGift) && !options['ignore-stanek'])
         log(ns, `WARNING: You have not yet accepted Stanek's Gift from the church in Chongqing. Purchasing augs will ` +
             `prevent you from doing so for the rest of this BN. (Run with '--ignore-stanek' to bypass this warning.)`, true);
-    else*/ if (options.purchase && purchaseableAugs) {
+    else if (options.purchase && purchaseableAugs) {
         await purchaseDesiredAugs(ns);
         await ns.write(output_file, "", "w"); // Clear the file so it isn't misinterpreted on next reset.
     } else if (!ignorePlayerData) // Write a temp file that summarizes what augs we could afford if we could ascend right now.
@@ -576,15 +575,6 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             log(ns, `Dropping aug from the purchase order: \"${mostExpensiveAug.name}\". New total cost: ${costAfter}`);
         }
     } while (restart);
-
-    // Stanek Exploit, may be patched in the future. We can "accept Stanek's Gift" by buying this aug at any time, even after buying other augs.
-    //   but when using the UIs, Stanek's Gift must be the first augmentation purchased (and it is insta-installed)
-    if (!options['ignore-stanek'] && !ownedAugmentations.includes(staneksGift) && staneksGift in augmentationData) {
-        const giftAug = augmentationData[staneksGift];
-        giftAug.joinedFactionsWithAug = giftAug.getFromJoined = () => "Church of the Machine God"; // We can buy it from them, even if not technically joined
-        giftAug.canAfford = () => true;
-        purchaseableAugs.push(giftAug);
-    }
 
     // Display unique affordable augs, but only show the full list if we aren't adding neuroflux levels below
     manageFilteredSubset(ns, outputRows, 'Unique Affordable', purchaseableAugs, options['neuroflux-disabled']);

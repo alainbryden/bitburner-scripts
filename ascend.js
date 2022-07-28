@@ -4,7 +4,8 @@ const argsSchema = [
     ['install-augmentations', false], // By default, augs will only be purchased. Set this flag to install (a.k.a reset)
     /* OR */['reset', false], // An alias for the above flag, does the same thing.
     ['allow-soft-reset', false], // If set to true, allows ascend.js to invoke a **soft** reset (installs no augs) when no augs are affordable. This is useful e.g. when ascending rapidly to grind hacknet hash upgrades.
-    ['bypass-stanek-warning', false], // If set to true, and this will bypass the warning before purchasing augmentations if you haven't gotten stanek yet.
+    ['skip-staneks-gift', false], // By default, we get stanek's gift before our first install (except in BN8). If set to true, skip this step.
+    /* Deprecated */['bypass-stanek-warning', false], // (Obsoleted by the above option) Used to warn you if you were installing augs without accepting stanek's gift
     // Spawn this script after installing augmentations (Note: Args not supported by the game)
     ['on-reset-script', null], // By default, will start with `stanek.js` if you have stanek's gift, otherwise `daemon.js`.
     ['ticks-to-wait-for-additional-purchases', 10], // Don't reset until we've gone this many game ticks without any new purchases being made (10 * 200ms (game tick time) ~= 2 seconds)
@@ -72,14 +73,28 @@ export async function main(ns) {
     };
     if (options['prioritize-home-ram']) await spendOnHomeRam();
 
+    // STANEK'S GIFT
+    // There is now an API to accept stanek's gift without resorting to exploits. We must do this before installing augs for the first time
+    if (options['skip-staneks-gift'])
+        log(ns, 'INFO: --skip-staneks-gift was set, we will not accept it.');
+    else if (playerData.bitNodeN == 8) {
+        log(ns, 'INFO: Stanek\'s gift is useless in BN8, setting the --skip-staneks-gift argument automatically.');
+        options['skip-staneks-gift'] = true;
+    } else {
+        log(ns, 'Accepting Stanek\'s Gift (if this is the first reset)...', true, 'info');
+        const haveStanek = await getNsDataThroughFile(ns, `ns.stanek.acceptGift()`, '/Temp/stanek-acceptGift.txt');
+        if (haveStanek) log(ns, 'INFO: Confirmed that we have Stanek\'s Gift', true, 'info');
+        else {
+            log(ns, 'WARNING: It looks like we can\'t get Stanek\'s Gift. (Did you manually purchase some augmentations?)', true, 'warning');
+            options['skip-staneks-gift'] = true; // Nothing we can do, no point in failing our augmentation install
+        }
+    }
+
     // STEP 3: Buy as many desired augmentations as possible
     log(ns, 'Purchasing augmentations...', true, 'info');
     const facmanArgs = ['--purchase', '-v'];
-    if (options['bypass-stanek-warning']) {
-        log(ns, 'INFO: --bypass-stanek-warning was set, sending the --ignore-stanek argument to faction-manager.js')
-        facmanArgs.push('--ignore-stanek');
-    } else if (playerData.bitNodeN == 8) {
-        log(ns, 'INFO: Staneks gift is useless in BN8, sending the --ignore-stanek argument to faction-manager.js')
+    if (options['skip-staneks-gift']) {
+        log(ns, 'INFO: Sending the --ignore-stanek argument to faction-manager.js')
         facmanArgs.push('--ignore-stanek');
     }
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
