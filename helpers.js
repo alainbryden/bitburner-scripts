@@ -363,7 +363,9 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
     // Find out what source files the user has unlocked
     let dictSourceFiles;
     try {
-        dictSourceFiles = await fnGetNsDataThroughFile(ns, `Object.fromEntries(ns.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`, '/Temp/owned-source-files.txt');
+        dictSourceFiles = await fnGetNsDataThroughFile(ns,
+            `Object.fromEntries(ns.singularity.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`,
+            '/Temp/owned-source-files.txt');
     } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
     // If the user is currently in a given bitnode, they will have its features unlocked
     if (includeLevelsFromCurrentBitnode) {
