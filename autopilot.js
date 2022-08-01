@@ -316,7 +316,7 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Spend hacknet hashes on our boosting best hack-income server once established
 	const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
-	if ((9 in unlockedSFs) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= options['time-before-boosting-best-hack-server']) {
+	if ((9 in unlockedSFs) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= options['time-before-boosting-best-hack-server'] && !(player.bitNodeN == 8)) {
 		const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
 		if (strServerIncomeInfo) {
 			const incomeByServer = JSON.parse(strServerIncomeInfo);
