@@ -423,7 +423,9 @@ async function maybeDoCasino(ns, player) {
 	//Or if BN8, as that also gives us plenty of starter cash to casino immediately
 	if (player.playtimeSinceLastAug < 60000 && !installedAugmentations.includes(`CashRoot Starter Kit`) && !player.bitNodeN == 8)
 		return;
-	if (player.money / player.playtimeSinceLastAug > 5e9 / 60000) // If we're making more than ~5b / minute, no need to run casino.
+	// If we're making more than ~5b / minute, no need to run casino.
+	//Unless BN8, if BN8 we always need casino cash bootstrap
+	if (player.money / player.playtimeSinceLastAug > 5e9 / 60000 && !player.bitNodeN == 8) 
 		return ranCasino = true;
 	if (player.money > 10E9) // If we already have 10b, assume we ran and lost track, or just don't need the money
 		return ranCasino = true;
