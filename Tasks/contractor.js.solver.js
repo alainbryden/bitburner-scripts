@@ -178,6 +178,8 @@ const codingContractTypesMetadata = [{
 {
     name: 'Array Jumping Game II',
     solver: function (data) {
+        if (data[0]==0) 
+            return '0';
         const n = data.length;
         let reach = 0;
         let jumps = 0;
