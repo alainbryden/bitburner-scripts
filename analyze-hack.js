@@ -40,7 +40,7 @@ export async function main(ns) {
     var player = ns.getPlayer();
     //ns.print(JSON.stringify(player));
 
-    if (options['at-hack-level']) player.hacking = options['at-hack-level'];
+    if (options['at-hack-level']) player.skills.hacking = options['at-hack-level'];
     var servers = serverNames.map(ns.getServer);
     // Compute the total RAM available to us on all servers (e.g. for running hacking scripts)
     var ram_total = servers.reduce(function (total, server) {
@@ -54,8 +54,8 @@ export async function main(ns) {
         server.hackDifficulty = server.minDifficulty;
         server.moneyAvailable = server.moneyMax;
         // Temporarily change the hack level on the player object to the requested level
-        const real_player_hack_skill = player.hacking;
-        player.hacking = hackLevel;
+        const real_player_hack_skill = player.skills.hacking;
+        player.skills.hacking = hackLevel;
         // Compute the cost (ram*seconds) for each tool
         try {
             const weakenCost = weaken_ram * ns.formulas.hacking.weakenTime(server, player);
@@ -78,7 +78,7 @@ export async function main(ns) {
             const cappedGainRate = Math.min(theoreticalGainRate, hackProfit / ram_total);
             ns.print(`At hack level ${hackLevel} and steal ${(hack_percent * 100).toPrecision(3)}%: Theoretical ${formatMoney(theoreticalGainRate)}, ` +
                 `Limit: ${formatMoney(hackProfit / ram_total)}, Exp: ${expRate.toPrecision(3)}, Hack Chance: ${(ns.formulas.hacking.hackChance(server, player) * 100).toPrecision(3)}% (${server.hostname})`);
-            player.hacking = real_player_hack_skill; // Restore the real hacking skill if we changed it temporarily
+            player.skills.hacking = real_player_hack_skill; // Restore the real hacking skill if we changed it temporarily
             return [theoreticalGainRate, cappedGainRate, expRate];
         }
         catch {
@@ -87,23 +87,23 @@ export async function main(ns) {
         }
     }
 
-    ns.print(`All? ${options['all']} Player hack: ${player.hacking} Ram total: ${ram_total}`);
+    ns.print(`All? ${options['all']} Player hack: ${player.skills.hacking} Ram total: ${ram_total}`);
     //ns.print(`\n` + servers.map(s => `${s.hostname} bought: ${s.purchasedByPlayer} moneyMax: ${s.moneyMax} admin: ${s.hasAdminRights} hack: ${s.requiredHackingSkill}`).join('\n'));
 
     // Filter down to the list of servers we wish to report on
     servers = servers.filter(server => !server.purchasedByPlayer && (server.moneyMax || 0) > 0 &&
-        (options['all'] || server.hasAdminRights && server.requiredHackingSkill <= player.hacking));
+        (options['all'] || server.hasAdminRights && server.requiredHackingSkill <= player.skills.hacking));
 
     // First address the servers within our hacking level
-    const unlocked_servers = servers.filter(s => s.requiredHackingSkill <= player.hacking)
+    const unlocked_servers = servers.filter(s => s.requiredHackingSkill <= player.skills.hacking)
         .map(function (server) {
-            [server.theoreticalGainRate, server.gainRate, server.expRate] = getRatesAtHackLevel(server, player, player.hacking);
+            [server.theoreticalGainRate, server.gainRate, server.expRate] = getRatesAtHackLevel(server, player, player.skills.hacking);
             return server;
         });
     // The best server's gain rate will be used to pro-rate the relative gain of servers that haven't been unlocked yet (if they were unlocked at this level)
     const best_unlocked_server = unlocked_servers.sort((a, b) => b.gainRate - a.gainRate)[0];
     // Compute locked server's gain rates (pro rated back to the current player's hack level)
-    const locked_servers = servers.filter(s => s.requiredHackingSkill > player.hacking).sort((a, b) => a.requiredHackingSkill - b.requiredHackingSkill)
+    const locked_servers = servers.filter(s => s.requiredHackingSkill > player.skills.hacking).sort((a, b) => a.requiredHackingSkill - b.requiredHackingSkill)
         .map(function (server) {
             // We will need to fake the hacking skill to get the numbers for when this server will first be unlocked, but to keep the comparison
             // fair, we will need to scale down the gain by the amount current best server gains now, verses what it would gain at that hack level.
@@ -126,7 +126,7 @@ export async function main(ns) {
         ns.tprint("Best server: ", best_server.hostname, " with ", formatMoney(best_server.gainRate), " per ram-second");
 
     let order = 1;
-    let serverListByGain = `Servers in order of best to worst hack money at Hack ${player.hacking}:`;
+    let serverListByGain = `Servers in order of best to worst hack money at Hack ${player.skills.hacking}:`;
     for (const server of server_eval)
         serverListByGain += `\n ${order++} ${server.hostname}, with ${formatMoney(server.gainRate)} per ram-second while stealing ` +
             `${(server.estHackPercent * 100).toPrecision(3)}% (unlocked at hack ${server.requiredHackingSkill})`;
@@ -138,7 +138,7 @@ export async function main(ns) {
     if (!options['silent'])
         ns.tprint("Best exp server: ", best_exp_server.hostname, " with ", best_exp_server.expRate, " exp per ram-second");
     order = 1;
-    let serverListByExp = `Servers in order of best to worst hack exp at Hack ${player.hacking}:`;
+    let serverListByExp = `Servers in order of best to worst hack exp at Hack ${player.skills.hacking}:`;
     for (let i = 0; i < 5; i++)
         serverListByExp += `\n ${order++} ${server_eval[i].hostname}, with ${server_eval[i].expRate.toPrecision(3)} exp per ram-second`;
     ns.print(serverListByExp);
