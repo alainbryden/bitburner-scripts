@@ -67,8 +67,8 @@ export async function main(ns) {
             }
 
             // Show total instantaneous script income and experience per second (values provided directly by the game)
-            addHud("Scr Inc", formatMoney(ns.getScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
-            addHud("Scr Exp", formatNumberShort(ns.getScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
+            addHud("Scr Inc", formatMoney(ns.getTotalScriptIncome()[0], 3, 2) + '/sec', "Total 'instantenous' income per second being earned across all scripts running on all servers.");
+            addHud("Scr Exp", formatNumberShort(ns.getTotalScriptExpGain(), 3, 2) + '/sec', "Total 'instantenous' hack experience per second being earned across all scripts running on all servers.");
 
             // Show reserved money
             const reserve = Number(ns.read("reserve.txt") || 0);

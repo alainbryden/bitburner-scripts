@@ -178,6 +178,8 @@ const codingContractTypesMetadata = [{
 {
     name: 'Array Jumping Game II',
     solver: function (data) {
+        if (data[0]==0) 
+            return '0';
         const n = data.length;
         let reach = 0;
         let jumps = 0;
@@ -834,5 +836,33 @@ const codingContractTypesMetadata = [{
 
         return result ?? "";
     }
+},
+{
+    name: 'Encryption I: Caesar Cipher',
+    solver: function (data) {
+      // data = [plaintext, shift value]
+      // build char array, shifting via map and join to final results
+      const cipher = [...data[0]]
+        .map((a) => (a === " " ? a : String.fromCharCode(((a.charCodeAt(0) - 65 - data[1] + 26) % 26) + 65)))
+        .join("");
+        return cipher;
+    }
+},
+
+{
+    name: "Encryption II: Vigenère Cipher",
+    solver: function (data) {
+      // data = [plaintext, keyword]
+      // build char array, shifting via map and corresponding keyword letter and join to final results
+      const cipher = [...data[0]]
+        .map((a, i) => {
+          return a === " "
+            ? a
+            : String.fromCharCode(((a.charCodeAt(0) - 2 * 65 + data[1].charCodeAt(i % data[1].length)) % 26) + 65);
+        })
+        .join("");
+      return cipher;
+    }
 }
-]
+
+]                         
