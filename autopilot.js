@@ -559,10 +559,10 @@ async function maybeInstallAugmentations(ns, player) {
 */
 async function shouldDelayInstall(ns, player, facmanOutput) {
 	// Are we close to being able to afford 4S TIX data?
-	if (!options['disable-wait-for-4s'] && !player.has4SDataTixApi) {
+	if (!options['disable-wait-for-4s'] && !ns.stock.has4SDataTIXAPI()) {
 		const totalWorth = player.money + await getStocksValue(ns, player);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
-			(player.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
+			(ns.stock.has4SData() ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		if (totalWorth / totalCost >= options['wait-for-4s-threshold']) {
 			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have ` +

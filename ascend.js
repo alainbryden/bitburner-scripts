@@ -115,9 +115,9 @@ export async function main(ns) {
 
     // STEP 5: Try to Buy 4S data / API if we haven't already and can afford it (although generally stockmaster.js would have bought these if it could)
     log(ns, 'Checking on Stock Market upgrades...', true, 'info');
-    if (playerData.hasTixApiAcces && !playerData.has4SDataTixApi)
+    if (ns.stock.hasTIXAPIAccess() && !ns.stock.has4SDataTIXAPI())
         await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/purchase-4s-api.txt');
-    if (playerData.hasTixApiAcces && !playerData.has4SData)
+    if (ns.stock.hasTIXAPIAccess() && !ns.stock.has4SData())
         await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt');
 
     // STEP 6: (SF10) Buy whatever sleeve upgrades we can afford
