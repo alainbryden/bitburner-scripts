@@ -152,7 +152,7 @@ async function getPlayerInfo(ns) {
 
 function playerHackSkill() { return _cachedPlayerInfo.skills.hacking; }
 
-function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.hacking_grow_mult };
+function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.mults.hacking_grow };
 
 /** Helper to check if a file exists.
  * A helper is used so that we have the option of exploring alternative implementations that cost less/no RAM.
