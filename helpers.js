@@ -418,7 +418,7 @@ let cachedStockSymbols; // Cache of stock symbols since these never change
  * @param {Player} player - If you have previously retrieved player info, you can provide that here to save some time.
  * @param {string[]} stockSymbols - If you have previously retrieved a list of all stock symbols, you can provide that here to save some time. */
 export async function getStocksValue(ns, player = null, stockSymbols = null) {
-    if (!(player || await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt')).hasTixApiAccess) return 0;
+    if (!(player || await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()', '/Temp/hasTIX.txt'))) return 0;
     if (!stockSymbols || stockSymbols.length == 0) {
         if (!cachedStockSymbols)
             cachedStockSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
