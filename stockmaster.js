@@ -154,8 +154,8 @@ export async function main(ns) {
         try {
             const playerStats = ns.getPlayer();
             const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
-            const pre4s = !playerStats.has4SDataTixApi;
-            const holdings = await refresh(ns, playerStats.has4SDataTixApi, allStocks, myStocks); // Returns total stock value
+            const pre4s = !ns.stock.has4SDataTIXAPI;
+            const holdings = await refresh(ns, ns.stock.has4SDataTIXAPI, allStocks, myStocks); // Returns total stock value
             const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
             const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
             if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
@@ -548,16 +548,16 @@ async function liquidate(ns) {
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
 async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
-    if (playerStats.has4SDataTixApi) return false; // Only return true if we just bought it
+    if (ns.stock.has4SDataTIXAPI) return false; // Only return true if we just bought it
     const cost4sData = 1E9 * bitnodeMults.FourSigmaMarketDataCost;
     const cost4sApi = 25E9 * bitnodeMults.FourSigmaMarketDataApiCost;
-    const totalCost = (playerStats.has4SData ? 0 : cost4sData) + cost4sApi;
+    const totalCost = (ns.stock.has4SData ? 0 : cost4sData) + cost4sApi;
     // Liquidate shares if it would allow us to afford 4S API data
     if (totalCost > budget) /* Need to reserve some money to invest */
         return false;
     if (playerStats.money < totalCost)
         await liquidate(ns);
-    if (!playerStats.has4SData) {
+    if (!ns.stock.has4SData) {
         if (await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt'))
             log(ns, `SUCCESS: Purchased 4SMarketData for ${formatMoney(cost4sData)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
         else
@@ -580,12 +580,12 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
 async function tryGetStockMarketAccess(ns, playerStats, budget) {
-    if (playerStats.hasTixApiAccess) return true; // Already have access
+    if (ns.stock.hasTIXAPIAccess) return true; // Already have access
     const costWseAccount = 200E6;
     const costTixApi = 5E9;
-    const totalCost = (playerStats.hasWseAccount ? 0 : costWseAccount) + costTixApi;
+    const totalCost = (ns.stock.hasWSEAccount ? 0 : costWseAccount) + costTixApi;
     if (totalCost > budget) return false;
-    if (!playerStats.hasWseAccount) {
+    if (!ns.stock.hasWSEAccount) {
         if (await getNsDataThroughFile(ns, 'ns.stock.purchaseWseAccount()', '/Temp/purchase-wse.txt'))
             log(ns, `SUCCESS: Purchased a WSE (stockmarket) account for ${formatMoney(costWseAccount)} (At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
         else
