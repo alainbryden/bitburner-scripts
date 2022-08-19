@@ -74,8 +74,9 @@ export async function main(ns) {
     // If given the "liquidate" command, try to kill any versions of this script trading in stocks
     // NOTE: We must do this immediately before we start resetting / overwriting global state below (which is shared between script instances)
     let player = ns.getPlayer();
+    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()', '/Temp/hasTIX.txt');
     if (runOptions.l || runOptions.liquidate) {
-        if (!player.hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
+        if (!hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
         log(ns, 'INFO: Killing any other stockmaster processes...', false, 'info');
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
             `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-stockmarket-scripts.js');
@@ -106,7 +107,7 @@ export async function main(ns) {
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
     let myStocks = [], allStocks = [];
 
-    if (!player.hasTixApiAccess) { // You cannot use the stockmaster until you have API access
+    if (!hasTixApiAccess) { // You cannot use the stockmaster until you have API access
         if (options['disable-purchase-tix-api'])
             return log(ns, "ERROR: You do not have stock market API access, and --disable-purchase-tix-api is set.", true);
         let success = false;
@@ -154,8 +155,8 @@ export async function main(ns) {
         try {
             const playerStats = ns.getPlayer();
             const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
-            const pre4s = !playerStats.has4SDataTixApi;
-            const holdings = await refresh(ns, playerStats.has4SDataTixApi, allStocks, myStocks); // Returns total stock value
+            const pre4s = !ns.stock.has4SDataTIXAPI();
+            const holdings = await refresh(ns, !pre4s, allStocks, myStocks); // Returns total stock value
             const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
             const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
             if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
@@ -445,6 +446,7 @@ let transactStock = async (ns, sym, numShares, action) =>
 async function doBuy(ns, stk, sharesToBuy) {
     // We include -2*commission in the "holdings value" of our stock, but if we make repeated purchases of the same stock, we have to track
     // the additional commission somewhere. So only subtract it from our running profit if this isn't our first purchase of this symbol
+    let price = 0; //price wasn't defined yet.
     if (stk.owned())
         totalProfit -= commission;
     let long = stk.bullish();
@@ -454,7 +456,7 @@ async function doBuy(ns, stk, sharesToBuy) {
         `${stk.sym.padEnd(5)} @ ${formatMoney(expectedPrice).padStart(9)} for ${formatMoney(sharesToBuy * expectedPrice).padStart(9)} (Spread:${(stk.spread_pct * 100).toFixed(2)}% ` +
         `ER:${formatBP(stk.expectedReturn()).padStart(8)}) Ticks to Profit: ${stk.timeToCoverTheSpread().toFixed(2)}`, noisy, 'info');
     try {
-        price = mock ? expectedPrice : Number(await transactStock(ns, stk.sym, sharesToBuy, long ? 'buyStock' : 'shortStock'));
+        price = mock ? expectedPrice : Number(await transactStock(ns, stk.sym, sharesToBuy, long ? 'buyStock' : 'buyShort'));
     } catch (err) {
         if (long) throw err;
         disableShorts = true;
@@ -548,7 +550,7 @@ async function liquidate(ns) {
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
 async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
-    if (playerStats.has4SDataTixApi) return false; // Only return true if we just bought it
+    if (ns.stock.has4SData()) return false; // Only return true if we just bought it
     const cost4sData = 1E9 * bitnodeMults.FourSigmaMarketDataCost;
     const cost4sApi = 25E9 * bitnodeMults.FourSigmaMarketDataApiCost;
     const totalCost = (playerStats.has4SData ? 0 : cost4sData) + cost4sApi;
