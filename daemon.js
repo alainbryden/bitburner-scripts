@@ -150,7 +150,7 @@ async function getPlayerInfo(ns) {
     return _cachedPlayerInfo = await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
 }
 
-function playerHackSkill() { return _cachedPlayerInfo.hacking; }
+function playerHackSkill() { return _cachedPlayerInfo.skills.hacking; }
 
 function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.hacking_grow_mult };
 
