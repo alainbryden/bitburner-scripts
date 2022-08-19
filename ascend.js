@@ -50,7 +50,7 @@ export async function main(ns) {
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
-    if (playerData.hasTixApiAccess) {
+    if (ns.stock.hasTIXAPIAccess()) {
         const stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
         const countOwnedStocks = async () => await getNsDataThroughFile(ns, `ns.args.map(sym => ns.stock.getPosition(sym))` +
             `.reduce((t, stk) => t + (stk[0] + stk[2] > 0 ? 1 : 0), 0)`, '/Temp/owned-stocks.txt', stkSymbols);
@@ -115,9 +115,9 @@ export async function main(ns) {
 
     // STEP 5: Try to Buy 4S data / API if we haven't already and can afford it (although generally stockmaster.js would have bought these if it could)
     log(ns, 'Checking on Stock Market upgrades...', true, 'info');
-    if (playerData.hasTixApiAcces && !playerData.has4SDataTixApi)
+    if (ns.stock.hasTIXAPIAccess() && !ns.stock.has4SDataTIXAPI())
         await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/purchase-4s-api.txt');
-    if (playerData.hasTixApiAcces && !playerData.has4SData)
+    if (ns.stock.hasTIXAPIAccess() && !ns.stock.has4SData())
         await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt');
 
     // STEP 6: (SF10) Buy whatever sleeve upgrades we can afford
