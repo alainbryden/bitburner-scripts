@@ -420,7 +420,7 @@ async function tryUpgradeMembers(ns, dictMembers) {
     let budget = Math.min(maxBudget, (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment)) * homeMoney;
     let augBudget = Math.min(maxBudget, (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment)) * homeMoney;
     // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when BitnodeMults are such that gang income is severely nerfed)
-    if (!playerData.has4SDataTixApi || playerData.bitNodeN === 8) {
+    if (!ns.stock.has4SDataTIXAPI() || playerData.bitNodeN === 8) {
         budget /= 100;
         augBudget /= 100;
     }

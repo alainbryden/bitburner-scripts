@@ -174,7 +174,7 @@ function reservedMoney(ns) {
     if (!doesFileExist(ns, "SQLInject.exe", "home") && playerMoney > 200e6)
         shouldReserve += 250e6; // Start saving at 200m of the 250m required for SQLInject
     const fourSigmaCost = (bitnodeMults.FourSigmaMarketDataApiCost * 25000000000);
-    if (!_cachedPlayerInfo.has4SDataTixApi && playerMoney >= fourSigmaCost / 2)
+    if (!ns.stock.has4SDataTIXAPI() && playerMoney >= fourSigmaCost / 2)
         shouldReserve += fourSigmaCost; // Start saving if we're half-way to buying 4S market access
     return shouldReserve;
 }
