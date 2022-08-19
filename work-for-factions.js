@@ -412,8 +412,8 @@ async function earnFactionInvite(ns, factionName) {
     // Establish some helper functions used to determine how fast we can train a stat
     const title = s => s && s[0].toUpperCase() + s.slice(1); // Annoyingly bitnode multis capitalize the first letter physical stat name
     const heuristic = (stat, trainingBitnodeMult) =>
-        Math.sqrt(player[`${stat}_mult`] * bitnodeMultipliers[`${title(stat)}LevelMultiplier`] *
-            /* */ player[`${stat}_exp_mult`] * trainingBitnodeMult);
+        Math.sqrt(player.mults[stat] * bitnodeMultipliers[`${title(stat)}LevelMultiplier`] *
+            /* */ player.mults[`${stat}_exp`] * trainingBitnodeMult);
     const crimeHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.CrimeExpGain); // When training with crime
     const classHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.ClassGymExpGain); // When training in university
     // Check which stats need to be trained up
