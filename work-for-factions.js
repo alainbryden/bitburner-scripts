@@ -911,8 +911,21 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     const companyConfig = companySpecificConfigs.find(c => c.name == factionName); // For anything company-specific
     const companyName = companyConfig?.companyName || factionName; // Name of the company that gives the faction (same for all but Fulcrum)
     const statModifier = companyConfig?.statModifier || 0; // How much e.g. Hack / Cha is needed for a promotion above the base requirement for the job
-    const repRequiredForFaction = companyConfig?.repRequiredForFaction || 400000; // Required to unlock the faction
+    
+    let backdoored = false;
+    if (!backdoored) // Check if an external script has backdoored this company's server yet. If so, it affects our ETA. (Don't need to check again once we discover it is)
+        backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, '/Temp/getServer-backdoorInstalled.txt', [serverByCompany[companyName]]);
 
+    // Check on reputation requirement to join faction, which is influenced if company server is backdoored or not
+    let repRequiredForFaction;
+    if(companyConfig?.repRequiredForFaction) {
+        repRequiredForFaction = companyConfig?.repRequiredForFaction;
+    } else if (backdoored) {
+         repRequiredForFaction = 300000;
+    } else {
+         repRequiredForFaction = 400000;
+    }
+    
     let player = (await getPlayerInfo(ns));
     if (player.factions.includes(factionName)) return false; // Only return true if we did work to earn a new faction invite
     if ((await checkFactionInvites(ns)).includes(factionName))
@@ -926,7 +939,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatus = "", lastStatusUpdateTime = 0, repGainRatePerMs = 0;
     let lastRepMeasurement = await getCompanyReputation(ns, companyName);
-    let studying = false, working = false, backdoored = false;
+    let studying = false, working = false;
     while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
         if (breakToMainLoop()) return ns.print('INFO: Interrupting corporation work to check on high-level priorities.');
         player = (await getPlayerInfo(ns));
@@ -998,8 +1011,6 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             }
         }
         if (lastStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-            if (!backdoored) // Check if an external script has backdoored this company's server yet. If so, it affects our ETA. (Don't need to check again once we discover it is)
-                backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, '/Temp/getServer-backdoorInstalled.txt', [serverByCompany[companyName]]);
             const cancellationMult = backdoored ? 0.75 : 0.5; // We will lose some of our gained reputation when we stop working early
             repGainRatePerMs *= cancellationMult;
             // Actually measure how much reputation we've earned since our last update, to give a more accurate ETA including external sources of rep
