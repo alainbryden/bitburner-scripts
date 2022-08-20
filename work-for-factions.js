@@ -911,7 +911,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     const companyConfig = companySpecificConfigs.find(c => c.name == factionName); // For anything company-specific
     const companyName = companyConfig?.companyName || factionName; // Name of the company that gives the faction (same for all but Fulcrum)
     const statModifier = companyConfig?.statModifier || 0; // How much e.g. Hack / Cha is needed for a promotion above the base requirement for the job
-    const repRequiredForFaction = companyConfig?.repRequiredForFaction || 200000; // Required to unlock the faction
+    const repRequiredForFaction = companyConfig?.repRequiredForFaction || 400000; // Required to unlock the faction
 
     let player = (await getPlayerInfo(ns));
     if (player.factions.includes(factionName)) return false; // Only return true if we did work to earn a new faction invite
