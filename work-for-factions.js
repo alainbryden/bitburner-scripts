@@ -561,12 +561,12 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER || reqStats >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${ns.heart.break()})`);
-    if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${player.strength}, Def: ${player.defense}, Dex: ${player.dexterity}, Agi: ${player.agility})`);
+    if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
     let crime, lastCrime, lastStatusUpdateTime;
-    while (forever || player.strength < reqStats || player.defense < reqStats || player.dexterity < reqStats || player.agility < reqStats || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
+    while (forever || player.skills.strength < reqStats || player.skills.defense < reqStats || player.skills.dexterity < reqStats || player.skills.agility < reqStats || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
-        let needStats = player.strength < reqStats || player.defense < reqStats || player.dexterity < reqStats || player.agility < reqStats;
+        let needStats = player.skills.strength < reqStats || player.skills.defense < reqStats || player.skills.dexterity < reqStats || player.skills.agility < reqStats;
         let karma = -ns.heart.break();
         crime = crimeCount < 10 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
             (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
