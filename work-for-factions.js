@@ -1020,7 +1020,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             const eta_milliseconds = ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRatePerMs;
             player = (await getPlayerInfo(ns));
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRatePerMs * 1000)} rep/sec. ` +
-                `(after ` + (hasFocusPenalty && !shouldFocusAtWork ? ' 20% non-focus Penalty' : '') + `)\n` +
+                (hasFocusPenalty && !shouldFocusAtWork ? '(after 20% non-focus Penalty)\n' : '') +
                 `${status}\nCurrent player stats are Hack:${player.skills.hacking} ${player.skills.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.skills.charisma} ${player.skills.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
                 `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
