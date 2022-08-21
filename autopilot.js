@@ -166,7 +166,7 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
 	// Logic below is for rushing a daedalus invite.
 	// We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
 	if (daedalusUnavailable || (wdHack || 0) > 0) return reserveForDaedalus = false;
-	if (player.hacking < 2500) return reserveForDaedalus = false;
+	if (player.skills.hacking < 2500) return reserveForDaedalus = false;
 	if (player.factions.includes("Daedalus")) {
 		if (reserveForDaedalus) {
 			log(ns, "SUCCESS: We sped along joining the faction 'Daedalus'. Restarting work-for-factions.js to speed along earn rep.", false, 'success');
@@ -205,7 +205,7 @@ async function checkIfBnIsComplete(ns, player) {
 		if (wdHack == -1) wdHack = Number.POSITIVE_INFINITY; // Cannot stringify infinity, so use -1 in transit
 	}
 	// Detect if a BN win condition has been met
-	let bnComplete = player.hacking >= wdHack;
+	let bnComplete = player.skills.hacking >= wdHack;
 	if (!bnComplete && player.inBladeburner && (7 in unlockedSFs)) // Detect the BB win condition
 		bnComplete = await getNsDataThroughFile(ns,
 			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
@@ -214,7 +214,7 @@ async function checkIfBnIsComplete(ns, player) {
 
 	const text = `BN ${player.bitNodeN}.${(dictOwnedSourceFiles[player.bitNodeN] || 0) + 1} completed at ` +
 		`${formatDuration(player.playtimeSinceLastBitnode)} ` +
-		`(${(player.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
+		`(${(player.skills.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
 
@@ -241,7 +241,7 @@ async function checkIfBnIsComplete(ns, player) {
 	}
 	if (!(4 in dictOwnedSourceFiles)) {
 		log(ns, `You do not own SF4, so you must manually exit the bitnode (` +
-			`${player.hacking >= wdHack ? "by hacking W0r1dD43m0n" : "on the bladeburner BlackOps tab"}).`, true);
+			`${player.skills.hacking >= wdHack ? "by hacking W0r1dD43m0n" : "on the bladeburner BlackOps tab"}).`, true);
 		return bnCompletionSuppressed = true;
 	}
 
@@ -322,7 +322,7 @@ async function checkOnRunningScripts(ns, player) {
 			const incomeByServer = JSON.parse(strServerIncomeInfo);
 			const dictServerHackReqs = await getNsDataThroughFile(ns, 'Object.fromEntries(ns.args.map(server => [server, ns.getServerRequiredHackingLevel(server)]))',
 				'/Temp/servers-hack-req.txt', incomeByServer.map(s => s.hostname));
-			const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.hacking)
+			const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
 				.reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, 0]);
 			//ns.getServerRequiredHackingLevel
 			log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
@@ -332,13 +332,13 @@ async function checkOnRunningScripts(ns, player) {
 	}
 
 	// Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.	
-	const hackThreshold = options['high-hack-threshold']; // If player hacking level is about 8000, run in "start-tight" mode
-	const daemonArgs = (player.hacking < hackThreshold || player.bitNodeN == 8) ? [] :
+	const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
+	const daemonArgs = (player.skills.hacking < hackThreshold || player.bitNodeN == 8) ? [] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
 		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
 			"--stock-manipulation-focus", "--silent-misfires", "--no-share",
 			// Use recovery thread padding sparingly until our hack level is significantly higher
-			"--recovery-thread-padding", 1.0 + (player.hacking - hackThreshold) / 1000.0];
+			"--recovery-thread-padding", 1.0 + (player.skills.hacking - hackThreshold) / 1000.0];
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
 	// Hacking earns no money in BN8, so prioritize XP
 	if (player.bitNodeN == 8) daemonArgs.push("--xp-only");
@@ -360,9 +360,9 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
 	const daemon = findScript('daemon.js');
-	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
-		if (player.hacking >= hackThreshold && !(player.bitNodeN == 8))
-			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
+	if ((!daemon || player.skills.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
+		if (player.skills.hacking >= hackThreshold && !(player.bitNodeN == 8))
+			log(ns, `INFO: Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
 		daemonStartTime = Date.now();
 	}
