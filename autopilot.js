@@ -559,10 +559,11 @@ async function maybeInstallAugmentations(ns, player) {
 */
 async function shouldDelayInstall(ns, player, facmanOutput) {
 	// Are we close to being able to afford 4S TIX data?
-	if (!options['disable-wait-for-4s'] && !ns.stock.has4SDataTIXAPI()) {
+	if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`, `/Temp/stock-has4SDataTIXAPI.txt`))) {
 		const totalWorth = player.money + await getStocksValue(ns);
+		const has4S = await getNsDataThroughFile(ns, `ns.stock.has4SData()`, `/Temp/stock-has4SData.txt`);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
-			(ns.stock.has4SData() ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
+			(has4S ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		const ratio = totalWorth / totalCost;
 		// If we're e.g. 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		// TODO: If ratio is > 1, we can afford it - but stockmaster won't buy until it has e.g. 20% more than the cost
