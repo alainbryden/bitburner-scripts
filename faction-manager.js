@@ -285,7 +285,7 @@ async function updateAugmentationData(ns, desiredAugs) {
         owned: simulatedOwnedAugmentations.includes(aug),
         reputation: dictAugRepReqs[aug],
         price: dictAugPrices[aug],
-        stats: dictAugStats[aug],
+        stats: Object.fromEntries(Object.entries(dictAugStats[aug]).filter(([k,v]) => v != 1)),
         prereqs: dictAugPrereqs[aug] || [],
         // The best augmentations either have no stats (special effect like no Focus penalty, or Red Pill), or stats in the 'stat-desired' command line options
         desired: desiredAugs.includes(aug) || Object.keys(dictAugStats[aug]).length == 0 ||
