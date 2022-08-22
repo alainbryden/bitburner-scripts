@@ -73,7 +73,6 @@ export async function main(ns) {
 
     // If given the "liquidate" command, try to kill any versions of this script trading in stocks
     // NOTE: We must do this immediately before we start resetting / overwriting global state below (which is shared between script instances)
-    let player = ns.getPlayer();
     const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()', '/Temp/hasTIX.txt');
     if (runOptions.l || runOptions.liquidate) {
         if (!hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
@@ -106,6 +105,7 @@ export async function main(ns) {
     // Other global values must be reset at start lest they be left in memory from a prior run
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
     let myStocks = [], allStocks = [];
+    let player = await getPlayerInfo(ns);
 
     if (!hasTixApiAccess) { // You cannot use the stockmaster until you have API access
         if (options['disable-purchase-tix-api'])
@@ -117,7 +117,7 @@ export async function main(ns) {
             await ns.sleep(sleepInterval);
             try {
                 const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
-                success = await tryGetStockMarketAccess(ns, player = ns.getPlayer(), player.money - reserve);
+                success = await tryGetStockMarketAccess(ns, player.money - reserve);
             } catch (err) {
                 log(ns, `WARNING: stockmaster.js Caught (and suppressed) an unexpected error while waiting to buy stock market access:\n` +
                     (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
@@ -154,7 +154,7 @@ export async function main(ns) {
     let pre4s = true;
     while (true) {
         try {
-            const playerStats = ns.getPlayer();
+            const playerStats = await getPlayerInfo(ns);
             const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
             // Check whether we have 4s access yes (once we do, we can stop checking)
             if (pre4s) pre4s = !(await checkAccess(ns, 'has4SDataTIXAPI'));
@@ -238,6 +238,14 @@ export async function main(ns) {
         }
         await ns.sleep(sleepInterval);
     }
+}
+
+/** Ram-dodge getting updated player info. Note that this is the only async routine called in the main loop.
+ * If latency or ram instability is an issue, you may wish to try uncommenting the direct request.
+ * @param {NS} ns
+ * @returns {Promise<Player>} */
+async function getPlayerInfo(ns) {
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
 }
 
 /* A sorting function to put stocks in the order we should prioritize investing in them */
@@ -466,10 +474,11 @@ async function doBuy(ns, stk, sharesToBuy) {
     }
     // The rest of this work is for troubleshooting / mock-mode purposes
     if (price == 0) {
-        if (ns.getPlayer().money < sharesToBuy * expectedPrice)
-            log(ns, `WARN: Failed to ${long ? 'buy' : 'short'} ${stk.sym} because money just recently dropped to ${formatMoney(ns.getPlayer().money)} and we can no longer afford it.`, noisy);
+        const playerMoney = (await getPlayerInfo(ns)).money;
+        if (playerMoney < sharesToBuy * expectedPrice)
+            log(ns, `WARN: Failed to ${long ? 'buy' : 'short'} ${stk.sym} because money just recently dropped to ${formatMoney(playerMoney)} and we can no longer afford it.`, noisy);
         else
-            log(ns, `ERROR: Failed to ${long ? 'buy' : 'short'} ${stk.sym} @ ${formatMoney(expectedPrice)} (0 was returned) despite having ${formatMoney(ns.getPlayer().money)}.`, true, 'error');
+            log(ns, `ERROR: Failed to ${long ? 'buy' : 'short'} ${stk.sym} @ ${formatMoney(expectedPrice)} (0 was returned) despite having ${formatMoney(playerMoney)}.`, true, 'error');
         return 0;
     } else if (price != expectedPrice) {
         log(ns, `WARNING: ${long ? 'Bought' : 'Shorted'} ${stk.sym} @ ${formatMoney(price)} but expected ${formatMoney(expectedPrice)} (spread: ${formatMoney(stk.spread)})`, false, 'warning');
@@ -599,9 +608,9 @@ async function tryBuy(ns, stockFn) {
 }
 
 /** @param {NS} ns 
- * @param {Player} playerStats 
+ * @param {number} budget - The amount we are willing to spend on WSE and API access
  * Tries to purchase access to the stock market **/
-async function tryGetStockMarketAccess(ns, playerStats, budget) {
+async function tryGetStockMarketAccess(ns, budget) {
     if (await checkAccess(ns, 'hasTIXAPIAccess')) return true; // Already have access
     const costWseAccount = 200E6;
     const costTixApi = 5E9;
@@ -611,13 +620,13 @@ async function tryGetStockMarketAccess(ns, playerStats, budget) {
     if (!hasWSE) {
         if (await tryBuy(ns, 'purchaseWseAccount'))
             log(ns, `SUCCESS: Purchased a WSE (stockmarket) account for ${formatMoney(costWseAccount)} ` +
-                `(At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+                `(At ${formatDuration((await getPlayerInfo(ns)).playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
         else
             log(ns, 'ERROR attempting to purchase WSE account!', false, 'error');
     }
     if (await tryBuy(ns, 'purchaseTixApi')) {
         log(ns, `SUCCESS: Purchased Tix (stockmarket) Api access for ${formatMoney(costTixApi)} ` +
-            `(At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+            `(At ${formatDuration((await getPlayerInfo(ns)).playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
         return true;
     } else
         log(ns, 'ERROR attempting to purchase Tix Api!', false, 'error');
