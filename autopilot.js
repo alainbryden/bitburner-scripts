@@ -23,7 +23,7 @@ const argsSchema = [ // The set of all command line arguments
 	['interval-check-scripts', 10000], // Get a listing of all running processes on home this frequently
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
 	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
-	['wait-for-4s-threshold', 0.5], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
+	['wait-for-4s-threshold', 0.9], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
 	['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
 	['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
 	['on-completion-script', null], // Spawn this script when we defeat the bitnode
@@ -150,7 +150,7 @@ async function initializeNewBitnode(ns, player) {
  * @param {NS} ns */
 async function mainLoop(ns) {
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-	const stocksValue = await getStocksValue(ns, player);
+	const stocksValue = await getStocksValue(ns);
 	await manageReservedMoney(ns, player, stocksValue);
 	await checkOnDaedalusStatus(ns, player, stocksValue);
 	await checkIfBnIsComplete(ns, player);
@@ -414,7 +414,7 @@ async function maybeDoCasino(ns, player) {
 	const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
 	// If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
 	// it's likely a sign that the flag is wrong and we should run cleanup and let casino get run again to be safe.
-	if (player.playtimeSinceLastAug < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns, player)) < 8E9) {
+	if (player.playtimeSinceLastAug < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns)) < 8E9) {
 		launchScriptHelper(ns, 'cleanup.js');
 		await ns.sleep(200); // Wait a short while for the dust to settle.
 	} else if (casinoRanFileSet)
@@ -427,7 +427,7 @@ async function maybeDoCasino(ns, player) {
 	//If we're making more than ~5b / minute, no need to run casino.
 	//Unless BN8, if BN8 we always need casino cash bootstrap
 	//Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
-	if ((cashRootBought ? player.money-1e6 : player.money) / player.playtimeSinceLastAug > 5e9 / 60000 && !player.bitNodeN == 8) 
+	if ((cashRootBought ? player.money - 1e6 : player.money) / player.playtimeSinceLastAug > 5e9 / 60000 && !player.bitNodeN == 8)
 		return ranCasino = true;
 	if (player.money > 10E9) // If we already have 10b, assume we ran and lost track, or just don't need the money
 		return ranCasino = true;
@@ -560,11 +560,14 @@ async function maybeInstallAugmentations(ns, player) {
 async function shouldDelayInstall(ns, player, facmanOutput) {
 	// Are we close to being able to afford 4S TIX data?
 	if (!options['disable-wait-for-4s'] && !ns.stock.has4SDataTIXAPI()) {
-		const totalWorth = player.money + await getStocksValue(ns, player);
+		const totalWorth = player.money + await getStocksValue(ns);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
 			(ns.stock.has4SData() ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
-		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
-		if (totalWorth / totalCost >= options['wait-for-4s-threshold']) {
+		const ratio = totalWorth / totalCost;
+		// If we're e.g. 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
+		// TODO: If ratio is > 1, we can afford it - but stockmaster won't buy until it has e.g. 20% more than the cost
+		//       (so it still has money to invest). It doesn't know we want to restart ASAP. Perhaps we should purchase ourselves?
+		if (ratio >= options['wait-for-4s-threshold']) {
 			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have ` +
 				`${(100 * totalWorth / totalCost).toFixed(0)}% of the cost (controlled by --wait-for-4s-threshold)`);
 			return true;

@@ -1,4 +1,7 @@
-import { log, getConfiguration, getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile, getActiveSourceFiles } from './helpers.js'
+import {
+    log, getConfiguration, getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile,
+    getActiveSourceFiles, getStockSymbols
+} from './helpers.js'
 
 const argsSchema = [
     ['install-augmentations', false], // By default, augs will only be purchased. Set this flag to install (a.k.a reset)
@@ -50,19 +53,19 @@ export async function main(ns) {
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
-    if (await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()', '/Temp/hasTIX.txt')) {
-        const stkSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
+    const stkSymbols = await getStockSymbols(ns);
+    if (stkSymbols != null) {
         const countOwnedStocks = async () => await getNsDataThroughFile(ns, `ns.args.map(sym => ns.stock.getPosition(sym))` +
             `.reduce((t, stk) => t + (stk[0] + stk[2] > 0 ? 1 : 0), 0)`, '/Temp/owned-stocks.txt', stkSymbols);
-        let ownedStocks = await countOwnedStocks();
-        while (ownedStocks > 0) {
+        let ownedStocks;
+        do {
             log(ns, `INFO: Waiting for ${ownedStocks} owned stocks to be sold...`, false, 'info');
             pid = ns.run(getFilePath('stockmaster.js'), 1, '--liquidate');
             if (pid) await waitForProcessToComplete(ns, pid, true);
             else log(ns, `ERROR: Failed to run "stockmaster.js --liquidate" to sell ${ownedStocks} owned stocks. Will try again soon...`, false, 'true');
             await ns.sleep(1000);
             ownedStocks = await countOwnedStocks();
-        }
+        } while (ownedStocks > 0);
     }
 
     // STEP 2: Buy Home RAM Upgrades (more important than squeezing in a few extra augs)
@@ -115,10 +118,10 @@ export async function main(ns) {
 
     // STEP 5: Try to Buy 4S data / API if we haven't already and can afford it (although generally stockmaster.js would have bought these if it could)
     log(ns, 'Checking on Stock Market upgrades...', true, 'info');
-    if (ns.stock.hasTIXAPIAccess() && !ns.stock.has4SDataTIXAPI())
-        await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/purchase-4s-api.txt');
-    if (ns.stock.hasTIXAPIAccess() && !ns.stock.has4SData())
-        await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/purchase-4s.txt');
+    await getNsDataThroughFile(ns, 'ns.stock.purchaseWseAccount()', '/Temp/stock-purchaseWseAccount.txt');
+    await getNsDataThroughFile(ns, 'ns.stock.purchaseTixApi()', '/Temp/stock-purchaseTixApi.txt');
+    await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/stock-purchase4SMarketData.txt');
+    await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/stock-purchase4SMarketDataTixApi.txt');
 
     // STEP 6: (SF10) Buy whatever sleeve upgrades we can afford
     if (10 in dictSourceFiles) {

@@ -202,7 +202,9 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
             /*5*/["Diplomacy"], /*6*/["Field Analysis"], /*7*/["Recruitment"]];
         let [action, contractName] = bladeburnerCityChaos > 50 ? ["Diplomacy"] : bbTasks[i];
         // If the sleeve is performing an action with a chance of failure, fallback to another task
-        if (sleeve.location.includes("%") && !sleeve.location.includes("100%"))
+        // TODO: We've lost a way to detect sleeve chance, need to look for a new way
+        //if (sleeve.location.includes("%") && !sleeve.location.includes("100%"))
+        if (sleeve.hp.current != sleeve.hp.max) // Assume if HP is not at max, they have started failing this task
             bladeburnerTaskFailed[i] = Date.now(); // If not, don't re-attempt this assignment for a while
         // As current city chaos gets progressively bad, assign more and more sleeves to Diplomacy to help get it under control
         if (bladeburnerCityChaos > (10 - i) * 10) // Later sleeves are first to get assigned, sleeve 0 is last at 100 chaos.

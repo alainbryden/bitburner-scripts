@@ -76,15 +76,14 @@ const desiredGangFactions = ["Slum Snakes", "The Syndicate", "The Dark Army", "S
 const allGangFactions = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Tetrads", "Slum Snakes", "The Black Hand", "NiteSec"];
 
 const loopSleepInterval = 5000; // 5 seconds
-const restartWorkInteval = 30 * 1000; // 30 seconds Collect e.g. rep earned by stopping and starting work;
 const statusUpdateInterval = 60 * 1000; // 1 minute (outside of this, minor updates in e.g. stats aren't logged)
 const checkForNewPrioritiesInterval = 10 * 60 * 1000; // 10 minutes. Interrupt whatever we're doing and check whether we could be doing something more useful.
 const waitForFactionInviteTime = 30 * 1000; // The game will only issue one new invite every 25 seconds, so if you earned two by travelling to one city, might have to wait a while
 
-let shouldFocusAtWork; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
+let shouldFocus; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
 let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus;
-let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastActionRestart, lastTravel, crimeCount;
+let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 
 export function autocomplete(data, args) {
@@ -106,15 +105,12 @@ export async function main(ns) {
     disableLogs(ns, ['sleep']);
 
     // Reset globals whose value can persist between script restarts in weird situations
-    lastTravel = lastActionRestart = crimeCount = 0;
+    lastTravel = crimeCount = 0;
     notifiedAboutDaedalus = false;
 
     // Process configuration options
     firstFactions = (options['first'] || []).map(f => f.replaceAll('_', ' ')); // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
     options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
-    options['no-crime'] = options['no-crime'] || options['no-focus']; // Can't crime if we aren't allowed to steal focus
-    if (options['crime-focus'] && options['no-focus'])
-        return log(ns, "ERROR: Cannot use --no-focus and --crime-focus at the same time. You need to focus to do crime!", true, 'error');
     // Default desired-stats if none were specified
     if (options['desired-stats'].length == 0)
         options['desired-stats'] = options['crime-focus'] ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacknet', 'crime'] :
@@ -188,7 +184,7 @@ async function loadStartupData(ns) {
     const installedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
     // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
     hasFocusPenalty = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
-    shouldFocusAtWork = !options['no-focus'] && hasFocusPenalty; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
+    shouldFocus = !options['no-focus'] && hasFocusPenalty; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
     hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
 
     // Find out if we're in a gang
@@ -418,7 +414,7 @@ async function earnFactionInvite(ns, factionName) {
     const classHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.ClassGymExpGain); // When training in university
     // Check which stats need to be trained up
     requirement = requiredCombatByFaction[factionName];
-    let deficientStats = !requirement ? [] : physicalStats.map(stat => ({ stat, value: player[stat] })).filter(stat => stat.value < requirement);
+    let deficientStats = !requirement ? [] : physicalStats.map(stat => ({ stat, value: player.skills[stat] })).filter(stat => stat.value < requirement);
     // Hash for special-case factions (just 'Daedalus' for now) requiring *either* hacking *or* combat
     if (reqHackingOrCombat.includes(factionName) && deficientStats.length > 0 && (
         // Compare roughly how long it will take to train up our hacking stat
@@ -435,7 +431,7 @@ async function earnFactionInvite(ns, factionName) {
             return ns.print("Some mults * exp_mults * bitnode mults appear to be too low to increase stats in a reasonable amount of time. " +
                 `You can control this with --training-stat-per-multi-threshold. Current sqrt(mult*exp_mult*bn_mult*bn_exp_mult) ` +
                 `should be ~${formatNumberShort(em, 2)}, have ` + deficientStats.map(s => s.stat).map(s => `${s.slice(0, 3)}: sqrt(` +
-                    `${formatNumberShort(player[`${s}_mult`])}*${formatNumberShort(player[`${s}_exp_mult`])}*` +
+                    `${formatNumberShort(player.mults[s])}*${formatNumberShort(player.mults[`${s}_exp`])}*` +
                     `${formatNumberShort(bitnodeMultipliers[`${title(s)}LevelMultiplier`])}*` +
                     `${formatNumberShort(bitnodeMultipliers.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
         doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
@@ -539,7 +535,6 @@ async function goToCity(ns, cityName) {
         return true;
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel.txt', [cityName])) {
-        lastActionRestart = Date.now();
         lastTravel = Date.now()
         announce(ns, `Travelled from ${player.city} to ${cityName}`, 'info');
         return true;
@@ -569,19 +564,29 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
         let karma = -ns.heart.break();
-        crime = crimeCount < 10 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
+        crime = crimeCount < 2 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
             (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly && index <= 1 ? 0 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
+        // Warn if current crime is disrupted
+        let currentWork = await getCurrentWorkInfo(ns);
+        let crimeType = currentWork.crimeType;
+        if (lastCrime && !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
+            announce(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${classType}) Restarting...`, 'warning');
+            ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
+        }
+        // Periodic status update with progress
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-            ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` +
-                (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
             lastCrime = crime;
             lastStatusUpdateTime = Date.now();
+            ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` +
+                (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
         }
-        ns.tail(); // Force a tail window open when auto-criming, or else it's very difficult to stop if it was accidentally closed.
-        await ns.sleep(1 + (await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0])', '/Temp/commitCrime.txt', [crime])));
-        while ((player = (await getPlayerInfo(ns))).crimeType == `commit ${crime}` || player.crimeType == crime) // If we woke up too early, wait a little longer for the crime to finish
-            await ns.sleep(10);
+        let crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', '/Temp/commitCrime.txt', [crime, shouldFocus])
+        if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
+        // Sleep for some multiple of the crime time to avoid interrupting a crime in progress on the next status update
+        let sleepTime = 1 + Math.ceil(crimeTime / loopSleepInterval) * loopSleepInterval;
+        await ns.sleep(sleepTime);
+
         crimeCount++;
     }
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
@@ -607,7 +612,6 @@ async function study(ns, focus, course, university = null) {
             return announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, focus])) {
-        lastActionRestart = Date.now();
         announce(ns, `Started studying '${course}' at '${university}`, 'success');
         return true;
     }
@@ -616,20 +620,30 @@ async function study(ns, focus, course, university = null) {
 }
 
 /** @param {NS} ns
+ * @returns {Promise<{ type: string, cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
+async function getCurrentWorkInfo(ns) {
+    return await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt');
+}
+
+/** @param {NS} ns
  * Helper to wait for studies to be complete */
 async function monitorStudies(ns, stat, requirement) {
     let lastStatusUpdateTime = 0;
+    const initialWork = await getCurrentWorkInfo(ns);
     while (!breakToMainLoop()) {
+        const currentWork = await initialWork(ns);
+        if (!currentWork.classType || currentWork.classType != initialWork.classType)
+            return announce(ns, `WARNING: Somebody interrupted our studies.` +
+                `\nWAS: ${JSON.stringify(initialWork)}\nNOW: ${JSON.stringify(currentWork)}`, 'warning');
         const player = await getPlayerInfo(ns);
-        if (!player.className)
-            return announce(ns, 'WARNING: Somebody interrupted our studies.', 'warning');
-        if (player[stat] >= requirement) {
-            announce(ns, `SUCCESS: Achieved ${stat} level ${player[stat]} >= ${requirement} while studying`);
+        if (player.skills[stat] >= requirement) {
+            announce(ns, `SUCCESS: Achieved ${stat} level ${player.skills[stat]} >= ${requirement} while studying`);
             return true;
         }
         if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             lastStatusUpdateTime = Date.now();
-            announce(ns, `Studying until ${stat} reaches ${requirement}. Currently at ${player[stat]}...`)
+            announce(ns, `Studying "${currentWork.classType}" at ${currentWork.location} until ${stat} reaches ${requirement}. ` +
+                `Currently at ${player.skills[stat]}...`); // TODO: Compute an ETA, and configure training threshold based on ETA
         }
         await ns.sleep(loopSleepInterval);
     }
@@ -645,7 +659,7 @@ export async function waitForFactionInvite(ns, factionName, maxWaitTime = waitFo
         if (invitations.includes(factionName) || joinedFactions.includes(factionName))
             break;
         await ns.sleep(loopSleepInterval);
-    } while (!invitations.includes(factionName) && !joinedFactions.includes(factionName) && (waitTime -= 1000) > 0);
+    } while (!invitations.includes(factionName) && !joinedFactions.includes(factionName) && (waitTime -= loopSleepInterval) > 0);
     if (joinedFactions.includes(factionName)) // Another script may have auto-joined this faction before we could
         ns.print(`An external script has joined faction "${factionName}" for us.`);
     else if (!invitations.includes(factionName))
@@ -748,8 +762,6 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         factionRepRequired = highestRepAug = mostExpensiveAugByFaction[factionName];
     }
 
-    if ((await getPlayerInfo(ns)).workRepGained > 0) // If we're currently doing faction work, stop to collect reputation and find out how much is remaining
-        await stop(ns);
     let currentReputation = await getFactionReputation(ns, factionName);
     // If the best faction aug is within 10% of our current rep, grind all the way to it so we can get it immediately, regardless of our current rep target
     if (forceBestAug || highestRepAug <= 1.1 * Math.max(currentReputation, factionRepRequired))
@@ -767,32 +779,38 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
     let lastStatusUpdateTime = 0;
+    let factionWork = null;
+    let isWorking = false;
     while ((currentReputation = (await getFactionReputation(ns, factionName))) < factionRepRequired) {
         if (breakToMainLoop()) return ns.print('INFO: Interrupting faction work to check on high-level priorities.');
-        const factionWork = await detectBestFactionWork(ns, factionName); // Before each loop - determine what work gives the most rep/second for our current stats
-        if (await startWorkForFaction(ns, factionName, factionWork, shouldFocusAtWork)) {
-            if (shouldFocusAtWork) ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep stealing focus
-            currentReputation = await getFactionReputation(ns, factionName); // Update to capture the reputation earned when restarting work
-            if (currentReputation > factionRepRequired) break;
-            lastActionRestart = Date.now();
-            // The game no longer tells us our rep gain rate, so we must measure it.
-            // repGainRatePerMs = (await getPlayerInfo(ns)).workRepGainRate / 200 * (hasFocusPenalty && !shouldFocusAtWork ? 0.8 : 1 /* penalty if we aren't focused but don't have the aug to compensate */);
-        } else {
-            announce(ns, `ERROR: Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
-            break;
+        factionWork ??= await detectBestFactionWork(ns, factionName); // When we first start working, determine what work gives the most rep/second for our current stats
+        const currentWork = await getCurrentWorkInfo(ns);
+        if (currentWork.factionName != factionName) {
+            if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
+                announce(ns, `Work for faction ${factionName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
+            }
+            if (await startWorkForFaction(ns, factionName, factionWork, shouldFocus)) {
+                isWorking = true;
+                if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
+            } else {
+                announce(ns, `ERROR: Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
+                break;
+            }
         }
         let status = `Doing '${factionWork}' work for "${factionName}" until ${Math.round(factionRepRequired).toLocaleString('en')} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+            lastFactionWorkStatus = status;
+            lastStatusUpdateTime = Date.now();
             // Measure approximately how quickly we're gaining reputation to give a rough ETA
             const repGainRate = await measureFactionRepGainRate(ns, factionName);
-            lastStatusUpdateTime = Date.now();
             const eta_milliseconds = 1000 * (factionRepRequired - currentReputation) / repGainRate;
-            ns.print((lastFactionWorkStatus = status) + ` Currently at ${Math.round(currentReputation).toLocaleString('en')}, ` +
+            ns.print(`${status} Currently at ${Math.round(currentReputation).toLocaleString('en')}, ` +
                 `earning ${formatNumberShort(repGainRate)} rep/sec. ` +
-                (hasFocusPenalty && !shouldFocusAtWork ? '(after 20% non-focus Penalty) ' : '') + `(ETA: ${formatDuration(eta_milliseconds)})`);
+                (hasFocusPenalty && !shouldFocus ? '(after 20% non-focus Penalty) ' : '') + `(ETA: ${formatDuration(eta_milliseconds)})`);
         }
         await tryBuyReputation(ns);
-        await ns.sleep(restartWorkInteval);
+        await ns.sleep(loopSleepInterval);
         if (!forceBestAug && !forceRep) { // Detect our rep requirement decreasing (e.g. if we exported for our daily +1 faction rep)
             let currentFavor = await getCurrentFactionFavour(ns, factionName);
             if (currentFavor > startingFavor) {
@@ -801,11 +819,6 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
                 factionRepRequired = forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
             }
         }
-        let workRepGained = (await getPlayerInfo(ns)).workRepGained; // Delay the next loop slightly until the next game tick so we aren't missing out on a few ms of rep
-        while (workRepGained === (await getPlayerInfo(ns)).workRepGained && (Date.now() - lastActionRestart < 200)) await ns.sleep(10);
-        // If we explicitly stop working, we immediately get our updated faction rep, otherwise it lags by 1 loop (until after next time we call workForFaction)
-        if (currentReputation + (await getPlayerInfo(ns)).workRepGained >= factionRepRequired)
-            await stop(ns); // We're close - stop working so our current rep is accurate when we check the while loop condition
     }
     if (currentReputation >= factionRepRequired)
         ns.print(`Attained ${Math.round(currentReputation).toLocaleString('en')} rep with "${factionName}" (needed ${factionRepRequired.toLocaleString('en')}).`);
@@ -850,7 +863,7 @@ async function measureCompanyRepGainRate(ns, companyName) {
 async function detectBestFactionWork(ns, factionName) {
     let bestWork, bestRepRate = 0;
     for (const work of ["security", "field", "hacking"]) {
-        if (!(await startWorkForFaction(ns, factionName, work, shouldFocusAtWork))) {
+        if (!(await startWorkForFaction(ns, factionName, work, shouldFocus))) {
             //ns.print(`"${factionName}": "${work}"" work not supported.`);
             continue; // This type of faction work must not be supported
         }
@@ -952,7 +965,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatus = "", lastStatusUpdateTime = 0;
-    let studying = false, working = false;
+    let isStudying = false, isWorking = false;
     let backdoored = await checkForBackdoor(ns, companyName);
     let repRequiredForFaction = (companyConfig?.repRequiredForFaction || 400_000) - (backdoored ? 100_000 : 0);
     while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
@@ -982,27 +995,32 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         const requiredRep = nextJob.reqRep[nextJobTier]; // No modifier on rep requirements
         let status = `Next promotion ('${nextJobName}' #${nextJobTier}) at Hack:${requiredHack} Cha:${requiredCha} Rep:${requiredRep?.toLocaleString('en')}` +
             (repRequiredForFaction > nextJob.reqRep[nextJobTier] ? '' : `, but we won't need it, because we'll sooner hit ${repRequiredForFaction.toLocaleString('en')} reputation to unlock company faction "${factionName}"!`);
+        // Monitor that we are still performing the expected work
+        let currentWork = await getCurrentWorkInfo(ns);
         // We should only study at university if every other requirement is met but Charisma
+        // (assume daemon is grinding hack XP as fast as it can, so no point in studying for that)
         if (currentReputation >= requiredRep && player.skills.hacking >= requiredHack && player.skills.charisma < requiredCha && !options['no-studying']) {
             status = `Studying at ZB university until Cha reaches ${requiredCha}...\n` + status;
-            if (studying && player.className !== 'taking a Leadership course' && player.className !== 'Leadership' /* In case className is made more intuitive in the future */) {
-                announce(ns, `Leadership studies were interrupted. player.className="${player.className}" Restarting in 5 seconds...`, 'warning');
-                studying = false; // If something external has interrupted our studies, take note
+            // TODO: See if we can re-use the function "monitorStudies" here instead of duplicating a lot of the same code.
+            let classType = currentWork.classType;
+            if (isStudying && !(classType && classType.toLowerCase().includes('leadership'))) {
+                announce(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, 'warning');
+                isStudying = false; // If something external has interrupted our studies, take note
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
             }
-            if (!studying) { // Study at ZB university if CHA is the limiter.
-                if (await studyForCharisma(ns, shouldFocusAtWork))
-                    working = !(studying = true);
+            if (!isStudying) { // Study at ZB university if CHA is the limiter.
+                if (await studyForCharisma(ns, shouldFocus))
+                    [isWorking, isStudying] = [false, true];
             }
             if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await trySpendHashes(ns, "Improve Studying");
                 if (spentHashes > 0) {
                     announce(ns, 'Bought a "Improve Studying" upgrade.', 'success');
-                    await studyForCharisma(ns, shouldFocusAtWork); // We must restart studying for the upgrade to take effect.
+                    await studyForCharisma(ns, shouldFocus); // We must restart studying for the upgrade to take effect.
                 }
             }
-        } else if (studying) { // If we no longer need to study and we currently are, turn off study mode and get back to work!
-            studying = false;
+        } else if (isStudying) { // If we no longer need to study and we currently are, turn off study mode and get back to work!
+            isStudying = false;
             continue; // Restart the loop so we refresh our promotion index and apply for a promotion before working more
         }
         await tryBuyReputation(ns);
@@ -1010,39 +1028,41 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // Regardless of the earlier promotion logic, always try for a promotion to make sure we don't miss a promotion due to buggy logic 
         if (await tryApplyToCompany(ns, companyName, currentRole))
             announce(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${(await getPlayerInfo(ns)).jobs[companyName]}. Promotion logic must be off..."`, 'warning');
-        // TODO: If we ever get rid of the below periodic restart-work, we will need to monitor for interruptions with player.workType == e.g. "Work for Company"
-        if (!studying && (!working || (Date.now() - lastActionRestart >= restartWorkInteval) /* We must periodically restart work to collect Rep Gains */)) {
-            // Work for the company (assume daemon is grinding hack XP as fast as it can, so no point in studying for that)
-            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, '/Temp/workForCompany.txt', [companyName, shouldFocusAtWork])) {
-                working = true;
-                if (shouldFocusAtWork) ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep stealing focus
-                currentReputation = await getCompanyReputation(ns, companyName); // Update to capture the reputation earned when restarting work
-                lastActionRestart = Date.now();
-                // The game no longer tells us our rep gain rate, so we must measure it.
-                // repGainRatePerMs = (await getPlayerInfo(ns)).workRepGainRate / 200 * (hasFocusPenalty && !shouldFocusAtWork ? 0.8 : 1 /* penalty if we aren't focused but don't have the aug to compensate */);
+
+        // If not studying, ensure we are working for this company
+        if (!isStudying && currentWork.companyName != companyName) {
+            if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
+                announce(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
+            }
+            // TODO: BITBURNER BUG: Game currently inverting this argument. Fix as soon as the game is updated. 
+            let focusArg = shouldFocus ? false : true; // TODO: REMOVE ON BUG FIX
+            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, '/Temp/workForCompany.txt', [companyName, focusArg])) {
+                isWorking = true;
+                if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {
                 announce(ns, `Something went wrong, failed to start working for company "${companyName}".`, 'error');
                 break;
             }
         }
         if (lastStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+            lastStatus = status;
+            lastStatusUpdateTime = Date.now();
             if (!backdoored) { // Check if an external script has backdoored this company's server yet. If so, it affects our ETA. (Don't need to check again once we discover it is)
                 backdoored = await checkForBackdoor(ns, companyName);
                 repRequiredForFaction -= 100_000;
             }
             // Measure rep gain rate to give an ETA
             const repGainRate = await measureCompanyRepGainRate(ns, companyName);
-            lastStatusUpdateTime = Date.now();
             const eta_milliseconds = 1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate;
             player = (await getPlayerInfo(ns));
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRate)} rep/sec. ` +
-                (hasFocusPenalty && !shouldFocusAtWork ? `(after 20% non-focus Penalty)` : '') + `\n` +
+                (hasFocusPenalty && !shouldFocus ? `(after 20% non-focus Penalty)` : '') + `\n` +
                 `${status}\nCurrent player stats are Hack:${player.skills.hacking} ${player.skills.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.skills.charisma} ${player.skills.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
                 `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
-            lastStatus = status;
         }
-        await ns.sleep(loopSleepInterval); // Sleep now and wake up periodically and stop working to check our stats / reputation progress
+        await ns.sleep(loopSleepInterval); // Sleep now and wake up periodically to check our stats / reputation progress
     }
     // Return true if we succeeded, false otherwise.
     if (currentReputation >= repRequiredForFaction) {
