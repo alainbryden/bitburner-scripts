@@ -29,7 +29,7 @@ const companySpecificConfigs = [
     { name: "NWO", statModifier: 25 },
     { name: "MegaCorp", statModifier: 25 },
     { name: "Blade Industries", statModifier: 25 },
-    { name: "Fulcrum Secret Technologies", companyName: "Fulcrum Technologies", repRequiredForFaction: 250000 }, // Special snowflake
+    { name: "Fulcrum Secret Technologies", companyName: "Fulcrum Technologies" }, // Special snowflake
     { name: "Silhouette", companyName: "TBD", repRequiredForFaction: 999e9 /* Hack to force work until max promotion. */ }
 ]
 const jobs = [ // Job stat requirements for a company with a base stat modifier of +224 (modifier of all megacorps except the ones above which are 25 higher)
@@ -908,12 +908,18 @@ async function tryApplyToCompany(ns, company, role) {
     return await getNsDataThroughFile(ns, `ns.singularity.applyToCompany(ns.args[0], ns.args[1])`, '/Temp/applyToCompany.txt', [company, role])
 }
 
+/** Check if the server associated with the specified company has been backdoored.
+ * @param {NS} ns */
+async function checkForBackdoor(ns, companyName) {
+    return await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`,
+        '/Temp/getServer-backdoorInstalled.txt', [serverByCompany[companyName]]);
+}
+
 /** @param {NS} ns */
 export async function workForMegacorpFactionInvite(ns, factionName, waitForInvite) {
     const companyConfig = companySpecificConfigs.find(c => c.name == factionName); // For anything company-specific
     const companyName = companyConfig?.companyName || factionName; // Name of the company that gives the faction (same for all but Fulcrum)
     const statModifier = companyConfig?.statModifier || 0; // How much e.g. Hack / Cha is needed for a promotion above the base requirement for the job
-    const repRequiredForFaction = companyConfig?.repRequiredForFaction || 200000; // Required to unlock the faction
 
     let player = (await getPlayerInfo(ns));
     if (player.factions.includes(factionName)) return false; // Only return true if we did work to earn a new faction invite
@@ -928,7 +934,9 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatus = "", lastStatusUpdateTime = 0, repGainRatePerMs = 0;
     let lastRepMeasurement = await getCompanyReputation(ns, companyName);
-    let studying = false, working = false, backdoored = false;
+    let studying = false, working = false;
+    let backdoored = await checkForBackdoor(ns, companyName);
+    let repRequiredForFaction = (companyConfig?.repRequiredForFaction || 400_000) - (backdoored ? 100_000 : 0);
     while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
         if (breakToMainLoop()) return ns.print('INFO: Interrupting corporation work to check on high-level priorities.');
         player = (await getPlayerInfo(ns));
@@ -1000,8 +1008,10 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             }
         }
         if (lastStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-            if (!backdoored) // Check if an external script has backdoored this company's server yet. If so, it affects our ETA. (Don't need to check again once we discover it is)
-                backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, '/Temp/getServer-backdoorInstalled.txt', [serverByCompany[companyName]]);
+            if (!backdoored) { // Check if an external script has backdoored this company's server yet. If so, it affects our ETA. (Don't need to check again once we discover it is)
+                backdoored = await checkForBackdoor(ns, companyName);
+                repRequiredForFaction -= 100_000;
+            }
             const cancellationMult = backdoored ? 0.75 : 0.5; // We will lose some of our gained reputation when we stop working early
             repGainRatePerMs *= cancellationMult;
             // Actually measure how much reputation we've earned since our last update, to give a more accurate ETA including external sources of rep
