@@ -463,8 +463,8 @@ async function earnFactionInvite(ns, factionName) {
         if (options['no-studying'])
             return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
         else if (classHeuristic('hacking') < em)
-            return ns.print(`Your combination of Hacking mult (${formatNumberShort(player.skills.hacking_mult)}), exp_mult ` +
-                `(${formatNumberShort(player.skills.hacking_exp_mult)}), and bitnode hacking / study exp mults ` +
+            return ns.print(`Your combination of Hacking mult (${formatNumberShort(player.mults.hacking)}), exp_mult ` +
+                `(${formatNumberShort(player.mults.hacking_exp)}), and bitnode hacking / study exp mults ` +
                 `(${formatNumberShort(bitnodeMultipliers.HackingLevelMultiplier)}) / (${formatNumberShort(bitnodeMultipliers.ClassGymExpGain)}) ` +
                 `are probably too low to increase hack from ${player.skills.hacking} to ${requirement} in a reasonable amount of time ` +
                 `(${formatNumberShort(classHeuristic('hacking'))} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
@@ -557,22 +557,24 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
     let player = await getPlayerInfo(ns);
+    let skills = player.skills;
     let strRequirements = [];
     let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER || reqStats >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${ns.heart.break()})`);
-    if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
-    let crime, lastCrime, lastStatusUpdateTime;
-    while (forever || player.skills.strength < reqStats || player.skills.defense < reqStats || player.skills.dexterity < reqStats || player.skills.agility < reqStats || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
+    if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${skills.strength}, Def: ${skills.defense}, Dex: ${skills.dexterity}, Agi: ${skills.agility})`);
+    let anyStatsDeficient = () => skills.strength < reqStats || skills.defense < reqStats || skills.dexterity < reqStats || skills.agility < reqStats;
+    let crime, lastCrime, lastStatusUpdateTime, needStats;
+    while (forever || (needStats = anyStatsDeficient()) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
-        let needStats = player.skills.strength < reqStats || player.skills.defense < reqStats || player.skills.dexterity < reqStats || player.skills.agility < reqStats;
         let karma = -ns.heart.break();
         crime = crimeCount < 10 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
             (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly && index <= 1 ? 0 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
-            ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` + (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
+            ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` +
+                (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
             lastCrime = crime;
             lastStatusUpdateTime = Date.now();
         }
