@@ -65,7 +65,7 @@ function setStatus(ns, logMessage) {
 // Will buy the most effective hacknet upgrade, so long as it will pay for itself in the next {payoffTimeSeconds} seconds.
 /** @param {NS} ns **/
 export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600 sec == 1 hour */, options) {
-    const currentHacknetMult = ns.getPlayer().hacknet_node_money_mult;
+    const currentHacknetMult = ns.getPlayer().mults.hacknet_node_money;
     // Get the lowest cache level, we do not consider upgrading the cache level of servers above this until all have the same cache level
     const minCacheLevel = [...Array(ns.hacknet.numNodes()).keys()].reduce((min, i) => Math.min(min, ns.hacknet.getNodeStats(i).cache), Number.MAX_VALUE);
     // Note: Formulas API has a hashGainRate which should agree with these calcs, but this way they're available even without the formulas API
