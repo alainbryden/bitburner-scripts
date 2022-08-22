@@ -127,7 +127,7 @@ export async function main(ns) {
     gangFaction = gangInfo ? gangInfo.faction : false;
     favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
     startingPlayerMoney = playerData.money;
-    stockValue = options['ignore-stocks'] ? 0 : await getStocksValue(ns, playerData);
+    stockValue = options['ignore-stocks'] ? 0 : await getStocksValue(ns);
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
     log(ns, 'In factions: ' + joinedFactions);
     // Get owned augmentations (whether they've been installed or not). Ignore strNF because you can always buy more.
@@ -285,7 +285,7 @@ async function updateAugmentationData(ns, desiredAugs) {
         owned: simulatedOwnedAugmentations.includes(aug),
         reputation: dictAugRepReqs[aug],
         price: dictAugPrices[aug],
-        stats: Object.fromEntries(Object.entries(dictAugStats[aug]).filter(([k,v]) => v != 1)),
+        stats: Object.fromEntries(Object.entries(dictAugStats[aug]).filter(([k, v]) => v != 1)),
         prereqs: dictAugPrereqs[aug] || [],
         // The best augmentations either have no stats (special effect like no Focus penalty, or Red Pill), or stats in the 'stat-desired' command line options
         desired: desiredAugs.includes(aug) || Object.keys(dictAugStats[aug]).length == 0 ||

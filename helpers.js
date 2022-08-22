@@ -357,6 +357,7 @@ export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode =
 }
 
 /** @param {NS} ns 
+ * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile
  * getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
 export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, includeLevelsFromCurrentBitnode = true) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
@@ -411,19 +412,23 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
     return others.length;
 }
 
-let cachedStockSymbols; // Cache of stock symbols since these never change
+let cachedStockSymbols = null; // Cache of stock symbols since these never change
+
+/** Helper function to get all stock symbols, or null if you do not have TIX api access.
+ * Caches symbols the first time they are successfully requested, since symbols never change.
+ * @param {NS} ns */
+export async function getStockSymbols(ns) {
+    cachedStockSymbols ??= await getNsDataThroughFile(ns,
+        `(() => { try { return ns.stock.getSymbols(); } catch { return null; } })()`,
+        '/Temp/stock-symbols.txt');
+    return cachedStockSymbols;
+}
 
 /** Helper function to get the total value of stocks using as little RAM as possible.
- * @param {NS} ns
- * @param {Player} player - If you have previously retrieved player info, you can provide that here to save some time.
- * @param {string[]} stockSymbols - If you have previously retrieved a list of all stock symbols, you can provide that here to save some time. */
-export async function getStocksValue(ns, player = null, stockSymbols = null) {
-    if (!(player || await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()', '/Temp/hasTIX.txt'))) return 0;
-    if (!stockSymbols || stockSymbols.length == 0) {
-        if (!cachedStockSymbols)
-            cachedStockSymbols = await getNsDataThroughFile(ns, `ns.stock.getSymbols()`, '/Temp/stock-symbols.txt');
-        stockSymbols = cachedStockSymbols;
-    }
+ * @param {NS} ns */
+export async function getStocksValue(ns) {
+    let stockSymbols = await getStockSymbols(ns);
+    if (stockSymbols == null) return 0; // No TIX API Access
     const helper = async (fn) => await getNsDataThroughFile(ns,
         `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${fn}(sym)]))`, `/Temp/stock-${fn}.txt`, stockSymbols);
     const askPrices = await helper('getAskPrice');
