@@ -625,7 +625,7 @@ async function study(ns, focus, course, university = null) {
         if (!currentwork.type == "CLASS")
             return announce(ns, 'WARNING: Somebody interrupted our studies.', 'warning');
         if (player.skills[stat] >= requirement) {
-            announce(ns, `SUCCESS: Achieved ${stat} level ${player[stat]} >= ${requirement} while studying`);
+            announce(ns, `SUCCESS: Achieved ${stat} level ${player.skills[stat]} >= ${requirement} while studying`);
             return true;
         }
         if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
