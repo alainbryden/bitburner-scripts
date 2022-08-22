@@ -617,24 +617,24 @@ async function study(ns, focus, course, university = null) {
 
 /** @param {NS} ns
  * Helper to wait for studies to be complete */
-async function monitorStudies(ns, stat, requirement) {
+ async function monitorStudies(ns, stat, requirement) {
     let lastStatusUpdateTime = 0;
     while (!breakToMainLoop()) {
         const player = await getPlayerInfo(ns);
-        if (!player.className)
+        const currentwork = await getNsDataThroughFile(ns, `ns.singularity.getCurrentWork()`, '/Temp/work.txt');
+        if (!currentwork.type == "CLASS")
             return announce(ns, 'WARNING: Somebody interrupted our studies.', 'warning');
-        if (player[stat] >= requirement) {
+        if (player.skills[stat] >= requirement) {
             announce(ns, `SUCCESS: Achieved ${stat} level ${player[stat]} >= ${requirement} while studying`);
             return true;
         }
         if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             lastStatusUpdateTime = Date.now();
-            announce(ns, `Studying until ${stat} reaches ${requirement}. Currently at ${player[stat]}...`)
+            announce(ns, `Studying until ${stat} reaches ${requirement}. Currently at ${player.skills[stat]}...`)
         }
         await ns.sleep(loopSleepInterval);
     }
 }
-
 /** @param {NS} ns */
 export async function waitForFactionInvite(ns, factionName, maxWaitTime = waitForFactionInviteTime) {
     ns.print(`Waiting for invite from faction "${factionName}"...`);
