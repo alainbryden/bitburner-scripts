@@ -687,7 +687,7 @@ export async function tryJoinFaction(ns, factionName) {
  * @returns {Promise<Player>} the result of ns.getPlayer() */
 async function getPlayerInfo(ns) {
     //return ns.getPlayer(); // Note: We may decide that we call this frequently enough it is not worth ram-dodging
-    return await getNsDataThroughFile(ns, `ns.getPlayerInfo()`, '/Temp/player-info.txt');
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
 }
 
 /** @param {NS} ns
