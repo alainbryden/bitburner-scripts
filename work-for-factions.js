@@ -617,7 +617,7 @@ async function study(ns, focus, course, university = null) {
 
 /** @param {NS} ns
  * Helper to wait for studies to be complete */
- async function monitorStudies(ns, stat, requirement) {
+async function monitorStudies(ns, stat, requirement) {
     let lastStatusUpdateTime = 0;
     while (!breakToMainLoop()) {
         const player = await getPlayerInfo(ns);
