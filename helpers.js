@@ -309,7 +309,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         catch (error) {
             const fatal = attempts >= maxRetries;
             log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} failed` +
-                (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`),
+                (fatal ? `: ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}` : `. Trying again in ${retryDelayMs}ms...`),
                 tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
             await ns.sleep(retryDelayMs);

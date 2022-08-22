@@ -424,7 +424,7 @@ async function earnFactionInvite(ns, factionName) {
         ns.print(`Ignoring combat requirement for ${factionName} as we are more likely to unlock them via hacking stats.`);
     else if (deficientStats.length > 0) {
         ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, Have ` +
-            physicalStats.map(s => `${s.slice(0, 3)}: ${player[s]}`).join(", "));
+            physicalStats.map(s => `${s.slice(0, 3)}: ${player.skills[s]}`).join(", "));
         const em = requirement / options['training-stat-per-multi-threshold'];
         // Hack: Create a rough heuristic suggesting how much multi we need to train physical stats in a reasonable amount of time. TODO: Be smarter
         if (deficientStats.map(s => s.stat).some(s => crimeHeuristic(s) < em))
@@ -559,7 +559,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${ns.heart.break()})`);
     if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${skills.strength}, Def: ${skills.defense}, Dex: ${skills.dexterity}, Agi: ${skills.agility})`);
     let anyStatsDeficient = () => skills.strength < reqStats || skills.defense < reqStats || skills.dexterity < reqStats || skills.agility < reqStats;
-    let crime, lastCrime, lastStatusUpdateTime, needStats;
+    let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
     while (forever || (needStats = anyStatsDeficient()) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
@@ -570,9 +570,14 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         // Warn if current crime is disrupted
         let currentWork = await getCurrentWorkInfo(ns);
         let crimeType = currentWork.crimeType;
-        if (lastCrime && !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
-            announce(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${classType}) Restarting...`, 'warning');
-            ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
+        if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
+            if (lastCrime) {
+                announce(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${classType}) Restarting...`, 'warning');
+                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
+            }
+            let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
+            crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', '/Temp/commitCrime.txt', [crime, focusArg])
+            if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
         }
         // Periodic status update with progress
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
@@ -581,8 +586,6 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
             ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` +
                 (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
         }
-        let crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', '/Temp/commitCrime.txt', [crime, shouldFocus])
-        if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
         // Sleep for some multiple of the crime time to avoid interrupting a crime in progress on the next status update
         let sleepTime = 1 + Math.ceil(crimeTime / loopSleepInterval) * loopSleepInterval;
         await ns.sleep(sleepTime);
@@ -622,7 +625,7 @@ async function study(ns, focus, course, university = null) {
 /** @param {NS} ns
  * @returns {Promise<{ type: string, cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
 async function getCurrentWorkInfo(ns) {
-    return await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt');
+    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt')) ?? {};
 }
 
 /** @param {NS} ns
