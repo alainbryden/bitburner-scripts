@@ -164,7 +164,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, fnIsAlive, command,
         `const f="${fName}"; if(ns.read(f)!==r) await ns.write(f,r,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs);
-    // Wait for the process to complete
+    // Wait for the process to complete (TODO: Replace the need for a `fnIsAlive` with one that simply checks the file contents are no longer `initialContents`)
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
     if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying. 
@@ -309,7 +309,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         catch (error) {
             const fatal = attempts >= maxRetries;
             log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} failed` +
-                (fatal ? `: ${String(error)}` : `. Trying again in ${retryDelayMs}ms...`),
+                (fatal ? `: ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}` : `. Trying again in ${retryDelayMs}ms...`),
                 tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw error;
             await ns.sleep(retryDelayMs);
