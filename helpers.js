@@ -292,6 +292,11 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
     }
 }
 
+/** If the argument is an Error instance, returns it as is, otherwise, returns a new Error instance. */
+function asError(error) {
+    return error instanceof Error ? error : new Error(typeof error === 'string' ? error : JSON.stringify(error));
+}
+
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
  * @param {NS} ns - The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
@@ -303,7 +308,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             const result = await fnFunctionThatMayFail()
             const error = typeof errorContext === 'string' ? errorContext : errorContext();
             if (!fnSuccessCondition(result))
-                throw (typeof error === 'string' ? new Error(error) : error);
+                throw asError(error);
             return result;
         }
         catch (error) {
@@ -311,7 +316,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} failed` +
                 (fatal ? `: ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}` : `. Trying again in ${retryDelayMs}ms...`),
                 tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
-            if (fatal) throw error;
+            if (fatal) throw asError(error);
             await ns.sleep(retryDelayMs);
             retryDelayMs *= backoffRate;
         }
