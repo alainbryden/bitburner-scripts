@@ -793,6 +793,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         if (currentWork.factionName != factionName) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
                 announce(ns, `Work for faction ${factionName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
             if (await startWorkForFaction(ns, factionName, factionWork, shouldFocus)) {
@@ -1043,6 +1044,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         if (!isStudying && currentWork.companyName != companyName) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
                 announce(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
             // TODO: BITBURNER BUG: Game currently inverting this argument. Fix as soon as the game is updated. 
@@ -1063,14 +1065,14 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 repRequiredForFaction -= 100_000;
             }
             // Measure rep gain rate to give an ETA
-            const repGainRate = await measureCompanyRepGainRate(ns, companyName);
-            const eta_milliseconds = 1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate;
+            const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName);
+            const eta = !isWorking ? "?" : formatDuration(1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate);
             player = await getPlayerInfo(ns);
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRate)} rep/sec. ` +
                 (hasFocusPenalty && !shouldFocus ? `(after 20% non-focus Penalty)` : '') + `\n` +
                 `${status}\nCurrent player stats are Hack:${player.skills.hacking} ${player.skills.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.skills.charisma} ${player.skills.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
-                `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
+                `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${eta})`}`);
         }
         await ns.sleep(loopSleepInterval); // Sleep now and wake up periodically to check our stats / reputation progress
         player = await getPlayerInfo(ns); // Update player after sleeping, before our next loop
