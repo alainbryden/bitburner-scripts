@@ -235,7 +235,7 @@ async function mainLoop(ns) {
     ns.print(`INFO: Starting main work loop with scope: ${scope}...`);
 
     // Update information that may have changed since our last loop
-    const player = (await getPlayerInfo(ns));
+    const player = await getPlayerInfo(ns);
     if (player.factions.length > numJoinedFactions) { // If we've recently joined a new faction, reset our work scope
         scope = 1; // Back to basics until we've satisfied all highest-priority work
         numJoinedFactions = player.factions.length;
@@ -504,7 +504,7 @@ async function earnFactionInvite(ns, factionName) {
         travelledForInvite = await travelToCityOrDidRecently(factionName);
     if (travelledForInvite) {
         workedForInvite = true;
-        player = await getPlayerInfo(ns);
+        player = await getPlayerInfo(ns); // Update player.city
     }
 
     // Special case, earn a CEO position to gain an invite to Silhouette
@@ -552,15 +552,16 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
     let player = await getPlayerInfo(ns);
-    let skills = player.skills;
     let strRequirements = [];
     let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER || reqStats >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
-    if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${ns.heart.break()})`);
-    if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have Str: ${skills.strength}, Def: ${skills.defense}, Dex: ${skills.dexterity}, Agi: ${skills.agility})`);
-    let anyStatsDeficient = () => skills.strength < reqStats || skills.defense < reqStats || skills.dexterity < reqStats || skills.agility < reqStats;
+    if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${Math.round(ns.heart.break()).toLocaleString('en')})`);
+    if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have ` +
+        `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
+    let anyStatsDeficient = (p) => p.skills.strength < reqStats || p.skills.defense < reqStats ||
+        /*                      */ p.skills.dexterity < reqStats || p.skills.agility < reqStats;
     let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
-    while (forever || (needStats = anyStatsDeficient()) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
+    while (forever || (needStats = anyStatsDeficient(player)) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
         let karma = -ns.heart.break();
@@ -587,10 +588,11 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
                 (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
         }
         // Sleep for some multiple of the crime time to avoid interrupting a crime in progress on the next status update
-        let sleepTime = 1 + Math.ceil(crimeTime / loopSleepInterval) * loopSleepInterval;
+        let sleepTime = 1 + Math.ceil(loopSleepInterval / crimeTime) * crimeTime;
         await ns.sleep(sleepTime);
 
         crimeCount++;
+        player = await getPlayerInfo(ns);
     }
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
     return true;
@@ -791,6 +793,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         if (currentWork.factionName != factionName) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
                 announce(ns, `Work for faction ${factionName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
             if (await startWorkForFaction(ns, factionName, factionWork, shouldFocus)) {
@@ -824,7 +827,8 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         }
     }
     if (currentReputation >= factionRepRequired)
-        ns.print(`Attained ${Math.round(currentReputation).toLocaleString('en')} rep with "${factionName}" (needed ${factionRepRequired.toLocaleString('en')}).`);
+        ns.print(`Attained ${Math.round(currentReputation).toLocaleString('en')} rep with "${factionName}" ` +
+            `(needed ${factionRepRequired.toLocaleString('en')}).`);
     if (factionName == "Daedalus") await daedalusSpecialCheck(ns, favorRepRequired, currentReputation);
     return currentReputation >= factionRepRequired;
 }
@@ -836,29 +840,32 @@ async function stop(ns) { return await getNsDataThroughFile(ns, `ns.singularity.
 /** Start the specified faction work
  * @param {NS} ns */
 async function startWorkForFaction(ns, factionName, work, focus) {
-    return await getNsDataThroughFile(ns, `ns.singularity.workForFaction(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/workForFaction.txt', [factionName, work, focus])
+    return await getNsDataThroughFile(ns, `ns.singularity.workForFaction(ns.args[0], ns.args[1], ns.args[2])`,
+        '/Temp/workForFaction.txt', [factionName, work, focus])
 }
 
 /** Measure our rep gain rate (per second)
- * @param {NS} ns */
-async function measureFactionRepGainRate(ns, factionName) {
+ * @param {NS} ns
+ * @param {() => Promise<number>} fnSampleReputation - An async function that samples the reputation at a current point in time */
+async function measureRepGainRate(ns, fnSampleReputation) {
     //return (await getPlayerInfo(ns)).workRepGainRate;
     // The game no longer provides the rep gain rate for a given work type, so we must measure it
-    const initialReputation = await getFactionReputation(ns, factionName);
+    const initialReputation = await fnSampleReputation();
     let nextTickReputation;
-    while (initialReputation == (nextTickReputation = await getFactionReputation(ns, factionName))) await ns.sleep(50);
+    let start = Date.now();
+    while (initialReputation == (nextTickReputation = await fnSampleReputation()) && Date.now() - start < 250)
+        await ns.sleep(50);
     return (nextTickReputation - initialReputation) * 5; // Assume this rep gain was for a 200 tick
 }
-
 /** Measure our faction rep gain rate (per second)
  * @param {NS} ns */
+async function measureFactionRepGainRate(ns, factionName) {
+    return await measureRepGainRate(ns, async () => await getFactionReputation(ns, factionName));
+}
+/** Measure our company rep gain rate (per second)
+ * @param {NS} ns */
 async function measureCompanyRepGainRate(ns, companyName) {
-    //return (await getPlayerInfo(ns)).workRepGainRate;
-    // The game no longer provides the rep gain rate for a given work type, so we must measure it
-    const initialReputation = await getCompanyReputation(ns, companyName);
-    let nextTickReputation;
-    while (initialReputation == (nextTickReputation = await getCompanyReputation(ns, companyName))) await ns.sleep(50);
-    return (nextTickReputation - initialReputation) * 5; // Assume this rep gain was for a 200 tick
+    return await measureRepGainRate(ns, async () => await getCompanyReputation(ns, companyName));
 }
 
 /** Try all work types and see what gives the best rep gain with this faction!
@@ -890,7 +897,7 @@ async function detectBestFactionWork(ns, factionName) {
  *  @param {Array<string>} megacorpFactionsInPreferredOrder - The list of all corporate factions, sorted in the order they should be worked for
  * */
 export async function workForAllMegacorps(ns, megacorpFactionsInPreferredOrder, alsoWorkForCompanyFactions, oneCompanyFactionAtATime) {
-    let player = (await getPlayerInfo(ns));
+    let player = await getPlayerInfo(ns);
     if (player.skills.hacking < 225)
         return ns.print(`Hacking Skill ${player.skills.hacking} is to low to work for any megacorps (min req. 225).`);
     let joinedCompanyFactions = player.factions.filter(f => megacorpFactionsInPreferredOrder.includes(f)); // Company factions we've already joined
@@ -956,7 +963,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     const companyName = companyConfig?.companyName || factionName; // Name of the company that gives the faction (same for all but Fulcrum)
     const statModifier = companyConfig?.statModifier || 0; // How much e.g. Hack / Cha is needed for a promotion above the base requirement for the job
 
-    let player = (await getPlayerInfo(ns));
+    let player = await getPlayerInfo(ns);
     if (player.factions.includes(factionName)) return false; // Only return true if we did work to earn a new faction invite
     if ((await checkFactionInvites(ns)).includes(factionName))
         return waitForInvite ? await waitForFactionInvite(ns, factionName) : false;
@@ -973,7 +980,6 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     let repRequiredForFaction = (companyConfig?.repRequiredForFaction || 400_000) - (backdoored ? 100_000 : 0);
     while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
         if (breakToMainLoop()) return ns.print('INFO: Interrupting corporation work to check on high-level priorities.');
-        player = (await getPlayerInfo(ns));
         // Determine the next promotion we're striving for (the sooner we get promoted, the faster we can earn company rep)
         const getTier = job => Math.min(job.reqRep.filter(r => r <= currentReputation).length, job.reqHack.filter(h => h <= player.skills.hacking).length, job.reqCha.filter(c => c <= player.skills.charisma).length) - 1;
         // It's generally best to hop back-and-forth between it and software engineer career paths (rep gain is about the same, but better money from software)
@@ -987,7 +993,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 announce(ns, `Application to "${companyName}" for a '${bestRoleName}' Job or Promotion failed.`, 'error');
             currentJobTier = bestJobTier; // API to apply for a job immediately gives us the highest tier we qualify for
             currentRole = bestRoleName;
-            player = (await getPlayerInfo(ns));
+            player = await getPlayerInfo(ns); // Update player.jobs info after attempted promotion
         }
         const currentJob = player.jobs[companyName];
         const nextJobTier = currentRole == "it" ? currentJobTier : currentJobTier + 1;
@@ -1029,13 +1035,16 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         await tryBuyReputation(ns);
 
         // Regardless of the earlier promotion logic, always try for a promotion to make sure we don't miss a promotion due to buggy logic 
-        if (await tryApplyToCompany(ns, companyName, currentRole))
-            announce(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${(await getPlayerInfo(ns)).jobs[companyName]}. Promotion logic must be off..."`, 'warning');
+        if (await tryApplyToCompany(ns, companyName, currentRole)) {
+            player = await getPlayerInfo(ns); // Find out what our new job is
+            announce(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${player.jobs[companyName]}. Promotion logic must be off..."`, 'warning');
+        }
 
         // If not studying, ensure we are working for this company
         if (!isStudying && currentWork.companyName != companyName) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
                 announce(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
             // TODO: BITBURNER BUG: Game currently inverting this argument. Fix as soon as the game is updated. 
@@ -1056,16 +1065,17 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 repRequiredForFaction -= 100_000;
             }
             // Measure rep gain rate to give an ETA
-            const repGainRate = await measureCompanyRepGainRate(ns, companyName);
-            const eta_milliseconds = 1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate;
-            player = (await getPlayerInfo(ns));
+            const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName);
+            const eta = !isWorking ? "?" : formatDuration(1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate);
+            player = await getPlayerInfo(ns);
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRate)} rep/sec. ` +
                 (hasFocusPenalty && !shouldFocus ? `(after 20% non-focus Penalty)` : '') + `\n` +
                 `${status}\nCurrent player stats are Hack:${player.skills.hacking} ${player.skills.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.skills.charisma} ${player.skills.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
-                `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${formatDuration(eta_milliseconds)})`}`);
+                `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${eta})`}`);
         }
         await ns.sleep(loopSleepInterval); // Sleep now and wake up periodically to check our stats / reputation progress
+        player = await getPlayerInfo(ns); // Update player after sleeping, before our next loop
     }
     // Return true if we succeeded, false otherwise.
     if (currentReputation >= repRequiredForFaction) {
