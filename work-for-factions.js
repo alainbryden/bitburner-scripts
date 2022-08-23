@@ -820,7 +820,9 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         await ns.sleep(loopSleepInterval);
         if (!forceBestAug && !forceRep) { // Detect our rep requirement decreasing (e.g. if we exported for our daily +1 faction rep)
             let currentFavor = await getCurrentFactionFavour(ns, factionName);
-            if (currentFavor > startingFavor) {
+            if (currentFavor === undefined)
+                log(ns, `ERROR: WTF... getCurrentFactionFavour returned 'undefined' for factionName: ${factionName}`, true, 'error');
+            else if (currentFavor > startingFavor) {
                 startingFavor = dictFactionFavors[factionName] = currentFavor;
                 favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
                 factionRepRequired = forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
