@@ -270,7 +270,7 @@ export async function waitForProcessToComplete(ns, pid, verbose) {
  * An advanced version of waitForProcessToComplete that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
  * Importing incurs 0 GB RAM (assuming fnIsAlive is implemented using another ns function you already reference elsewhere like ns.ps) 
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
- * @param {function} fnIsAlive - A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
+ * @param {(pid: number) => Promise<boolean>} fnIsAlive - A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
  **/
 export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose) {
     checkNsInstance(ns, '"waitForProcessToComplete_Custom"');
@@ -278,14 +278,18 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
     // Wait for the PID to stop running (cheaper than e.g. deleting (rm) a possibly pre-existing file and waiting for it to be recreated)
     let start = Date.now();
     let sleepMs = 1;
+    let done = false;
     for (var retries = 0; retries < 1000; retries++) {
-        if (!fnIsAlive(pid)) break; // Script is done running
+        if (!(await fnIsAlive(pid))) {
+            done = true;
+            break; // Script is done running
+        }
         if (verbose && retries % 100 === 0) ns.print(`Waiting for pid ${pid} to complete... (${formatDuration(Date.now() - start)})`);
         await ns.sleep(sleepMs);
         sleepMs = Math.min(sleepMs * 2, 200);
     }
     // Make sure that the process has shut down and we haven't just stopped retrying
-    if (fnIsAlive(pid)) {
+    if (!done) {
         let errorMessage = `run-command pid ${pid} is running much longer than expected. Max retries exceeded.`;
         ns.print(errorMessage);
         throw new Error(errorMessage);
