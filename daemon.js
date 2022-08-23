@@ -1,9 +1,9 @@
 import {
     formatMoney, formatRam, formatDuration, formatDateTime, formatNumber,
-    scanAllServers, hashCode, disableLogs, log, getFilePath, getConfiguration,
+    hashCode, disableLogs, log, getFilePath, getConfiguration,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
-    getFnRunViaNsExec, getFnIsAliveViaNsPs, autoRetry
+    getFnRunViaNsExec, autoRetry
 } from './helpers.js'
 
 // daemon.js has histocially been the central orchestrator of almost every script in the game.
@@ -162,10 +162,12 @@ function doesFileExist(ns, filename, hostname = undefined) { return ns.fileExist
 
 let psCache = [];
 /** PS can get expensive, and we use it a lot so we cache this for the duration of a loop
- * @param {NS} ns */
-function ps(ns, server, canUseCache = true) {
+ * @param {NS} ns
+ * @returns {Promise<ProcessInfo[]>} */
+async function processList(ns, server, canUseCache = true) {
     const cachedResult = psCache[server];
-    return canUseCache && cachedResult ? cachedResult : (psCache[server] = ns.ps(server));
+    return canUseCache && cachedResult ? cachedResult :
+        (psCache[server] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', [server]));
 }
 
 // Returns the amount of money we should currently be reserving. Dynamically adapts to save money for a couple of big purchases on the horizon
@@ -189,13 +191,13 @@ export async function main(ns) {
 
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
-    const competingDaemons = ns.ps("home").filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
+    const competingDaemons = (await processList(ns, "home")).filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
     if (competingDaemons.length > 0) { // We expect only 1, due to this logic, but just in case, generalize the code below to support multiple.
         const daemonPids = competingDaemons.map(p => p.pid);
         log(ns, `Info: Restarting another '${scriptName}' instance running on home (pid: ${daemonPids} args: ` +
             `[${competingDaemons[0].args.join(", ")}]) with new args ([${ns.args.join(", ")}])...`, true)
         const killPid = await killProcessIds(ns, daemonPids);
-        await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), killPid);
+        await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), killPid);
         await ns.sleep(loopInterval); // The game can be slow to kill scripts, give it an extra bit of time.
     }
 
@@ -270,7 +272,7 @@ export async function main(ns) {
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
     asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-    let shouldUpgradeHacknet = () => (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false) === null) && reservedMoney(ns) < ns.getServerMoneyAvailable("home");
+    let shouldUpgradeHacknet = async () => ((await whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)) === null) && reservedMoney(ns) < ns.getServerMoneyAvailable("home");
     // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
     let shouldImproveHacking = () => bitnodeMults.ScriptHackMoneyGain != 0 && playerBitnode != 8 || ns.getServerMoneyAvailable("home") > 1e12;
     // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
@@ -319,8 +321,9 @@ export async function main(ns) {
     hackTools.forEach(tool => tool.name = getFilePath(tool.name));
 
     await buildToolkit(ns, [...asynchronousHelpers, ...periodicScripts, ...hackTools]); // build toolkit
-    await getStaticServerData(ns, scanAllServers(ns)); // Gather information about servers that will never change
-    buildServerList(ns); // create the exhaustive server list
+    const allServers = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    await getStaticServerData(ns, allServers); // Gather information about servers that will never change
+    await buildServerList(ns, false, allServers); // create the exhaustive server list
     await establishMultipliers(ns); // figure out the various bitnode and player multipliers
     maxTargets = stockFocus ? Object.keys(serverStockSymbols).length : options['initial-max-targets']; // Ensure we immediately attempt to target all servers that represent stocks if in stock-focus mode
 
@@ -396,21 +399,21 @@ async function kickstartHackXp(ns) {
 
 /** Check running status of scripts on servers
  * @param {NS} ns
- * @returns {string} */
-function whichServerIsRunning(ns, scriptName, canUseCache = true) {
+ * @returns {Promise<string>} */
+async function whichServerIsRunning(ns, scriptName, canUseCache = true) {
     for (const server of getAllServers())
-        if (ps(ns, server.name, canUseCache).some(process => process.filename === scriptName))
+        if ((await processList(ns, server.name, canUseCache)).some(process => process.filename === scriptName))
             return server.name;
     return null;
 }
 
 /** Helper to kick off external scripts
  * @param {NS} ns
- * @returns {boolean} true if all scripts have been launched */
+ * @returns {Promise<boolean>} true if all scripts have been launched */
 async function runStartupScripts(ns) {
     let launched = 0;
     for (const helper of asynchronousHelpers) {
-        if (!helper.isLaunched && (helper.shouldRun === undefined || helper.shouldRun())) {
+        if (!helper.isLaunched && (helper.shouldRun === undefined || (await helper.shouldRun()))) {
             if (launched > 0) await ns.sleep(200); // Sleep a short while between each script being launched, so they aren't all fighting for temp RAM at the same time.
             helper.isLaunched = await tryRunTool(ns, getTool(helper))
             if (helper.isLaunched) launched++;
@@ -426,7 +429,7 @@ async function runPeriodicScripts(ns) {
     let launched = 0;
     for (const task of periodicScripts) {
         let tool = getTool(task);
-        if ((Date.now() - (task.lastRun || 0) >= task.interval) && (task.shouldRun === undefined || task.shouldRun())) {
+        if ((Date.now() - (task.lastRun || 0) >= task.interval) && (task.shouldRun === undefined || (await task.shouldRun()))) {
             task.lastRun = Date.now()
             if (launched > 0) await ns.sleep(11); // Sleep a short while between each script being launched, so they aren't all fighting for temp RAM at the same time.
             if (await tryRunTool(ns, tool))
@@ -456,7 +459,7 @@ async function tryRunTool(ns, tool) {
         log(ns, `ERROR: Tool ${tool.name} was not found on ${daemonHost}`, true, 'error');
         return false;
     }
-    let runningOnServer = whichServerIsRunning(ns, tool.name);
+    let runningOnServer = await whichServerIsRunning(ns, tool.name);
     if (runningOnServer != null) {
         if (verbose) log(ns, `INFO: Tool ${tool.name} is already running on server ${runningOnServer}.`);
         return true;
@@ -464,7 +467,7 @@ async function tryRunTool(ns, tool) {
     const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
     const runResult = await arbitraryExecution(ns, tool, 1, args, tool.requiredServer || "home");
     if (runResult) {
-        runningOnServer = whichServerIsRunning(ns, tool.name, false);
+        runningOnServer = await whichServerIsRunning(ns, tool.name, false);
         if (verbose) log(ns, `Ran tool: ${tool.name} ` + (args.length > 0 ? `with args ${JSON.stringify(args)} ` : '') + (runningOnServer ? `on server ${runningOnServer}.` : 'but it shut down right away.'));
         if (tool.tail === true && runningOnServer) {
             log(ns, `Tailing Tool: ${tool.name} on server ${runningOnServer}` + (args.length > 0 ? ` with args ${JSON.stringify(args)}` : ''));
@@ -506,7 +509,7 @@ async function exec(ns, script, host, numThreads, ...args) {
 async function doRoot(ns, server) {
     if (verbose) log(ns, `Rooting Server ${server.name}`);
     const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), 'home', 1, server.name);
-    await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
+    await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
 }
 
 // Main targeting loop
@@ -521,7 +524,7 @@ async function doTargetingLoop(ns) {
         try {
             let start = Date.now();
             psCache = []; // Clear the cache of the process list we update once per loop
-            buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process
+            await buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process
             const playerInfo = await getPlayerInfo(ns); // Update player info
             // Run some auxilliary processes that ease the ram burden of this daemon and add additional functionality (like managing hacknet or buying servers)
             await runPeriodicScripts(ns);
@@ -554,7 +557,14 @@ async function doTargetingLoop(ns) {
 
             // Hack: We can get stuck and never improve if we don't try to prep at least one server to improve our future targeting options.
             // So get the first un-prepped server that is within our hacking level, and move it to the front of the list.
-            var firstUnpreppedServerIndex = targetingOrder.findIndex(s => s.shouldHack() && s.canHack() && !s.isPrepped() && !s.isTargeting())
+            let firstUnpreppedServerIndex = -1;
+            for (var i = 0; i < targetingOrder.length; i++) {
+                const s = targetingOrder[i];
+                if (s.shouldHack() && s.canHack() && !s.isPrepped() && !(await s.isTargeting())) {
+                    firstUnpreppedServerIndex = i; // Note: Can't use array.findIndex due to await.
+                    break;
+                }
+            }
             if (firstUnpreppedServerIndex !== -1 && !stockMode)
                 targetingOrder.unshift(targetingOrder.splice(firstUnpreppedServerIndex, 1)[0]);
 
@@ -576,6 +586,7 @@ async function doTargetingLoop(ns) {
                 }
 
                 const server = targetingOrder[i];
+                server.resetCaches(); // For each new loop, reset any cached properties
                 // Attempt to root any servers that are not yet rooted
                 if (!server.hasRoot() && server.canCrack())
                     await doRoot(ns, server);
@@ -591,14 +602,14 @@ async function doTargetingLoop(ns) {
                     // New logic allows for unhackable servers to be prepping. Keep tabs on how many we have of each
                     if (server.isPrepped())
                         cantHackButPrepped.push(server);
-                    else if (server.isPrepping())
+                    else if (await server.isPrepping())
                         cantHackButPrepping.push(server);
-                } else if (server.isTargeting()) { // Note servers already being targeted from a prior loop
+                } else if (await server.isTargeting()) { // Note servers already being targeted from a prior loop
                     targeting.push(server); // TODO: Switch to continuously queing batches in the seconds leading up instead of far in advance with large delays
-                } else if (server.isPrepping()) { // Note servers already being prepped from a prior loop
+                } else if (await server.isPrepping()) { // Note servers already being prepped from a prior loop
                     prepping.push(server);
                 } else if (isWorkCapped() || xpOnly) { // Various conditions for which we'll postpone any additional work on servers
-                    if (xpOnly && (((nextXpCycleEnd[server.name] || 0) > start - 10000) || server.isXpFarming()))
+                    if (xpOnly && (((nextXpCycleEnd[server.name] || 0) > start - 10000) || (await server.isXpFarming())))
                         targeting.push(server); // A server counts as "targeting" if in XP mode and its due to be farmed or was in the past 10 seconds
                     else
                         skipped.push(server);
@@ -790,7 +801,7 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt', serverNames);
     // Get the information about the relative profitability of each server
     const pid = await exec(ns, getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
-    await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
+    await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
     dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
     if (!dictServerProfitInfo)
         log(ns, "WARNING: analyze-hack info unavailable. Will use fallback approach.");
@@ -817,6 +828,15 @@ class Server {
         this.prepRegressions = 0;
         this.previousCycle = null;
         this._hasRootCached = false; // Once we get root, we never lose it, so we can stop asking
+        this._isPrepped = null;
+        this._isPrepping = null;
+        this._isTargeting = null;
+        this._isXpFarming = null;
+    }
+    resetCaches() {
+        // Reset any caches that can change over time
+        // this._hasRootCached = false; // Does not need to be reset, because once rooted, this fact will never change
+        this._isPrepped = this._isPrepping = this._isTargeting = this._isXpFarming = null;
     }
     getMinSecurity() { return dictServerMinSecurityLevels[this.name] ?? 0; } // Servers not in our dictionary were purchased, and so undefined is okay
     getMaxMoney() { return dictServerMaxMoney[this.name] ?? 0; }
@@ -832,20 +852,21 @@ class Server {
     }
     // "Prepped" means current security is at the minimum, and current money is at the maximum
     isPrepped() {
+        if (this._isPrepped != null) return this._isPrepped;
         let currentSecurity = this.getSecurity();
         let currentMoney = this.getMoney();
         // Logic for whether we consider the server "prepped" (tolerate a 1% discrepancy)
-        let isPrepped = (currentSecurity == 0 || ((this.getMinSecurity() / currentSecurity) >= 0.99)) &&
+        this._isPrepped = (currentSecurity == 0 || ((this.getMinSecurity() / currentSecurity) >= 0.99)) &&
             (this.getMaxMoney() != 0 && ((currentMoney / this.getMaxMoney()) >= 0.99) || stockFocus /* Only prep security in stock-focus mode */);
-        return isPrepped;
+        return this._isPrepped;
     }
     // Function to tell if the sever is running any tools, with optional filtering criteria on the tool being run
-    isSubjectOfRunningScript(filter, useCache = true, count = false) {
+    async isSubjectOfRunningScript(filter, useCache = true, count = false) {
         const toolNames = hackTools.map(t => t.name);
         let total = 0;
         // then figure out if the servers are running the other 2, that means prep
         for (const hostname of allHostNames)
-            for (const process of ps(this.ns, hostname, useCache))
+            for (const process of await processList(this.ns, hostname, useCache))
                 if (toolNames.includes(process.filename) && process.args[0] == this.name && (!filter || filter(process))) {
                     if (count)
                         total++;
@@ -854,14 +875,17 @@ class Server {
                 }
         return count ? total : false;
     }
-    isPrepping(useCache = true) {
-        return this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4] == "prep", useCache);
+    async isPrepping(useCache = true) {
+        this._isPrepping ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4] == "prep", useCache);
+        return this._isPrepping;
     }
-    isTargeting(useCache = true) {
-        return this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('Batch'), useCache);
+    async isTargeting(useCache = true) {
+        this._isTargeting ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('Batch'), useCache);
+        return this._isTargeting;
     }
-    isXpFarming(useCache = true) {
-        return this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('FarmXP'), useCache);
+    async isXpFarming(useCache = true) {
+        this._isXpFarming ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('FarmXP'), useCache);
+        return this._isXpFarming;
     }
     serverGrowthPercentage() {
         return this.ns.getServerGrowth(this.name) * bitnodeMults.ServerGrowthRate * getPlayerHackingGrowMulti() / 100;
@@ -1366,7 +1390,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
  * @param {Server} currentTarget */
 async function prepServer(ns, currentTarget) {
     // Check if already prepped or in targeting mode, in which case presume prep server is to be skipped.
-    if (currentTarget.isPrepped() || currentTarget.isTargeting()) return null;
+    if (currentTarget.isPrepped() || (await currentTarget.isTargeting())) return null;
     let start = Date.now();
     let now = new Date(start.valueOf());
     let weakenTool = getTool("weak"), growTool = getTool("grow");
@@ -1516,7 +1540,7 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
             expTime = server.timeToGrow();
         }
         let loopRunning = false;
-        if (server.isXpFarming()) {
+        if (await server.isXpFarming()) {
             if (loopingMode)
                 loopRunning = true;
             else {
@@ -1638,9 +1662,10 @@ async function updateStockPositions(ns) {
 
 // Kills all scripts running the specified tool and targeting one of the specified servers if stock market manipulation is enabled
 async function terminateScriptsManipulatingStock(ns, servers, toolName) {
-    const problematicProcesses = allHostNames.flatMap(hostname => ps(ns, hostname)
-        .filter(process => servers.includes(process.args[0]) && (loopingMode || toolName == process.filename && process.args.length > 5 && process.args[5]))
-        .map(process => process.pid));
+    const processes = await Promise.all(allHostNames.flatMap(hostname => processList(ns, hostname)));
+    // TODO: This is unmaintanable AF
+    const problematicProcesses = processes.filter(process => servers.includes(process.args[0]) &&
+        (loopingMode || toolName == process.filename && process.args.length > 5 && process.args[5])).map(process => process.pid);
     if (problematicProcesses.length > 0) {
         log(ns, `INFO: Killing ${problematicProcesses.length} pids running ${toolName} with stock manipulation in the wrong direction.`);
         await killProcessIds(ns, problematicProcesses);
@@ -1684,9 +1709,10 @@ function removeServerByName(ns, deletedHostName) {
 let isFlaggedForDeletion = (ns, hostName) => hostName != "home" && doesFileExist(ns, getFilePath("/Flags/deleting.txt"), hostName);
 
 // Helper to construct our server lists from a list of all host names
-function buildServerList(ns, verbose = false) {
+async function buildServerList(ns, verbose = false, allServers = undefined) {
     // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans) that are not currently flagged for deletion
-    let scanResult = scanAllServers(ns).filter(hostName => !isFlaggedForDeletion(ns, hostName));
+    allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    let scanResult = allServers.filter(hostName => !isFlaggedForDeletion(ns, hostName));
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
         scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-node-'))
@@ -1755,9 +1781,11 @@ function getAllServersByTargetOrder() {
 async function runCommand(ns, ...args) {
     return await runCommand_Custom(ns, getFnRunViaNsExec(ns, daemonHost), ...args);
 }
-
 async function getNsDataThroughFile(ns, ...args) {
-    return await getNsDataThroughFile_Custom(ns, getFnRunViaNsExec(ns, daemonHost), getFnIsAliveViaNsPs(ns), ...args);
+    return await getNsDataThroughFile_Custom(ns, getFnRunViaNsExec(ns, daemonHost), ...args);
+}
+function getHomeProcIsAlive(ns) {
+    return async (pid) => (await processList(ns, 'home', false)).some(p => p.pid === pid);
 }
 
 async function establishMultipliers(ns) {
@@ -1775,7 +1803,7 @@ async function establishMultipliers(ns) {
 }
 
 class Tool {
-    /** @param {({name: string; shortName: string; shouldRun: () => boolean; args: string[]; tail: boolean; requiredServer: string; threadSpreadingAllowed: boolean; })} toolConfig
+    /** @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; tail: boolean; requiredServer: string; threadSpreadingAllowed: boolean; })} toolConfig
      * @param {Number} toolCost **/
     constructor(toolConfig, toolCost) {
         this.name = toolConfig.name;
@@ -1816,7 +1844,7 @@ class Tool {
 }
 
 /** @param {NS} ns
- * @param {({name: string; shortName: string; shouldRun: () => boolean; args: string[]; tail: boolean; requiredServer: string; threadSpreadingAllowed: boolean; })[]} allTools **/
+ * @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; tail: boolean; requiredServer: string; threadSpreadingAllowed: boolean; })[]} allTools **/
 async function buildToolkit(ns, allTools) {
     log(ns, "buildToolkit");
     let toolCosts = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(s => [s, ns.getScriptRam(s, 'home')]))`,
