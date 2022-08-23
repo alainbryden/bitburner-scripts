@@ -634,7 +634,7 @@ async function monitorStudies(ns, stat, requirement) {
     let lastStatusUpdateTime = 0;
     const initialWork = await getCurrentWorkInfo(ns);
     while (!breakToMainLoop()) {
-        const currentWork = await initialWork(ns);
+        const currentWork = await getCurrentWorkInfo(ns);
         if (!currentWork.classType || currentWork.classType != initialWork.classType)
             return announce(ns, `WARNING: Somebody interrupted our studies.` +
                 `\nWAS: ${JSON.stringify(initialWork)}\nNOW: ${JSON.stringify(currentWork)}`, 'warning');
@@ -686,8 +686,8 @@ export async function tryJoinFaction(ns, factionName) {
 /** @param {NS} ns
  * @returns {Promise<Player>} the result of ns.getPlayer() */
 async function getPlayerInfo(ns) {
-    return ns.getPlayer(); // Note: Decided that we call this frequently enough it is not worth ram-dodging
-    // return await getNsDataThroughFile(ns, `ns.getPlayerInfo()`, '/Temp/player-info.txt');
+    //return ns.getPlayer(); // Note: We may decide that we call this frequently enough it is not worth ram-dodging
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
 }
 
 /** @param {NS} ns

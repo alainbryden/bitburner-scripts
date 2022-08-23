@@ -126,6 +126,7 @@ let currentTerminalServer; // Periodically updated when intelligence farming, th
 let dictSourceFiles; // Available source files
 let bitnodeMults = null; // bitnode multipliers that can be automatically determined after SF-5
 let playerBitnode = 0;
+let haveTixApi, have4sApi; // Whether we have WSE API accesses
 /** @returns {Player} Trick to get TS to detect the correct type for the global "_cachedPlayerInfo" below. */
 let getPlayerType = () => null;
 let _cachedPlayerInfo = getPlayerType(); // stores multipliers for player abilities and other player info
@@ -174,7 +175,7 @@ function reservedMoney(ns) {
     if (!doesFileExist(ns, "SQLInject.exe", "home") && playerMoney > 200e6)
         shouldReserve += 250e6; // Start saving at 200m of the 250m required for SQLInject
     const fourSigmaCost = (bitnodeMults.FourSigmaMarketDataApiCost * 25000000000);
-    if (!ns.stock.has4SDataTIXAPI() && playerMoney >= fourSigmaCost / 2)
+    if (!have4sApi && playerMoney >= fourSigmaCost / 2)
         shouldReserve += fourSigmaCost; // Start saving if we're half-way to buying 4S market access
     return shouldReserve;
 }
@@ -476,8 +477,6 @@ async function tryRunTool(ns, tool) {
     return false;
 }
 
-let dictScriptsRun = {}; // Keep a cache of every script run on every host, and sleep if it's our first run (to work around a bitburner bug)
-
 /** Workaround a current bitburner bug by yeilding briefly to the game after executing something.
  * @param {NS} ns
  * @param {String} script - Filename of script to execute.
@@ -551,7 +550,7 @@ async function doTargetingLoop(ns) {
             // Processed servers will be split into various lists for generating a summary at the end
             const prepping = [], preppedButNotTargeting = [], targeting = [], notRooted = [], cantHack = [],
                 cantHackButPrepped = [], cantHackButPrepping = [], noMoney = [], failed = [], skipped = [];
-            var lowestUnhackable = 99999;
+            let lowestUnhackable = 99999;
 
             // Hack: We can get stuck and never improve if we don't try to prep at least one server to improve our future targeting options.
             // So get the first un-prepped server that is within our hacking level, and move it to the front of the list.
@@ -793,11 +792,16 @@ async function refreshDynamicServerData(ns, serverNames) {
     const pid = await exec(ns, getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getFnIsAliveViaNsPs(ns), pid);
     dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
-    if (!dictServerProfitInfo) return log(ns, "WARNING: analyze-hack info unavailable. Will use fallback approach.");
-    dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
+    if (!dictServerProfitInfo)
+        log(ns, "WARNING: analyze-hack info unavailable. Will use fallback approach.");
+    else
+        dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
     //ns.print(dictServerProfitInfo);
     if (options.i)
         currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()', '/Temp/terminal-server.txt'));
+    // Determine whether we have purchased stock API accesses yet
+    haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.hasTIXAPIAccess()`, `/Temp/stock-hasTIXAPIAccess.txt`);
+    have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`, `/Temp/stock-has4SDataTIXAPI.txt`);
 }
 
 class Server {
@@ -1601,7 +1605,7 @@ let shouldManipulateHack = []; // Dict of server names, with a value of "true" i
 let failedStockUpdates = 0;
 /** @param {NS} ns **/
 async function updateStockPositions(ns) {
-    if (!ns.stock.hasTIXAPIAccess()) return; // No point in attempting anything here if the user doesn't have stock market access yet.
+    if (!haveTixApi) return; // No point in attempting anything here if the user doesn't have stock market access yet.
     let updatedPositions = ns.read(`/Temp/stock-probabilities.txt`); // Should be a dict of stock symbol -> prob left by the stockmaster.js script.
     if (!updatedPositions) {
         failedStockUpdates++;

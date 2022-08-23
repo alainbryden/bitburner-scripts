@@ -150,7 +150,8 @@ async function initializeNewBitnode(ns, player) {
  * @param {NS} ns */
 async function mainLoop(ns) {
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-	const stocksValue = await getStocksValue(ns);
+	let stocksValue = 0;
+	try { await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
 	await manageReservedMoney(ns, player, stocksValue);
 	await checkOnDaedalusStatus(ns, player, stocksValue);
 	await checkIfBnIsComplete(ns, player);
@@ -303,8 +304,11 @@ async function checkOnRunningScripts(ns, player) {
 	while (killScripts.length > 0)
 		await killScript(ns, killScripts.pop(), runningScripts);
 
+	// Hold back on launching certain scripts if we are low on home RAM
+	const homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
+
 	// Launch stock-master in a way that emphasizes it as our main source of income early-on
-	if (!findScript('stockmaster.js') && !reserveForDaedalus)
+	if (!findScript('stockmaster.js') && !reserveForDaedalus && homeRam >= 32)
 		launchScriptHelper(ns, 'stockmaster.js', [
 			"--fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
 			"--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
@@ -559,10 +563,11 @@ async function maybeInstallAugmentations(ns, player) {
 */
 async function shouldDelayInstall(ns, player, facmanOutput) {
 	// Are we close to being able to afford 4S TIX data?
-	if (!options['disable-wait-for-4s'] && !ns.stock.has4SDataTIXAPI()) {
+	if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`, `/Temp/stock-has4SDataTIXAPI.txt`))) {
 		const totalWorth = player.money + await getStocksValue(ns);
+		const has4S = await getNsDataThroughFile(ns, `ns.stock.has4SData()`, `/Temp/stock-has4SData.txt`);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
-			(ns.stock.has4SData() ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
+			(has4S ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		const ratio = totalWorth / totalCost;
 		// If we're e.g. 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		// TODO: If ratio is > 1, we can afford it - but stockmaster won't buy until it has e.g. 20% more than the cost
