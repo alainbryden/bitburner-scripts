@@ -851,7 +851,8 @@ async function measureRepGainRate(ns, fnSampleReputation) {
     // The game no longer provides the rep gain rate for a given work type, so we must measure it
     const initialReputation = await fnSampleReputation();
     let nextTickReputation;
-    while (initialReputation == (nextTickReputation = await fnSampleReputation()))
+    let start = Date.now();
+    while (initialReputation == (nextTickReputation = await fnSampleReputation()) && Date.now() - start < 250)
         await ns.sleep(50);
     return (nextTickReputation - initialReputation) * 5; // Assume this rep gain was for a 200 tick
 }
