@@ -338,9 +338,10 @@ async function mainLoop(ns) {
     let foundWork = false;
     if (factionsWeCanWorkFor.length > 0 && !options['crime-focus']) {
         // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
-        let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => dictFactionFavors[b] - dictFactionFavors[a])[0];
+        let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => (dictFactionFavors[b] || 0) - (dictFactionFavors[a] || 0))[0];
         let targetRep = 1000 + (await getFactionReputation(ns, mostFavorFaction)) * 1.05; // Hack: Grow rep by ~5%, plus 1000 incase it's currently 0
-        ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) with highest-favor faction: ${mostFavorFaction} (${dictFactionFavors[mostFavorFaction]?.toFixed(2)} favor)`);
+        ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) ` +
+            `with highest-favor faction: ${mostFavorFaction} (${(dictFactionFavors[mostFavorFaction] || 0).toFixed(2)} favor)`);
         foundWork = await workForSingleFaction(ns, mostFavorFaction, false, false, targetRep);
     }
     if (!foundWork && !options['no-crime']) { // Otherwise, kill some time by doing crimes for a little while
@@ -747,7 +748,7 @@ let lastFactionWorkStatus = "";
 export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = undefined) {
     const repToFavour = (rep) => Math.ceil(25500 * 1.02 ** (rep - 1) - 25000);
     let highestRepAug = forceBestAug ? mostExpensiveAugByFaction[factionName] : mostExpensiveDesiredAugByFaction[factionName];
-    let startingFavor = dictFactionFavors[factionName];
+    let startingFavor = dictFactionFavors[factionName] || 0;
     let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
     // When to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
     let factionRepRequired = forceRep ? forceRep : forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
