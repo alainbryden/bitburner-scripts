@@ -173,11 +173,13 @@ async function filesExist(ns, filenames, hostname = undefined) {
 let psCache = (/**@returns{{[serverName: string]: ProcessInfo[];}}*/() => [])();
 /** PS can get expensive, and we use it a lot so we cache this for the duration of a loop
  * @param {NS} ns
- * @returns {Promise<ProcessInfo[]>} */
-async function processList(ns, serverName, canUseCache = true) {
+ * @returns {ProcessInfo[]} */
+function processList(ns, serverName, canUseCache = true) {
     const cachedResult = psCache[serverName];
     const processList = canUseCache && cachedResult !== undefined ? cachedResult :
-        (psCache[serverName] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', [serverName]));
+        // Note: We experimented with ram-dodging `ps`, but there's so much data involed that serializing/deserializing generates a lot of latency
+        //(psCache[serverName] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', [serverName]));
+        (psCache[serverName] = ns.ps(serverName));
     return processList;
 }
 
@@ -202,7 +204,7 @@ export async function main(ns) {
 
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
-    const competingDaemons = (await processList(ns, "home")).filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
+    const competingDaemons = processList(ns, "home").filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
     if (competingDaemons.length > 0) { // We expect only 1, due to this logic, but just in case, generalize the code below to support multiple.
         const daemonPids = competingDaemons.map(p => p.pid);
         log(ns, `Info: Restarting another '${scriptName}' instance running on home (pid: ${daemonPids} args: ` +
@@ -413,7 +415,7 @@ async function kickstartHackXp(ns) {
  * @returns {Promise<string>} */
 async function whichServerIsRunning(ns, scriptName, canUseCache = true) {
     for (const server of getAllServers())
-        if ((await processList(ns, server.name, canUseCache)).some(process => process.filename === scriptName))
+        if (processList(ns, server.name, canUseCache).some(process => process.filename === scriptName))
             return server.name;
     return null;
 }
@@ -792,7 +794,7 @@ async function doTargetingLoop(ns) {
 // How much a weaken thread is expected to reduce security by
 let actualWeakenPotency = () => bitnodeMults.ServerWeakenRate * weakenThreadPotency;
 
-// Dictionaries of static server information
+// Dictionaries of server information
 let serversDictCommand = command => `Object.fromEntries(ns.args.map(server => [server, ${command}]))`;
 let dictInitialServerInfos = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerRequiredHackinglevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
@@ -800,26 +802,29 @@ let dictServerNumPortsRequired = (/**@returns{{[serverName: string]: number;}}*/
 let dictServerMinSecurityLevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerMaxMoney = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerProfitInfo = (/**@returns{{[serverName: string]: {gainRate: number, expRate: number}}}*/() => undefined)();
-
+let dictServerGrowths = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 
 /** Gathers up arrays of server data via external request to have the data written to disk.
  * @param {NS} ns */
 async function getStaticServerData(ns, serverNames) {
-    // The "GetServer" object result is now required to use the formulas API.
-    // TODO: See if in the future they add a "dummyServer" function or similar
-    // TODO: Iff this becomes permanent, might as well get other static server data from the resulting server objectswhy is it that every keystroke
-    dictInitialServerInfos = await getNsDataThroughFile(ns, serversDictCommand('ns.getServer(server)'), '/Temp/servers-getServer.txt', serverNames);
     dictServerRequiredHackinglevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerRequiredHackingLevel(server)'), '/Temp/servers-hack-req.txt', serverNames);
     dictServerNumPortsRequired = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerNumPortsRequired(server)'), '/Temp/servers-num-ports.txt', serverNames);
+    dictServerGrowths = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerGrowth(server)'), '/Temp/servers-growth.txt', serverNames);
+    // The "GetServer" object result is now required to use the formulas API (due to type checking that the parameter is a valid "server" instance)
+    // TODO: See if in the future they add a "ns.formulas.dummyServer()" function or similar, then we no longer need this.    
+    // TODO: Iff this becomes permanent, might as well get other static server data from the resulting server objectswhy is it that every keystroke
+    dictInitialServerInfos = await getNsDataThroughFile(ns, serversDictCommand('ns.getServer(server)'), '/Temp/servers-getServer.txt', serverNames);
     await refreshDynamicServerData(ns, serverNames);
 }
 
-/** @param {NS} ns **/
+/** Refresh data that might change over time, but for which having precice up-to-date information isn't critical.
+ * @param {NS} ns **/
 async function refreshDynamicServerData(ns, serverNames) {
     if (verbose) log(ns, "refreshDynamicServerData");
+    // Min Security / Max Money can be affected by Hashnet purchases, so we should update this occasionally
     dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt', serverNames);
     dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt', serverNames);
-    // Get the information about the relative profitability of each server
+    // Get the information about the relative profitability of each server (affects targetting order)
     const pid = await exec(ns, getFilePath('analyze-hack.js'), daemonHost, 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
     const analyzeHackResult = dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
@@ -827,11 +832,12 @@ async function refreshDynamicServerData(ns, serverNames) {
         log(ns, "WARNING: analyze-hack info unavailable. Will use fallback approach.");
     else
         dictServerProfitInfo = Object.fromEntries(JSON.parse(analyzeHackResult).map(s => [s.hostname, s]));
-    if (options.i)
-        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()', '/Temp/terminal-server.txt'));
-    // Determine whether we have purchased stock API accesses yet
+    // Determine whether we have purchased stock API accesses yet (affects reserving and attempts to manipulate stock markets)
     haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.hasTIXAPIAccess()`, `/Temp/stock-hasTIXAPIAccess.txt`);
     have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`, `/Temp/stock-has4SDataTIXAPI.txt`);
+    // If required, determine the current terminal server (used when intelligence farming)
+    if (options.i)
+        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()', '/Temp/terminal-server.txt'));
 }
 
 class Server {
@@ -843,22 +849,24 @@ class Server {
         this.server = dictInitialServerInfos[node];
         this.requiredHackLevel = dictServerRequiredHackinglevels[node];
         this.portsRequired = dictServerNumPortsRequired[node];
+        this.serverGrowth = dictServerGrowths[node];
         this.percentageToSteal = 1.0 / 16.0; // This will get tweaked automatically based on RAM available and the relative value of this server
         this.previouslyPrepped = false;
         this.prepRegressions = 0;
         this.previousCycle = null;
-        this._hasRootCached = false; // Once we get root, we never lose it, so we can stop asking
         this._isPrepped = null;
         this._isPrepping = null;
         this._isTargeting = null;
         this._isXpFarming = null;
         this._percentStolenPerHackThread = null;
+        this._hasRootCached = null; // Once we get root, we never lose it, so we can stop asking
     }
     resetCaches() {
         // Reset any caches that can change over time
-        // this._hasRootCached = false; // Does not need to be reset, because once rooted, this fact will never change
         this._isPrepped = this._isPrepping = this._isTargeting = this._isXpFarming =
             this._percentStolenPerHackThread = null;
+        // Once true - Does not need to be reset, because once rooted, this fact will never change
+        if (this._hasRootCached == false) this._hasRootCached = null;
     }
     getMinSecurity() { return dictServerMinSecurityLevels[this.name] ?? 0; } // Servers not in our dictionary were purchased, and so undefined is okay
     getMaxMoney() { return dictServerMaxMoney[this.name] ?? 0; }
@@ -884,12 +892,11 @@ class Server {
     }
     // Function to tell if the sever is running any tools, with optional filtering criteria on the tool being run
     async isSubjectOfRunningScript(filter, useCache = true, count = false) {
-        const toolNames = hackTools.map(t => t.name);
         let total = 0;
-        // then figure out if the servers are running the other 2, that means prep
-        for (const hostname of allHostNames)
-            for (const process of await processList(this.ns, hostname, useCache))
-                if (toolNames.includes(process.filename) && process.args[0] == this.name && (!filter || filter(process))) {
+        for (const hostname of allHostNames) // For each server that could be running scripts (TODO: Maintain a smaller list of only servers with more than 1.6GB RAM)
+            for (const process of processList(this.ns, hostname, useCache)) // For all scripts on the server
+                // Does the script's arguments suggest it is targetting this server and matches the filter criteria?
+                if (process.args.length > 0 && process.args[0] == this.name && (!filter || filter(process))) {
                     if (count)
                         total++;
                     else
@@ -902,15 +909,15 @@ class Server {
         return this._isPrepping;
     }
     async isTargeting(useCache = true) {
-        this._isTargeting ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('Batch'), useCache);
+        this._isTargeting ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].startsWith('Batch'), useCache);
         return this._isTargeting;
     }
     async isXpFarming(useCache = true) {
-        this._isXpFarming ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].includes('FarmXP'), useCache);
+        this._isXpFarming ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4] == 'FarmXP', useCache);
         return this._isXpFarming;
     }
     serverGrowthPercentage() {
-        return this.ns.getServerGrowth(this.name) * bitnodeMults.ServerGrowthRate * getPlayerHackingGrowMulti() / 100;
+        return this.serverGrowth * bitnodeMults.ServerGrowthRate * getPlayerHackingGrowMulti() / 100;
     }
     adjustedGrowthRate() {
         return Math.min(maxGrowthRate, 1 + ((unadjustedGrowthRate - 1) / this.getMinSecurity()));
@@ -974,7 +981,7 @@ class Server {
     getWeakenThreadsNeededAfterGrowth() {
         return Math.ceil((this.getGrowThreadsNeededAfterTheft() * growthThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14));
     }
-    hasRoot() { return this._hasRootCached || (this._hasRootCached = this.ns.hasRootAccess(this.name)); }
+    hasRoot() { return this._hasRootCached ??= this.ns.hasRootAccess(this.name); }
     isHost() { return this.name == daemonHost; }
     totalRam() {
         let maxRam = this.ns.getServerMaxRam(this.name);
@@ -1012,8 +1019,10 @@ function getTotalNetworkUtilization() {
     return utilizationStats.totalUsedRam / utilizationStats.totalMaxRam;
 }
 
-// return a "performance snapshot" (Ram required for the cycle) to compare against optimal, or another snapshot
-// TODO: Better gauge of performance might be money stolen per (RAM * time) cost
+/** return a "performance snapshot" (Ram required for the cycle) to compare against optimal, or another snapshot
+ * TODO: Better gauge of performance might be money stolen per (RAM * time) cost
+ * @param {} currentTarget
+ * @param {{ listOfServersFreeRam: number[]; totalMaxRam: number; totalFreeRam: number; totalUsedRam: number; }} networkStats */
 function getPerformanceSnapshot(currentTarget, networkStats) {
     // The total RAM cost of running one weaken/hack/grow cycle to steal `currentTarget.percentageToSteal` of `currentTarget.money`
     const weaken1Cost = currentTarget.getWeakenThreadsNeededAfterTheft() * getTool("weak").cost;
@@ -1023,13 +1032,16 @@ function getPerformanceSnapshot(currentTarget, networkStats) {
     // Simulate how many times we could schedule this batch given current server ram availability
     // (and hope that whatever executes the tasks in this batch is clever enough to slot them in as such (TODO: simulate using our actual executor logic?)
     const jobs = [weaken1Cost, weaken2Cost, growCost, hackCost].sort((a, b) => b - a); // Sort jobs largest to smallest
-    const simulatedRemainingRam = networkStats.listOfServersFreeRam.slice();
+    const simulatedRemainingRam = networkStats.listOfServersFreeRam.slice()
+        // Scheduler would sort servers by largest to smallest before slotting jobs
+        // Technically, we should re-sort after each simulated job, but for performance (and because this is an estimate), don't bother.
+        .sort((a, b) => b - a);
     var maxScheduled = -1;
     var canScheduleAnother = true;
     while (canScheduleAnother && maxScheduled++ <= maxBatches) {
         for (const job of jobs) {
             // Find a free slot for this job, starting with largest servers as the scheduler tends to do
-            const freeSlot = simulatedRemainingRam.sort((a, b) => b - a).findIndex(ram => ram >= job);
+            const freeSlot = simulatedRemainingRam/*.sort((a, b) => b - a)*/.findIndex(ram => ram >= job);
             if (freeSlot === -1)
                 canScheduleAnother = false;
             else
@@ -1042,7 +1054,7 @@ function getPerformanceSnapshot(currentTarget, networkStats) {
         // Given our timing delay, **approximately** how many cycles can we initiate before the first batch's first task fires?
         // TODO: Do a better job of calculating this *outside* of the performance snapshot, and only calculate it once.
         optimalPacedCycles: Math.min(maxBatches, Math.max(1, Math.floor(((currentTarget.timeToWeaken()) / cycleTimingDelay).toPrecision(14))
-            - 1)), // Fudge factor, this isnt an exact scuence
+            - 1)), // Fudge factor, this isnt an exact science
         // Given RAM availability, how many cycles could we schedule across all hosts?
         maxCompleteCycles: Math.max(maxScheduled - 1, 1) // Fudge factor. The executor isn't perfect
     };
@@ -1816,7 +1828,7 @@ async function getNsDataThroughFile(ns, ...args) {
     return await getNsDataThroughFile_Custom(ns, getFnRunViaNsExec(ns, daemonHost), ...args);
 }
 function getHomeProcIsAlive(ns) {
-    return async (pid) => (await processList(ns, daemonHost, false)).some(p => p.pid === pid);
+    return (pid) => processList(ns, daemonHost, false).some(p => p.pid === pid);
 }
 
 async function establishMultipliers(ns) {
