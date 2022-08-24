@@ -88,6 +88,7 @@ async function startUp(ns) {
 		bnCompletionSuppressed = stanekLaunched = false;
 	playerInstalledAugCount = wdHack = null;
 	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
+	lastStatusLog = "";
 	installedAugmentations = killScripts = [];
 
 	// Collect and cache some one-time data
@@ -494,10 +495,12 @@ async function maybeInstallAugmentations(ns, player) {
 	const reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * player.playtimeSinceLastAug / 3.6E6);
 	const augsNeeded = Math.max(1, options['install-at-aug-count'] - reducedAugReq);
 	const augsNeededInclNf = Math.max(1, options['install-at-aug-plus-nf-count'] - reducedAugReq);
-	const augSummary = `${formatMoney(facman.total_rep_cost + facman.total_aug_cost)} for ${facman.affordable_nf_count} levels of ` +
-		`NeuroFlux and ${affordableAugCount - Math.sign(facman.affordable_nf_count)} of ${facman.unowned_count - 1} accessible augmentations: ${facman.affordable_augs.join(", ")}`;
-	let reserveNeeded = facman.total_rep_cost + facman.total_aug_cost;
-	let resetStatus = `Reserving ${augSummary}`
+	const uniqueAugCount = affordableAugCount - Math.sign(facman.affordable_nf_count); // Don't count NF if included
+	let totalCost = facman.total_rep_cost + facman.total_aug_cost;
+	const augSummary = `${uniqueAugCount} of ${facman.unowned_count - 1} remaining augmentations` +
+		(facman.affordable_nf_count > 0 ? `+ ${facman.affordable_nf_count} levels of NeuroFlux.` : '.') +
+		(uniqueAugCount > 0 ? `\n  Augs: [\"${facman.affordable_augs.join("\", \"")}\"]` : '');
+	let resetStatus = `Reserving ${formatMoney(totalCost)} to install ${augSummary}`
 	let shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
 	// If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
@@ -505,14 +508,15 @@ async function maybeInstallAugmentations(ns, player) {
 	if (player.factions.includes("Daedalus") && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
 		shouldReset = true;
 		resetStatus = `We have enough reputation with Daedalus to unlock donations on our next reset.\n${resetStatus}`;
-		if (reserveNeeded == 0) reserveNeeded = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
+		if (totalCost == 0) totalCost = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
 	}
 
 	// If not ready to reset, set a status with our progress and return
 	if (!shouldReset) {
 		setStatus(ns, `Currently at ${formatDuration(player.playtimeSinceLastAug)} since last aug. ` +
-			`Need ${augsNeeded} unique augs or ${augsNeededInclNf} including NeuroFlux levels to install.\n` +
-			`Can afford: ${augSummary}`, augSummary);
+			`Waiting for ${augsNeeded} new augs (or ${augsNeededInclNf} including NeuroFlux levels) before installing.` +
+			`\nCan currently get: ${augSummary}` +
+			`\n  Total Cost: ${formatMoney(totalCost)} (\`run faction-manager.js\` for details)`, augSummary);
 		return reservedPurchase = 0; // If we were previously reserving money for a purchase, reset that flag now
 	}
 	// If we want to reset, but there is a reason to delay, don't reset
@@ -520,20 +524,20 @@ async function maybeInstallAugmentations(ns, player) {
 		return reservedPurchase = 0;
 
 	// Ensure the money needed for the above augs doesn't get ripped out from under us by reserving it and waiting one more loop
-	if (reservedPurchase < reserveNeeded) {
+	if (reservedPurchase < totalCost) {
 		if (reservedPurchase != 0) // If we were already reserving for a purchase and the nubmer went up, log a notice of the timer being reset.
 			log(ns, `INFO: The augmentation purchase we can afford has increased from ${formatMoney(reservedPurchase)} ` +
-				`to ${formatMoney(reserveNeeded)}. Resetting the timer before we install augmentations.`);
+				`to ${formatMoney(totalCost)}. Resetting the timer before we install augmentations.`);
 		installCountdown = Date.now() + options['install-countdown']; // Each time we can afford more augs, reset the install delay timer
-		await ns.write("reserve.txt", reserveNeeded, "w"); // Should prevent other scripts from spending this money
+		await ns.write("reserve.txt", totalCost, "w"); // Should prevent other scripts from spending this money
 	}
 	// We must wait until the configured cooldown elapses before we install augs.
 	if (installCountdown > Date.now()) {
-		resetStatus += `\nWaiting for ${formatDuration(options['install-countdown'])} (--install-countdown) to elapse ` +
-			`with no new affordable augs before we install...`;
+		resetStatus += `\n  Waiting for ${formatDuration(options['install-countdown'])} (--install-countdown) ` +
+			`to elapse before we install, in case we're close to being able to purchase more augmentations...`;
 		setStatus(ns, resetStatus);
 		ns.toast(`Heads up: Autopilot plans to reset in ${formatDuration(installCountdown - Date.now())}`, 'info');
-		return reservedPurchase = reserveNeeded;
+		return reservedPurchase = totalCost;
 	}
 
 	// Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
