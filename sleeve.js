@@ -200,7 +200,7 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
         // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
         const bbTasks = [
             // Note: Sleeve 0 might still be used for faction work (unless --disable-follow-player is set), so don't assign them a 'unique' task
-            /*0*/options['enable-bladeburner-team-building'] ? ["Support main sleeve"] : ["Infiltrate synthoids"]
+            /*0*/options['enable-bladeburner-team-building'] ? ["Support main sleeve"] : ["Infiltrate synthoids"],
             // Note: Each contract type can only be performed by one sleeve at a time (similar to working for factions)
             /*1*/["Take on contracts", "Retirement"], /*2*/["Take on contracts", "Bounty Hunter"], /*3*/["Take on contracts", "Tracking"],
             // Other bladeburner work can be duplicated, but tackling a variety is probably useful. Overrides occur below
