@@ -1065,7 +1065,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             lastStatusUpdateTime = Date.now();
             if (!backdoored) { // Check if an external script has backdoored this company's server yet. If so, it affects our ETA. (Don't need to check again once we discover it is)
                 backdoored = await checkForBackdoor(ns, companyName);
-                repRequiredForFaction -= 100_000;
+                if (backdoored) repRequiredForFaction -= 100_000;
             }
             // Measure rep gain rate to give an ETA
             const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName);
