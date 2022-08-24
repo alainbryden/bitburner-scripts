@@ -1728,15 +1728,14 @@ function removeServerByName(ns, deletedHostName) {
     resetServerSortCache(); // Reset the cached sorted lists of objects
 }
 
-// Indication that a server has been flagged for deletion (by the host manager). Doesn't count for home of course, as this is where the flag file is stored for copying.
-let isFlaggedForDeletion = (ns, hostName) => hostName != "home" && doesFileExist(ns, getFilePath("/Flags/deleting.txt"), hostName);
-
 // Helper to construct our server lists from a list of all host names
 async function buildServerList(ns, verbose = false, allServers = undefined) {
     // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans) that are not currently flagged for deletion
     allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
-    const flaggedForDeletion = await filesExist
-    let scanResult = allServers.filter(hostName => !isFlaggedForDeletion(ns, hostName));
+    // Indication that a server has been flagged for deletion (by the host manager).
+    const flaggedForDeletion = await getNsDataThroughFile(ns, `ns.args.slice(1).map(s => ns.fileExists(ns.args[0], s))`,
+        '/Temp/servers-have-file.txt', [getFilePath("/Flags/deleting.txt"), ...allServers]);
+    let scanResult = allServers.filter((hostName, i) => hostName == "home" || !flaggedForDeletion[i]);
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
         scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-node-'))
