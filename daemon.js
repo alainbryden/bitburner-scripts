@@ -92,20 +92,20 @@ const maxLoopTime = 1000; //ms
 let loopInterval = 1000; //ms
 // the number of milliseconds to delay the grow execution after theft to ensure it doesn't trigger too early and have no effect.
 // For timing reasons the delay between each step should be *close* 1/4th of this number, but there is some imprecision
-let cycleTimingDelay; // (Set in command line args)
-let queueDelay; // (Set in command line args) The delay that it can take for a script to start, used to pessimistically schedule things in advance
-let maxBatches; // (Set in command line args) The max number of batches this daemon will spool up to avoid running out of IRL ram (TODO: Stop wasting RAM by scheduling batches so far in advance. e.g. Grind XP while waiting for cycle start!)
-let maxTargets; // (Set in command line args) Initial value, will grow if there is an abundance of RAM
+let cycleTimingDelay = 0; // (Set in command line args)
+let queueDelay = 0; // (Set in command line args) The delay that it can take for a script to start, used to pessimistically schedule things in advance
+let maxBatches = 0; // (Set in command line args) The max number of batches this daemon will spool up to avoid running out of IRL ram (TODO: Stop wasting RAM by scheduling batches so far in advance. e.g. Grind XP while waiting for cycle start!)
+let maxTargets = 0; // (Set in command line args) Initial value, will grow if there is an abundance of RAM
 let maxPreppingAtMaxTargets = 3; // The max servers we can prep when we're at our current max targets and have spare RAM
 // Allows some home ram to be reserved for ad-hoc terminal script running and when home is explicitly set as the "preferred server" for starting a helper
-let homeReservedRam; // (Set in command line args)
+let homeReservedRam = 0; // (Set in command line args)
 
-let allHostNames = []; // simple name array of servers that have been discovered
-let _allServers = []; // Array of Server objects - our internal model of servers for hacking
+let allHostNames = (/**@returns {string[]}*/() => [])(); // simple name array of servers that have been discovered
+let _allServers = (/**@returns{Server[]}*/() => [])(); // Array of Server objects - our internal model of servers for hacking
 // Lists of tools (external scripts) run
 let hackTools, asynchronousHelpers, periodicScripts;
 // toolkit var for remembering the names and costs of the scripts we use the most
-let toolsByShortName; // Dictionary of tools keyed by tool short name
+let toolsByShortName = (/**@returns{{[id: string]: Tool;}}*/() => undefined)(); // Dictionary of tools keyed by tool short name
 let allHelpersRunning = false; // Tracks whether all long-lived helper scripts have been launched
 let studying = false; // Whether we're currently studying
 
@@ -122,17 +122,13 @@ let recoveryThreadPadding = 1; // How many multiples to increase the weaken/grow
 
 let daemonHost = null; // the name of the host of this daemon, so we don't have to call the function more than once.
 let hasFormulas = true;
-let currentTerminalServer; // Periodically updated when intelligence farming, the current connected terminal server.
-let dictSourceFiles; // Available source files
+let currentTerminalServer = ""; // Periodically updated when intelligence farming, the current connected terminal server.
+let dictSourceFiles = (/**@returns{{[bitnode: number]: number;}}*/() => undefined)(); // Available source files
 let bitnodeMults = null; // bitnode multipliers that can be automatically determined after SF-5
 let playerBitnode = 0;
-let haveTixApi, have4sApi; // Whether we have WSE API accesses
-/** @returns {Player} Trick to get TS to detect the correct type for the global "_cachedPlayerInfo" below. */
-let getPlayerType = () => null;
-let _cachedPlayerInfo = getPlayerType(); // stores multipliers for player abilities and other player info
-/** @returns {NS} Trick to get TS to detect the correct type for the global ns instance below. */
-let getNSType = () => null;
-let _ns = getNSType(); // Globally available ns reference, for convenience
+let haveTixApi = false, have4sApi = false; // Whether we have WSE API accesses
+let _cachedPlayerInfo = (/**@returns{Player}*/() => undefined)(); // stores multipliers for player abilities and other player info
+let _ns = (/**@returns{NS}*/() => undefined)(); // Globally available ns reference, for convenience
 
 // Property to avoid log churn if our status hasn't changed since the last loop
 let lastUpdate = "";
@@ -153,28 +149,43 @@ async function getPlayerInfo(ns) {
 
 function playerHackSkill() { return _cachedPlayerInfo.skills.hacking; }
 
-function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.mults.hacking_grow };
+function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.mults.hacking_grow; };
 
 /** Helper to check if a file exists.
  * A helper is used so that we have the option of exploring alternative implementations that cost less/no RAM.
  * @param {NS} ns */
-function doesFileExist(ns, filename, hostname = undefined) { return ns.fileExists(filename, hostname); }
+function doesFileExist(ns, filename, hostname = undefined) {
+    // Fast (and free) - for local files, try to read the file and ensure it's not empty
+    if ((hostname === undefined || hostname === daemonHost) && !filename.endsWith('.exe'))
+        return ns.read(filename) != '';
+    return ns.fileExists(filename, hostname);
+}
 
-let psCache = [];
+/** Helper to check which of a set of files exist on a remote server in a single batch ram-dodging request
+ * @param {NS} ns
+ * @param {string[]} filenames
+ * @returns {Promise<boolean[]>} */
+async function filesExist(ns, filenames, hostname = undefined) {
+    return await getNsDataThroughFile(ns, `ns.args.slice(1).map(f => ns.fileExists(f, ns.args[0]))`,
+        '/Temp/files-exist.txt', [hostname ?? daemonHost, ...filenames])
+}
+
+let psCache = (/**@returns{{[serverName: string]: ProcessInfo[];}}*/() => [])();
 /** PS can get expensive, and we use it a lot so we cache this for the duration of a loop
  * @param {NS} ns
  * @returns {Promise<ProcessInfo[]>} */
-async function processList(ns, server, canUseCache = true) {
-    const cachedResult = psCache[server];
-    return canUseCache && cachedResult ? cachedResult :
-        (psCache[server] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', [server]));
+async function processList(ns, serverName, canUseCache = true) {
+    const cachedResult = psCache[serverName];
+    const processList = canUseCache && cachedResult !== undefined ? cachedResult :
+        (psCache[serverName] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', [serverName]));
+    return processList;
 }
 
 // Returns the amount of money we should currently be reserving. Dynamically adapts to save money for a couple of big purchases on the horizon
 function reservedMoney(ns) {
     let shouldReserve = Number(ns.read("reserve.txt") || 0);
     let playerMoney = ns.getServerMoneyAvailable("home");
-    if (!doesFileExist(ns, "SQLInject.exe", "home") && playerMoney > 200e6)
+    if (!ownedCracks.includes("SQLInject.exe") && playerMoney > 200e6)
         shouldReserve += 250e6; // Start saving at 200m of the 250m required for SQLInject
     const fourSigmaCost = (bitnodeMults.FourSigmaMarketDataApiCost * 25000000000);
     if (!have4sApi && playerMoney >= fourSigmaCost / 2)
@@ -279,7 +290,7 @@ export async function main(ns) {
     periodicScripts = [
         // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
         { interval: 25000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !allHostNames.includes("darkweb") },
-        { interval: 26000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && getNumPortCrackers(ns) != 5 },
+        { interval: 26000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && ownedCracks.length != 5 },
         { interval: 27000, name: "/Tasks/contractor.js", requiredServer: "home" }, // Periodically look for coding contracts that need solving
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money.
         { interval: 28000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
@@ -508,7 +519,7 @@ async function exec(ns, script, host, numThreads, ...args) {
  * Execute an external script that roots a server, and wait for it to complete. **/
 async function doRoot(ns, server) {
     if (verbose) log(ns, `Rooting Server ${server.name}`);
-    const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), 'home', 1, server.name);
+    const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), daemonHost, 1, server.name);
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
 }
 
@@ -525,12 +536,13 @@ async function doTargetingLoop(ns) {
             let start = Date.now();
             psCache = []; // Clear the cache of the process list we update once per loop
             await buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process
+            await updatePortCrackers(ns); // Check if any new port crackers have been purchased
             const playerInfo = await getPlayerInfo(ns); // Update player info
             // Run some auxilliary processes that ease the ram burden of this daemon and add additional functionality (like managing hacknet or buying servers)
             await runPeriodicScripts(ns);
 
             if (stockMode) await updateStockPositions(ns); // In stock market manipulation mode, get our current position in all stocks
-            const targetingOrder = getAllServersByTargetOrder();
+            const targetingOrder = await getAllServersByTargetOrder();
 
             if (loops % 60 == 0) { // For more expensive updates, only do these every so often
                 // If we have not yet launched all helpers (e.g. awaiting more home ram, or TIX API to be purchased) see if any are now ready to be run
@@ -551,8 +563,9 @@ async function doTargetingLoop(ns) {
                 }
             }
             // Processed servers will be split into various lists for generating a summary at the end
-            const prepping = [], preppedButNotTargeting = [], targeting = [], notRooted = [], cantHack = [],
-                cantHackButPrepped = [], cantHackButPrepping = [], noMoney = [], failed = [], skipped = [];
+            /**@returns{Server[]}*/const n = () => []; // Trick to initialize new arrays with a strong type
+            const prepping = n(), preppedButNotTargeting = n(), targeting = n(), notRooted = n(), cantHack = n(),
+                cantHackButPrepped = n(), cantHackButPrepping = n(), noMoney = n(), failed = n(), skipped = n();
             let lowestUnhackable = 99999;
 
             // Hack: We can get stuck and never improve if we don't try to prep at least one server to improve our future targeting options.
@@ -729,7 +742,7 @@ async function doTargetingLoop(ns) {
 
             // Log some status updates
             let keyUpdates = `Of ${allHostNames.length} total servers:\n > ${noMoney.length} were ignored (owned or no money)`;
-            if (notRooted.length > 0)
+            if (notRooted.length > 0 || ownedCracks.length < 5)
                 keyUpdates += `, ${notRooted.length} are not rooted (missing ${crackNames.filter(c => !ownedCracks.includes(c)).join(', ')})`;
             if (cantHack.length > 0)
                 keyUpdates += `\n > ${cantHack.length} cannot be hacked (${cantHackButPrepping.length} prepping, ` +
@@ -781,14 +794,21 @@ let actualWeakenPotency = () => bitnodeMults.ServerWeakenRate * weakenThreadPote
 
 // Dictionaries of static server information
 let serversDictCommand = command => `Object.fromEntries(ns.args.map(server => [server, ${command}]))`;
-let dictServerRequiredHackinglevels;
-let dictServerNumPortsRequired;
-let dictServerMinSecurityLevels;
-let dictServerMaxMoney;
-let dictServerProfitInfo;
+let dictInitialServerInfos = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
+let dictServerRequiredHackinglevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
+let dictServerNumPortsRequired = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
+let dictServerMinSecurityLevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
+let dictServerMaxMoney = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
+let dictServerProfitInfo = (/**@returns{{[serverName: string]: {gainRate: number, expRate: number}}}*/() => undefined)();
 
-// Gathers up arrays of server data via external request to have the data written to disk.
+
+/** Gathers up arrays of server data via external request to have the data written to disk.
+ * @param {NS} ns */
 async function getStaticServerData(ns, serverNames) {
+    // The "GetServer" object result is now required to use the formulas API.
+    // TODO: See if in the future they add a "dummyServer" function or similar
+    // TODO: Iff this becomes permanent, might as well get other static server data from the resulting server objectswhy is it that every keystroke
+    dictInitialServerInfos = await getNsDataThroughFile(ns, serversDictCommand('ns.getServer(server)'), '/Temp/servers-getServer.txt', serverNames);
     dictServerRequiredHackinglevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerRequiredHackingLevel(server)'), '/Temp/servers-hack-req.txt', serverNames);
     dictServerNumPortsRequired = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerNumPortsRequired(server)'), '/Temp/servers-num-ports.txt', serverNames);
     await refreshDynamicServerData(ns, serverNames);
@@ -800,14 +820,13 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt', serverNames);
     dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt', serverNames);
     // Get the information about the relative profitability of each server
-    const pid = await exec(ns, getFilePath('analyze-hack.js'), 'home', 1, '--all', '--silent');
+    const pid = await exec(ns, getFilePath('analyze-hack.js'), daemonHost, 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
-    dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
-    if (!dictServerProfitInfo)
+    const analyzeHackResult = dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
+    if (!analyzeHackResult)
         log(ns, "WARNING: analyze-hack info unavailable. Will use fallback approach.");
     else
-        dictServerProfitInfo = Object.fromEntries(JSON.parse(dictServerProfitInfo).map(s => [s.hostname, s]));
-    //ns.print(dictServerProfitInfo);
+        dictServerProfitInfo = Object.fromEntries(JSON.parse(analyzeHackResult).map(s => [s.hostname, s]));
     if (options.i)
         currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()', '/Temp/terminal-server.txt'));
     // Determine whether we have purchased stock API accesses yet
@@ -821,6 +840,7 @@ class Server {
     constructor(ns, node) {
         this.ns = ns;
         this.name = node;
+        this.server = dictInitialServerInfos[node];
         this.requiredHackLevel = dictServerRequiredHackinglevels[node];
         this.portsRequired = dictServerNumPortsRequired[node];
         this.percentageToSteal = 1.0 / 16.0; // This will get tweaked automatically based on RAM available and the relative value of this server
@@ -832,11 +852,13 @@ class Server {
         this._isPrepping = null;
         this._isTargeting = null;
         this._isXpFarming = null;
+        this._percentStolenPerHackThread = null;
     }
     resetCaches() {
         // Reset any caches that can change over time
         // this._hasRootCached = false; // Does not need to be reset, because once rooted, this fact will never change
-        this._isPrepped = this._isPrepping = this._isTargeting = this._isXpFarming = null;
+        this._isPrepped = this._isPrepping = this._isTargeting = this._isXpFarming =
+            this._percentStolenPerHackThread = null;
     }
     getMinSecurity() { return dictServerMinSecurityLevels[this.name] ?? 0; } // Servers not in our dictionary were purchased, and so undefined is okay
     getMaxMoney() { return dictServerMaxMoney[this.name] ?? 0; }
@@ -844,7 +866,7 @@ class Server {
     getExpPerSecond() { return dictServerProfitInfo ? dictServerProfitInfo[this.name]?.expRate ?? 0 : (1 / dictServerMinSecurityLevels[this.name] ?? 0); }
     getMoney() { return this.ns.getServerMoneyAvailable(this.name); }
     getSecurity() { return this.ns.getServerSecurityLevel(this.name); }
-    canCrack() { return getNumPortCrackers(this.ns) >= this.portsRequired; }
+    canCrack() { return ownedCracks.length >= this.portsRequired; }
     canHack() { return this.requiredHackLevel <= playerHackSkill(); }
     shouldHack() {
         return this.getMaxMoney() > 0 && this.name !== "home" && !this.name.startsWith('hacknet-node-') &&
@@ -911,19 +933,21 @@ class Server {
         return Math.log(this.targetGrowthCoefficientAfterTheft()) / Math.log(this.adjustedGrowthRate());
     }
     percentageStolenPerHackThread() {
+        if (this._percentStolenPerHackThread !== null) return this._percentStolenPerHackThread;
         if (hasFormulas) {
             try {
-                let server = {
-                    hackDifficulty: this.getMinSecurity(),
-                    requiredHackingSkill: this.requiredHackLevel
-                };
-                return this.ns.formulas.hacking.hackPercent(server, _cachedPlayerInfo); // hackAnalyzePercent(this.name) / 100;
+                // Mock the properties required to determine the hackPercent at minimum security
+                this.server.hackDifficulty = this.getMinSecurity();
+                this.server.requiredHackingSkill = this.requiredHackLevel;
+                return this._percentStolenPerHackThread =
+                    this.ns.formulas.hacking.hackPercent(this.server, _cachedPlayerInfo); // hackAnalyzePercent(this.name) / 100;
             } catch {
                 hasFormulas = false;
             }
         }
-        return Math.min(1, Math.max(0, (((100 - Math.min(100, this.getMinSecurity())) / 100) *
-            ((playerHackSkill() - (this.requiredHackLevel - 1)) / playerHackSkill()) / 240)));
+        return this._percentStolenPerHackThread =
+            Math.min(1, Math.max(0, (((100 - Math.min(100, this.getMinSecurity())) / 100) *
+                ((playerHackSkill() - (this.requiredHackLevel - 1)) / playerHackSkill()) / 240)));
     }
     actualPercentageToSteal() {
         return this.getHackThreadsNeeded() * this.percentageStolenPerHackThread();
@@ -934,7 +958,6 @@ class Server {
     }
     getGrowThreadsNeeded() {
         return Math.min(this.getMaxMoney(),
-
             // TODO: Not true! Worst case is 1$ per thread and *then* it multiplies. We can return a much lower number here.
             Math.ceil((this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14)));
     }
@@ -1712,6 +1735,7 @@ let isFlaggedForDeletion = (ns, hostName) => hostName != "home" && doesFileExist
 async function buildServerList(ns, verbose = false, allServers = undefined) {
     // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans) that are not currently flagged for deletion
     allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    const flaggedForDeletion = await filesExist
     let scanResult = allServers.filter(hostName => !isFlaggedForDeletion(ns, hostName));
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
@@ -1731,7 +1755,9 @@ function getAllServers() { return _allServers; }
 function getServerByName(hostname) { return getAllServers().find(s => s.name == hostname); }
 
 // Note: We maintain copies of the list of servers, in different sort orders, to reduce re-sorting time on each iteration
-let _serverListByFreeRam, _serverListByMaxRam, _serverListByTargetOrder;
+let _serverListByFreeRam = (/**@returns{Server[]}*/() => undefined)();
+let _serverListByMaxRam = (/**@returns{Server[]}*/() => undefined)();
+let _serverListByTargetOrder = (/**@returns{Server[]}*/() => undefined)();
 const resetServerSortCache = () => _serverListByFreeRam = _serverListByMaxRam = _serverListByTargetOrder = undefined;
 
 /** @param {Server[]} toSort
@@ -1758,9 +1784,14 @@ function getAllServersByMaxRam() {
     });
 }
 
-/** @returns {Server[]} Sorted in the order we should prioritize spending ram on targeting them (for hacking) */
-function getAllServersByTargetOrder() {
-    return _sortServersAndReturn(_serverListByTargetOrder ??= getAllServers().slice(), function (a, b) {
+/** @returns {Promise<Server[]>} Sorted in the order we should prioritize spending ram on targeting them (for hacking) */
+async function getAllServersByTargetOrder() {
+    _serverListByTargetOrder ??= getAllServers().slice(); // Take a fresh copy if not already cached
+    // The check for whether a server is being targetted is async, so we must collect this info upfront before using in a sort function
+    const dictIsTargeting = {};
+    for (const server of _serverListByTargetOrder)
+        dictIsTargeting[server.name] = await server.isTargeting();
+    return _sortServersAndReturn(_serverListByTargetOrder, function (a, b) {
         // To ensure we establish some income, prep fastest-to-prep servers first, and target prepped servers before unprepped servers.
         if (a.canHack() != b.canHack()) return a.canHack() ? -1 : 1; // Sort all hackable servers first
         if (stockFocus) { // If focused on stock-market manipulation, sort up servers with a stock, prioritizing those we have some position in
@@ -1770,7 +1801,8 @@ function getAllServersByTargetOrder() {
             if (stkCmp != 0) return stkCmp;
         }
         // Next, Sort prepped servers to the front. Assume that if we're targetting, we're prepped (between cycles)
-        if ((a.isPrepped() || a.isTargeting()) != (b.isPrepped() || b.isTargeting)) return a.isPrepped() || a.isTargeting() ? -1 : 1;
+        if ((a.isPrepped() || dictIsTargeting[a.name]) != (b.isPrepped() || dictIsTargeting[b.name]))
+            return a.isPrepped() || dictIsTargeting[a.name] ? -1 : 1;
         if (!a.canHack()) return a.requiredHackLevel - b.requiredHackLevel; // Unhackable servers are sorted by lowest hack requirement
         //if (!a.isPrepped()) return a.timeToWeaken() - b.timeToWeaken(); // Unprepped servers are sorted by lowest time to weaken
         // For ready-to-hack servers, the sort order is based on money, RAM cost, and cycle time
@@ -1785,7 +1817,7 @@ async function getNsDataThroughFile(ns, ...args) {
     return await getNsDataThroughFile_Custom(ns, getFnRunViaNsExec(ns, daemonHost), ...args);
 }
 function getHomeProcIsAlive(ns) {
-    return async (pid) => (await processList(ns, 'home', false)).some(p => p.pid === pid);
+    return async (pid) => (await processList(ns, daemonHost, false)).some(p => p.pid === pid);
 }
 
 async function establishMultipliers(ns) {
@@ -1851,6 +1883,7 @@ async function buildToolkit(ns, allTools) {
         '/Temp/script-costs.txt', allTools.map(t => t.name));
     const toolsTyped = allTools.map(toolConfig => new Tool(toolConfig, toolCosts[toolConfig.name]));
     toolsByShortName = Object.fromEntries(toolsTyped.map(tool => [tool.shortName || hashToolDefinition(tool), tool]));
+    await updatePortCrackers(ns);
     return toolsTyped;
 }
 
@@ -1866,11 +1899,9 @@ function getTool(s) {
 const crackNames = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe"];
 let ownedCracks = [];
 
-function getNumPortCrackers(ns) {
-    // Once we own a port cracker, assume it won't be deleted.
-    if (ownedCracks.length == 5) return 5;
-    for (const crack of crackNames.filter(c => !ownedCracks.includes(c)))
-        if (doesFileExist(ns, crack, 'home'))
-            ownedCracks.push(crack);
-    return ownedCracks.length;
+/** Determine which port crackers we own
+ * @param {NS} ns */
+async function updatePortCrackers(ns) {
+    const owned = await filesExist(ns, crackNames);
+    ownedCracks = crackNames.filter((s, i) => owned[i]);
 }
