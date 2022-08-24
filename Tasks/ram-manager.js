@@ -27,12 +27,12 @@ export async function main(ns) {
         if (cost >= Number.MAX_VALUE || currentRam == max_ram)
             return log(ns, `INFO: We're at max home RAM (${formatRam(currentRam)})`);
         const nextRam = currentRam * 2;
-        const upgradeDesc = `home RAM from ${formatRam(currentRam)} to ${formatRam(nextRam)}`;
+        const upgradeDesc = `home RAM from ${formatRam(currentRam)} to ${formatRam(nextRam)} (cost: ${formatMoney(cost)})`;
         if (spendable < cost)
             return log(ns, `Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
         if (!(await getNsDataThroughFile(ns, `ns.singularity.upgradeHomeRam()`, `/Temp/upgradeHomeRam.txt`)))
             return log(ns, `ERROR: Failed to upgrade ${upgradeDesc} thinking we could afford it ` +
-                `(cost: ${formatMoney(cost)} cash: ${formatMoney(money)} budget: ${formatMoney(spendable)})`, true, 'error');
+                `(cash: ${formatMoney(money)} budget: ${formatMoney(spendable)})`, true, 'error');
         // Otherwise, we've successfully upgraded home ram.
         log(ns, `SUCCESS: Upgraded ${upgradeDesc}`, true, 'success');
         const newMaxRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
