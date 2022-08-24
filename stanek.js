@@ -10,8 +10,7 @@ const defaultCompletionScript = getFilePath('daemon.js');
 const defaultCompletionArgs = [];
 // Name of the external script that will be created and called to generate charges
 const chargeScript = "/Temp/stanek.js.charge.js";
-const awakeningRep = 1E6;
-const serenityRep = 100E6;
+let awakeningRep = 1E6, serenityRep = 100E6; // Base reputation cost - can be scaled by bitnode multipliers
 
 const argsSchema = [
     ['reserved-ram', 32], // Don't use this RAM
@@ -25,7 +24,7 @@ const argsSchema = [
     ['on-completion-script', null], // (Default in code) Spawn this script when max-charges is reached
     ['on-completion-script-args', []], // (Default in code) Optional args to pass to the script when launched
     ['no-tail', false], // By default, keeps a tail window open, because it's pretty important to know when this script is running (can't use home for anything else)
-    ['reputation-threshold', 0.2], // By default, if we are this close to the 100m rep needed for an unowned aug (e.g. "Stanek's Gift - Serenity"), we will keep charging despite the 'max-charges' setting
+    ['reputation-threshold', 0.2], // By default, if we are this close to the rep needed for an unowned stanek upgrade (e.g. "Stanek's Gift - Serenity"), we will keep charging despite the 'max-charges' setting
 ];
 
 export function autocomplete(data, args) {
@@ -90,8 +89,15 @@ export async function main(ns) {
         log(ns, `INFO: SF4 required to get owned faction rep and augmentation info. Ignoring the --reputation-threshold setting.`);
     } else {
         const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
-        const awakeningOwned = ownedAugmentations.includes("Stanek's Gift - Awakening");
-        const serenityOwned = ownedAugmentations.includes("Stanek's Gift - Serenity");
+        const [strAwakening, strSerenity] = ["Stanek's Gift - Awakening", "Stanek's Gift - Serenity"];
+        const [awakeningOwned, serenityOwned] = [ownedAugmentations.includes(strAwakening), ownedAugmentations.includes(strSerenity)];
+        if (!awakeningOwned || !serenityOwned) {
+            [awakeningRep, serenityRep] = await getNsDataThroughFile(ns,
+                `[${[strAwakening, strSerenity].map(a => `ns.singularity.getAugmentationRepReq(\"${a}\")`)}]`,
+                '/Temp/stanek-aug-rep-reqs.txt');
+            log(ns, `INFO: Stanek Augmentations Rep Requirements are Awakening: ${formatNumberShort(awakeningRep)}, ` +
+                `Serenity: ${formatNumberShort(serenityRep)} (--reputation-threshold = ${options['reputation-threshold']})`);
+        }
         shouldContinueForAug = (currentRep) => // return true if currentRep is high enough that we should keep grinding for the next unowned aug
             !awakeningOwned && options['reputation-threshold'] * awakeningRep <= currentRep && currentRep < awakeningRep ||
             !serenityOwned && options['reputation-threshold'] * serenityRep <= currentRep && currentRep < serenityRep
