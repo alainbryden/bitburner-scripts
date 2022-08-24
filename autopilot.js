@@ -267,7 +267,7 @@ async function checkIfBnIsComplete(ns, player) {
 /** Helper to get a list of all scripts running (on home)
  * @param {NS} ns */
 async function getRunningScripts(ns) {
-	return await getNsDataThroughFile(ns, 'ns.ps()', '/Temp/ps.txt');
+	return await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', ['home']);
 }
 
 /** Helper to get the first instance of a running script by name.
