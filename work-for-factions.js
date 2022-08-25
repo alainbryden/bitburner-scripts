@@ -574,7 +574,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let crimeType = currentWork.crimeType;
         if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
             if (lastCrime) {
-                announce(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${classType}) Restarting...`, 'warning');
+                announce(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, 'warning');
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
@@ -618,7 +618,7 @@ async function study(ns, focus, course, university = null) {
             return announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, focus])) {
-        announce(ns, `Started studying '${course}' at '${university}`, 'success');
+        announce(ns, `Started studying '${course}' at '${university}'`, 'success');
         return true;
     }
     announce(ns, `ERROR: For some reason, failed to study '${course}' at university '${university}' (Not in correct city? Player is in '${playerCity}')`, 'error');
