@@ -357,13 +357,6 @@ async function mainLoop(ns) {
 // Ram-dodging helper, runs a command for all items in a list and returns a dictionary.
 const dictCommand = (command) => `Object.fromEntries(ns.args.map(o => [o, ${command}]))`;
 
-/** @param {NS} ns 
- * Prints a message, and also toasts it!
- * TODO: Now redundant with log from helpers, refactor all usages. */
-function announce(ns, msg, toastVariant = 'info') {
-    log(ns, msg, false, toastVariant);
-}
-
 const requiredMoneyByFaction = {
     "Tian Di Hui": 1E6, "Sector-12": 15E6, "Chongqing": 20E6, "New Tokyo": 20E6, "Ishima": 30E6, "Aevum": 40E6, "Volhaven": 50E6,
     "Slum Snakes": 1E6, "Silhouette": 15E6, "The Syndicate": 10E6, "The Covenant": 75E9, "Daedalus": 100E9, "Illuminati": 150E9
@@ -537,13 +530,13 @@ async function goToCity(ns, cityName) {
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel.txt', [cityName])) {
         lastTravel = Date.now()
-        announce(ns, `Travelled from ${player.city} to ${cityName}`, 'info');
+        log(ns, `Travelled from ${player.city} to ${cityName}`, false, 'info');
         return true;
     }
     if (player.money < 200000)
-        announce(ns, `WARN: Insufficient funds to travel from ${player.city} to ${cityName}`, 'warning');
+        log(ns, `WARN: Insufficient funds to travel from ${player.city} to ${cityName}`, false, 'warning');
     else
-        announce(ns, `ERROR: Failed to travel from ${player.city} to ${cityName} for some reason...`, 'error');
+        log(ns, `ERROR: Failed to travel from ${player.city} to ${cityName} for some reason...`, false, 'error');
     return false;
 }
 
@@ -574,7 +567,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let crimeType = currentWork.crimeType;
         if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
             if (lastCrime) {
-                announce(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, 'warning');
+                log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
@@ -609,19 +602,23 @@ const uniByCity = Object.fromEntries([["Aevum", "Summit University"], ["Sector-1
 
 /** @param {NS} ns */
 async function study(ns, focus, course, university = null) {
-    if (options['no-studying'])
-        return announce(ns, `WARNING: Could not study '${course}' because --no-studying is set.`, 'warning');
+    if (options['no-studying']) {
+        log(ns, `WARNING: Could not study '${course}' because --no-studying is set.`, false, 'warning');
+        return;
+    }
     const playerCity = (await getPlayerInfo(ns)).city;
     if (!university) { // Auto-detect the university in our city
         university = uniByCity[playerCity];
-        if (!university)
-            return announce(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, 'warning');
+        if (!university) {
+            log(ns, `WARNING: Could not study '${course}' because we are in city '${playerCity}' without a university.`, false, 'warning');
+            return;
+        }
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, focus])) {
-        announce(ns, `Started studying '${course}' at '${university}'`, 'success');
+        log(ns, `Started studying '${course}' at '${university}'`, false, 'success');
         return true;
     }
-    announce(ns, `ERROR: For some reason, failed to study '${course}' at university '${university}' (Not in correct city? Player is in '${playerCity}')`, 'error');
+    log(ns, `ERROR: For some reason, failed to study '${course}' at university '${university}' (Not in correct city? Player is in '${playerCity}')`, false, 'error');
     return false;
 }
 
@@ -638,18 +635,20 @@ async function monitorStudies(ns, stat, requirement) {
     const initialWork = await getCurrentWorkInfo(ns);
     while (!breakToMainLoop()) {
         const currentWork = await getCurrentWorkInfo(ns);
-        if (!currentWork.classType || currentWork.classType != initialWork.classType)
-            return announce(ns, `WARNING: Somebody interrupted our studies.` +
-                `\nWAS: ${JSON.stringify(initialWork)}\nNOW: ${JSON.stringify(currentWork)}`, 'warning');
+        if (!currentWork.classType || currentWork.classType != initialWork.classType) {
+            log(ns, `WARNING: Somebody interrupted our studies.` +
+                `\nWAS: ${JSON.stringify(initialWork)}\nNOW: ${JSON.stringify(currentWork)}`, false, 'warning');
+            return;
+        }
         const player = await getPlayerInfo(ns);
         if (player.skills[stat] >= requirement) {
-            announce(ns, `SUCCESS: Achieved ${stat} level ${player.skills[stat]} >= ${requirement} while studying`);
+            log(ns, `SUCCESS: Achieved ${stat} level ${player.skills[stat]} >= ${requirement} while studying`, false, 'info');
             return true;
         }
         if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             lastStatusUpdateTime = Date.now();
-            announce(ns, `Studying "${currentWork.classType}" at ${currentWork.location} until ${stat} reaches ${requirement}. ` +
-                `Currently at ${player.skills[stat]}...`); // TODO: Compute an ETA, and configure training threshold based on ETA
+            log(ns, `Studying "${currentWork.classType}" at ${currentWork.location} until ${stat} reaches ${requirement}. ` +
+                `Currently at ${player.skills[stat]}...`, false, 'info'); // TODO: Compute an ETA, and configure training threshold based on ETA
         }
         await ns.sleep(loopSleepInterval);
     }
@@ -678,10 +677,13 @@ export async function waitForFactionInvite(ns, factionName, maxWaitTime = waitFo
     } while (!invitations.includes(factionName) && !joinedFactions.includes(factionName) && (waitTime -= loopSleepInterval) > 0);
     if (joinedFactions.includes(factionName)) // Another script may have auto-joined this faction before we could
         ns.print(`An external script has joined faction "${factionName}" for us.`);
-    else if (!invitations.includes(factionName))
-        return announce(ns, `ERROR: Waited ${formatDuration(maxWaitTime)}, but still have not recieved an invite for faction: "${factionName}" (Requirements not met?)`, 'error');
-    else if (!(await tryJoinFaction(ns, factionName)))
-        return announce(ns, `ERROR: Something went wrong. Earned "${factionName}" faction invite, but failed to join it.`, 'error');
+    else if (!invitations.includes(factionName)) {
+        log(ns, `ERROR: Waited ${formatDuration(maxWaitTime)}, but still have not recieved an invite for faction: "${factionName}" (Requirements not met?)`, false, 'error');
+        return;
+    } else if (!(await tryJoinFaction(ns, factionName))) {
+        log(ns, `ERROR: Something went wrong. Earned "${factionName}" faction invite, but failed to join it.`, false, 'error');
+        return;
+    }
     return true;
 }
 
@@ -692,7 +694,7 @@ export async function tryJoinFaction(ns, factionName) {
         return true;
     if (!(await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, '/Temp/join-faction.txt', [factionName])))
         return false;
-    announce(ns, `Joined faction "${factionName}"`, 'success');
+    log(ns, `Joined faction "${factionName}"`, false, 'success');
     return true;
 }
 
@@ -803,7 +805,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         const currentWork = await getCurrentWorkInfo(ns);
         if (currentWork.factionName != factionName) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
-                announce(ns, `Work for faction ${factionName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                log(ns, `Work for faction ${factionName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, false, 'warning');
                 isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
@@ -811,7 +813,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
                 isWorking = true;
                 if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {
-                announce(ns, `ERROR: Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, 'error');
+                log(ns, `ERROR: Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, false, 'error');
                 break;
             }
         }
@@ -949,7 +951,7 @@ export async function tryBuyReputation(ns) {
     if ((await getPlayerInfo(ns)).money > 100E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-node hashes on contracts to gain rep faster
         let spentHashes = await trySpendHashes(ns, "Generate Coding Contract");
         if (spentHashes > 0) {
-            announce(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, 'success');
+            log(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, false, 'success');
         }
     }
 }
@@ -1001,9 +1003,9 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         const bestRoleName = qualifyingItTier > qualifyingSoftwareTier ? "it" : "software"; // If tied for qualifying tier, go for software
         if (currentJobTier < bestJobTier || currentRole != bestRoleName) { // We are ready for a promotion, ask for one!
             if (await tryApplyToCompany(ns, companyName, bestRoleName))
-                announce(ns, `Successfully applied to "${companyName}" for a '${bestRoleName}' Job or Promotion`, 'success');
+                log(ns, `Successfully applied to "${companyName}" for a '${bestRoleName}' Job or Promotion`, false, 'success');
             else if (currentJobTier !== -1) // Unless we just restarted "work-for-factions" and lost track of our current job, this is an error
-                announce(ns, `Application to "${companyName}" for a '${bestRoleName}' Job or Promotion failed.`, 'error');
+                log(ns, `Application to "${companyName}" for a '${bestRoleName}' Job or Promotion failed.`, false, 'error');
             currentJobTier = bestJobTier; // API to apply for a job immediately gives us the highest tier we qualify for
             currentRole = bestRoleName;
             player = await getPlayerInfo(ns); // Update player.jobs info after attempted promotion
@@ -1026,7 +1028,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             // TODO: See if we can re-use the function "monitorStudies" here instead of duplicating a lot of the same code.
             let classType = currentWork.classType;
             if (isStudying && !(classType && classType.toLowerCase().includes('leadership'))) {
-                announce(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, 'warning');
+                log(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, false, 'warning');
                 isStudying = false; // If something external has interrupted our studies, take note
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
             }
@@ -1037,7 +1039,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await trySpendHashes(ns, "Improve Studying");
                 if (spentHashes > 0) {
-                    announce(ns, 'Bought a "Improve Studying" upgrade.', 'success');
+                    log(ns, 'Bought a "Improve Studying" upgrade.', false, 'success');
                     await studyForCharisma(ns, shouldFocus); // We must restart studying for the upgrade to take effect.
                 }
             }
@@ -1050,13 +1052,13 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // Regardless of the earlier promotion logic, always try for a promotion to make sure we don't miss a promotion due to buggy logic 
         if (await tryApplyToCompany(ns, companyName, currentRole)) {
             player = await getPlayerInfo(ns); // Find out what our new job is
-            announce(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${player.jobs[companyName]}. Promotion logic must be off..."`, 'warning');
+            log(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${player.jobs[companyName]}. Promotion logic must be off..."`, false, 'warning');
         }
 
         // If not studying, ensure we are working for this company
         if (!isStudying && (!isWorking || currentWork.companyName != companyName)) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
-                announce(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
+                log(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, false, 'warning');
                 isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
@@ -1066,7 +1068,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 isWorking = true;
                 if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {
-                announce(ns, `Something went wrong, failed to start working for company "${companyName}".`, 'error');
+                log(ns, `Something went wrong, failed to start working for company "${companyName}".`, false, 'error');
                 break;
             }
         }
