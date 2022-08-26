@@ -866,7 +866,7 @@ async function measureRepGainRate(ns, fnSampleReputation) {
     const initialReputation = await fnSampleReputation();
     let nextTickReputation;
     let start = Date.now();
-    while (initialReputation == (nextTickReputation = await fnSampleReputation()) && Date.now() - start < 250)
+    while (initialReputation == (nextTickReputation = await fnSampleReputation()) && Date.now() - start < 450)
         await ns.sleep(50);
     return (nextTickReputation - initialReputation) * 5; // Assume this rep gain was for a 200 tick
 }
@@ -1054,7 +1054,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         }
 
         // If not studying, ensure we are working for this company
-        if (!isStudying && currentWork.companyName != companyName) {
+        if (!isStudying && (!isWorking || currentWork.companyName != companyName)) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
                 announce(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, 'warning');
                 isWorking = false;
