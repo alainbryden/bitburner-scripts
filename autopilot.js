@@ -498,7 +498,7 @@ async function maybeInstallAugmentations(ns, player) {
 	const uniqueAugCount = affordableAugCount - Math.sign(facman.affordable_nf_count); // Don't count NF if included
 	let totalCost = facman.total_rep_cost + facman.total_aug_cost;
 	const augSummary = `${uniqueAugCount} of ${facman.unowned_count - 1} remaining augmentations` +
-		(facman.affordable_nf_count > 0 ? `+ ${facman.affordable_nf_count} levels of NeuroFlux.` : '.') +
+		(facman.affordable_nf_count > 0 ? ` + ${facman.affordable_nf_count} levels of NeuroFlux.` : '.') +
 		(uniqueAugCount > 0 ? `\n  Augs: [\"${facman.affordable_augs.join("\", \"")}\"]` : '');
 	let resetStatus = `Reserving ${formatMoney(totalCost)} to install ${augSummary}`
 	let shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
