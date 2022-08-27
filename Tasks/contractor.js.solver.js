@@ -17,25 +17,33 @@ export async function main(ns) {
         const answer = findAnswer(contractInfo)
         let notice = null;
         if (answer != null) {
-            const solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
-            if (solvingResult) {
-                const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
-                ns.toast(message, 'success');
-                ns.tprint(message);
-            } else {
-                notice = `ERROR: Wrong answer for contract type "${contractInfo.type}" (${contractInfo.contract} on ${contractInfo.hostname}):` +
-                    `\nIncorrect Answer Given: ${JSON.stringify(answer)}\nContract Info: ${JSON.stringify(contractInfo)}`;
+            let solvingResult = false;
+            try {
+                solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
+                if (solvingResult) {
+                    const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
+                    ns.toast(message, 'success');
+                    ns.tprint(message);
+                } else {
+                    notice = `ERROR: Wrong answer for contract type "${contractInfo.type}" (${contractInfo.contract} on ${contractInfo.hostname}):` +
+                        `\nIncorrect Answer Given: ${JSON.stringify(answer)}`;
+                }
+            } catch (err) {
+                let errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
+                if (err?.stack) errorMessage += '\n' + err.stack;
+                notice = `ERROR: Attemt to solve contract raised an error. (Answer Given: ${JSON.stringify(answer)})` +
+                    `\nWhile unlikely, this could happen if the contract vanished before we had a chance to solve it:\n"${errorMessage}"`;
             }
         } else {
-            notice = `WARNING: No solver available for contract type "${contractInfo.type}"\nFull info: ${JSON.stringify(contractInfo)})`;
+            notice = `WARNING: No solver available for contract type "${contractInfo.type}"`;
         }
         if (notice) {
             if (!notified.includes(contractInfo.contract)) {
-                ns.tprint(notice)
+                ns.tprint(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`)
                 ns.toast(notice, 'warning');
                 notified.push(contractInfo.contract)
             }
-            ns.print(notice);
+            ns.print(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`);
         }
         await ns.sleep(10)
     }
@@ -178,7 +186,7 @@ const codingContractTypesMetadata = [{
 {
     name: 'Array Jumping Game II',
     solver: function (data) {
-        if (data[0]==0) 
+        if (data[0] == 0)
             return '0';
         const n = data.length;
         let reach = 0;
@@ -840,11 +848,11 @@ const codingContractTypesMetadata = [{
 {
     name: 'Encryption I: Caesar Cipher',
     solver: function (data) {
-      // data = [plaintext, shift value]
-      // build char array, shifting via map and join to final results
-      const cipher = [...data[0]]
-        .map((a) => (a === " " ? a : String.fromCharCode(((a.charCodeAt(0) - 65 - data[1] + 26) % 26) + 65)))
-        .join("");
+        // data = [plaintext, shift value]
+        // build char array, shifting via map and join to final results
+        const cipher = [...data[0]]
+            .map((a) => (a === " " ? a : String.fromCharCode(((a.charCodeAt(0) - 65 - data[1] + 26) % 26) + 65)))
+            .join("");
         return cipher;
     }
 },
@@ -852,17 +860,17 @@ const codingContractTypesMetadata = [{
 {
     name: "Encryption II: Vigenère Cipher",
     solver: function (data) {
-      // data = [plaintext, keyword]
-      // build char array, shifting via map and corresponding keyword letter and join to final results
-      const cipher = [...data[0]]
-        .map((a, i) => {
-          return a === " "
-            ? a
-            : String.fromCharCode(((a.charCodeAt(0) - 2 * 65 + data[1].charCodeAt(i % data[1].length)) % 26) + 65);
-        })
-        .join("");
-      return cipher;
+        // data = [plaintext, keyword]
+        // build char array, shifting via map and corresponding keyword letter and join to final results
+        const cipher = [...data[0]]
+            .map((a, i) => {
+                return a === " "
+                    ? a
+                    : String.fromCharCode(((a.charCodeAt(0) - 2 * 65 + data[1].charCodeAt(i % data[1].length)) % 26) + 65);
+            })
+            .join("");
+        return cipher;
     }
 }
 
-]                         
+]
