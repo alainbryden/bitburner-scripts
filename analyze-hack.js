@@ -78,12 +78,13 @@ export async function main(ns) {
             const cappedGainRate = Math.min(theoreticalGainRate, hackProfit / ram_total);
             ns.print(`At hack level ${hackLevel} and steal ${(hack_percent * 100).toPrecision(3)}%: Theoretical ${formatMoney(theoreticalGainRate)}, ` +
                 `Limit: ${formatMoney(hackProfit / ram_total)}, Exp: ${expRate.toPrecision(3)}, Hack Chance: ${(ns.formulas.hacking.hackChance(server, player) * 100).toPrecision(3)}% (${server.hostname})`);
-            player.skills.hacking = real_player_hack_skill; // Restore the real hacking skill if we changed it temporarily
             return [theoreticalGainRate, cappedGainRate, expRate];
         }
         catch {
             // Formulas API unavailable?
             return [server.moneyMax, server.moneyMax, 1 / server.minDifficulty];
+        } finally {
+            player.skills.hacking = real_player_hack_skill; // Restore the real hacking skill if we changed it temporarily
         }
     }
 
