@@ -166,7 +166,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
     // Wait for the process to complete. Note, as long as the above returned a pid, we don't actually have to check it, just the file contents
     const fnIsAlive = (ignored_pid) => ns.read(fName) === initialContents;
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
-    if (verbose) ns.print(`Process ${pid} is done. Reading the contents of ${fName}...`);
+    if (verbose) log(ns, `Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying. 
     let lastRead;
     const fileData = await autoRetry(ns, () => ns.read(fName),
@@ -178,7 +178,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
                     lastRead == "" ? `\nThe file appears to have been deleted before a result could be retrieved. Perhaps there is a conflicting script.` :
                         `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
         maxRetries, retryDelayMs, undefined, verbose, verbose);
-    if (verbose) ns.print(`Read the following data for command ${command}:\n${fileData}`);
+    if (verbose) log(ns, `Read the following data for command ${command}:\n${fileData}`);
     return JSON.parse(fileData); // Deserialize it back into an object/array and return
 }
 
@@ -222,15 +222,15 @@ function getExports(ns) {
 export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand_Custom"');
     if (!Array.isArray(args)) throw new Error(`args specified were a ${typeof args}, but an array is required.`);
-    if (verbose) // In verbose mode, wrap the command in something that will dump it's output to the terminal
-        command = `try { let output = ${command}; ns.tprint(JSON.stringify(output)); } ` +
-            `catch(e) { ns.tprint('ERROR: '+(typeof e=='string'?e:e.message||JSON.stringify(e))); throw(e); }`;
-    else disableLogs(ns, ['sleep']);
+    if (!verbose) disableLogs(ns, ['sleep']);
     // Auto-import any helpers that the temp script attempts to use
     const required = getExports(ns).filter(e => command.includes(`${e}(`));
     let script = (required.length > 0 ? `import { ${required.join(", ")} } from 'helpers.js'\n` : '') +
         `export async function main(ns) { ${command} }`;
     fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
+    if (verbose)
+        log(ns, `INFO: Using a temporary script (${fileName}) to execute the command:` +
+            `\n  ${command}\nWith the following arguments:    ${JSON.stringify(args)}`);
     // It's possible for the file to be deleted while we're trying to execute it, so even wrap writing the file in a retry
     return await autoRetry(ns, async () => {
         // To improve performance, don't re-write the temp script if it's already in place with the correct contents.
