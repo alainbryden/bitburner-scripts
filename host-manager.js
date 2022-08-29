@@ -101,7 +101,20 @@ async function tryToBuyBestServerPossible(ns) {
     // Gether the list of all purchased servers.
     const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/getPurchasedServers.txt');
     // Scan the set of all servers on the network that we own (or rooted) to get a sense of current RAM utilization
-    const rootedServers = scanAllServers(ns).filter(s => ns.hasRootAccess(s));
+    let rootedServers = scanAllServers(ns).filter(s => ns.hasRootAccess(s));
+
+    // If some of the servers are hacknet servers, and they aren't being used for scripts, ignore the RAM they have available
+    // with the assumption that these are reserved for generating hashes
+    const likelyHacknet = rootedServers.filter(s => s.startsWith("hacknet-node-"));
+    if (likelyHacknet.length > 0) {
+        const totalHacknetUsedRam = likelyHacknet.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
+        if (totalHacknetUsedRam == 0) {
+            rootedServers = rootedServers.filter(s => !likelyHacknet.includes(s));
+            log(ns, `Removing ${likelyHacknet.length} hacknet servers from RAM statistics since they are not being utilized.`)
+        } else if (!keepRunning)
+            log(ns, `We are currently using ${formatRam(totalHacknetUsedRam)} of hacknet RAM, so including hacknet in our utilization stats.`)
+    }
+
     const totalMaxRam = rootedServers.reduce((t, s) => t + ns.getServerMaxRam(s), 0);
     const totalUsedRam = rootedServers.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
     const utilizationRate = totalUsedRam / totalMaxRam;
