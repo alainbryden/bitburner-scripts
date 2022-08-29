@@ -27,6 +27,7 @@ const argsSchema = [
     ['train-to-dexterity', 70], // Sleeves will go to the gym until they reach this much Dex
     ['train-to-agility', 70], // Sleeves will go to the gym until they reach this much Agi
     ['training-reserve', null], // Defaults to global reserve.txt. Can be set to a negative number to allow debt. Sleeves will not train if money is below this amount.
+    ['training-cap-seconds', 8 * 60 * 60], // Time in seconds since the start of the bitnode (default 8 hours) after which we will no longer attempt to train sleeves
     ['disable-spending-hashes-for-gym-upgrades', false], // Set to true to disable spending hashes on gym upgrades when training up sleeves.
     ['enable-bladeburner-team-building', false], // Set to true to have one sleeve support the main sleeve, and another do recruitment. Otherwise, they will just do more "Infiltrate Synthoids"
 ];
@@ -116,8 +117,12 @@ async function mainLoop(ns) {
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
     // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
     const costByNextLoop = interval / 1000 * task.filter(t => t.startsWith("train")).length * 12000; // TODO: Training cost/sec seems to be a bug. Should be 1/5 this ($2400/sec)
-    let canTrain = !options['disable-training'] && (playerInfo.money - costByNextLoop) > (options['training-reserve'] ||
-        (promptedForTrainingBudget ? ns.read(trainingReserveFile) : undefined) || globalReserve);
+    let canTrain = !options['disable-training'] &&
+        // To avoid training forever when mults are crippling, stop training if we've been in the bitnode a certain amount of time
+        (options['training-cap-seconds'] * 1000 > playerInfo.playtimeSinceLastBitnode) &&
+        // Don't train if we have no money (unless player has given permission to train into debt)
+        (playerInfo.money - costByNextLoop) > (options['training-reserve'] ||
+            (promptedForTrainingBudget ? ns.read(trainingReserveFile) : undefined) || globalReserve);
     // If any sleeve is training at the gym, see if we can purchase a gym upgrade to help them
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
