@@ -219,7 +219,7 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
             // Note: Each contract type can only be performed by one sleeve at a time (similar to working for factions)
             /*1*/["Take on contracts", "Retirement"], /*2*/["Take on contracts", "Bounty Hunter"], /*3*/["Take on contracts", "Tracking"],
             // Other bladeburner work can be duplicated, but tackling a variety is probably useful. Overrides occur below
-            /*4*/["Infiltrate synthoids"], /*5*/["Diplomacy"], /*6*/["Field Analysis"],
+            /*4*/["Infiltrate synthoids"], /*5*/["Diplomacy"], /*6*/["Field analysis"],
             /*7*/options['enable-bladeburner-team-building'] ? ["Recruitment"] : ["Infiltrate synthoids"]
         ];
         let [action, contractName] = bbTasks[i];
