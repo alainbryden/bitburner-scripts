@@ -92,12 +92,25 @@ async function manageSleeveAugs(ns, i, budget) {
     return 0;
 }
 
+/** @param {NS} ns
+ * @returns {Promise<Player>} the result of ns.getPlayer() */
+async function getPlayerInfo(ns) {
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
+}
+
+/** @param {NS} ns
+ * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
+async function getCurrentWorkInfo(ns) {
+    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt')) ?? {};
+}
+
 /** @param {NS} ns 
  * Main loop that gathers data, checks on all sleeves, and manages them. */
 async function mainLoop(ns) {
     // Update info
     numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
-    const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    const playerInfo = await getPlayerInfo(ns);
+    const workInfo = await getCurrentWorkInfo(ns);
     if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
@@ -137,7 +150,7 @@ async function mainLoop(ns) {
         if (Date.now() - (lastReassignTime[i] || 0) < minTaskWorkTime) continue;
 
         // Decide what we think the sleeve should be doing for the next little while
-        let [designatedTask, command, args, statusUpdate] = await pickSleeveTask(ns, playerInfo, i, sleeve, canTrain);
+        let [designatedTask, command, args, statusUpdate] = await pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain);
 
         // Start the clock, this sleeve should stick to this task for minTaskWorkTime
         lastReassignTime[i] = Date.now();
@@ -158,8 +171,9 @@ async function mainLoop(ns) {
 /** Picks the best task for a sleeve, and returns the information to assign and give status updates for that task.
  * @param {NS} ns 
  * @param {Player} playerInfo
+ * @param {{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }} workInfo
  * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve */
-async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
+async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
     // Must synchronize first iif you haven't maxed memory on every sleeve.
     if (sleeve.sync < 100)
         return ["synchronize", `ns.sleeve.setToSynchronize(ns.args[0])`, [i], `syncing... ${sleeve.sync.toFixed(2)}%`];
@@ -183,17 +197,18 @@ async function pickSleeveTask(ns, playerInfo, i, sleeve, canTrain) {
         }
     }
     // If player is currently working for faction or company rep, sleeves 0 can help him out (Note: Only one sleeve can work for a faction)
-    if (i == 0 && !options['disable-follow-player'] && playerInfo.isWorking && playerInfo.workType == "Working for Faction") {
+    if (i == 0 && !options['disable-follow-player'] && workInfo.type == "FACTION") {
         // TODO: We should be able to borrow logic from work-for-factions.js to have more sleeves work for useful factions / companies
         // We'll cycle through work types until we find one that is supported. TODO: Auto-determine the most productive faction work to do.
-        const faction = playerInfo.currentWorkFactionName;
+        const faction = workInfo.factionName;
         const work = works[workByFaction[faction] || 0];
         return [`work for faction '${faction}' (${work})`, `ns.sleeve.setToFactionWork(ns.args[0], ns.args[1], ns.args[2])`, [i, faction, work],
         /*   */ `helping earn rep with faction ${faction} by doing ${work}.`];
     }
-    if (i == 0 && !options['disable-follow-player'] && playerInfo.isWorking && playerInfo.workType == "Working for Company") { // If player is currently working for a company rep, sleeves 0 shall help him out (only one sleeve can work for a company)
-        return [`work for company '${playerInfo.companyName}'`, `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`, [i, playerInfo.companyName],
-        /*   */ `helping earn rep with company ${playerInfo.companyName}.`];
+    if (i == 0 && !options['disable-follow-player'] && workInfo.type == "COMPANY") { // If player is currently working for a company rep, sleeves 0 shall help him out (only one sleeve can work for a company)
+        const companyName = workInfo.companyName;
+        return [`work for company '${companyName}'`, `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`, [i, companyName],
+        /*   */ `helping earn rep with company ${companyName}.`];
     }
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
     if (playerInfo.inBladeburner && playerInGang) {
