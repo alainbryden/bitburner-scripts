@@ -162,7 +162,7 @@ async function mainLoop(ns) {
         // Set the sleeve's new task if it's not the same as what they're already doing.
         let assignSuccess = true;
         if (task[i] != designatedTask)
-            assignSuccess = await setSleeveTask(ns, playerInfo, i, designatedTask, command, args);
+            assignSuccess = await setSleeveTask(ns, i, designatedTask, command, args);
 
         // For certain tasks, log a periodic status update.
         if (assignSuccess && statusUpdate && (Date.now() - (lastStatusUpdateTime[i] ?? 0) > minTaskWorkTime)) {
@@ -177,7 +177,8 @@ async function mainLoop(ns) {
  * @param {NS} ns 
  * @param {Player} playerInfo
  * @param {{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }} workInfo
- * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve */
+ * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve 
+ * @returns {[string, string, any[], string]} a 4-tuple of task name, command, args, and status message */
 async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
     // Must synchronize first iif you haven't maxed memory on every sleeve.
     if (sleeve.sync < 100)
@@ -253,8 +254,12 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
 
 /** Sets a sleeve to its designated task, with some extra error handling logic for working for factions. 
  * @param {NS} ns 
- * @param {Player} playerInfo */
-async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
+ * @param {number} i - Sleeve number
+ * @param {string} designatedTask - string describing the designated task
+ * @param {string} command - dynamic command to initiate this work 
+ * @param {any[]} args - arguments consumed by the dynamic command
+ * */
+async function setSleeveTask(ns, i, designatedTask, command, args) {
     let strAction = `Set sleeve ${i} to ${designatedTask} `;
     try { // Assigning a task can throw an error rather than simply returning false. We must suppress this
         if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
@@ -266,14 +271,16 @@ async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
     // If assigning the task failed...
     lastReassignTime[i] = 0;
     // If working for a faction, it's possible he current work isn't supported, so try the next one.
-    if (designatedTask.startsWith('work for faction')) {
-        const nextWorkIndex = (workByFaction[playerInfo.currentWorkFactionName] || 0) + 1;
+    const wffPrefix = 'work for faction '; // Hack: extract the faction from the designatedTask description
+    if (designatedTask.startsWith(wffPrefix)) {
+        const faction = designatedTask.slice(wffPrefix.length);
+        const nextWorkIndex = (workByFaction[faction] || 0) + 1;
         if (nextWorkIndex >= works.length) {
             log(ns, `WARN: Failed to ${strAction}. None of the ${works.length} work types appear to be supported. Will loop back and try again.`, true, 'warning');
             nextWorkIndex = 0;
         } else
             log(ns, `INFO: Failed to ${strAction} - work type may not be supported. Trying the next work type (${works[nextWorkIndex]})`);
-        workByFaction[playerInfo.currentWorkFactionName] = nextWorkIndex;
+        workByFaction[faction] = nextWorkIndex;
     } else if (designatedTask.startsWith('Bladeburner')) { // Bladeburner action may be out of operations
         bladeburnerTaskFailed[i] = Date.now(); // There will be a cooldown before this task is assigned again.
     } else
