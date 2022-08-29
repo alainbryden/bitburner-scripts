@@ -157,7 +157,7 @@ async function mainLoop(ns) {
         // Set the sleeve's new task if it's not the same as what they're already doing.
         let assignSuccess = true;
         if (task[i] != designatedTask)
-            assignSuccess = await setSleeveTask(ns, playerInfo, i, designatedTask, command, args);
+            assignSuccess = await setSleeveTask(ns, playerInfo, workInfo, i, designatedTask, command, args);
 
         // For certain tasks, log a periodic status update.
         if (assignSuccess && statusUpdate && (Date.now() - (lastStatusUpdateTime[i] ?? 0) > minTaskWorkTime)) {
@@ -248,8 +248,9 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
 
 /** Sets a sleeve to its designated task, with some extra error handling logic for working for factions. 
  * @param {NS} ns 
- * @param {Player} playerInfo */
-async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
+ * @param {Player} playerInfo 
+ * @param {{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }} workInfo */
+async function setSleeveTask(ns, playerInfo, workInfo, i, designatedTask, command, args) {
     let strAction = `Set sleeve ${i} to ${designatedTask} `;
     try { // Assigning a task can throw an error rather than simply returning false. We must suppress this
         if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
@@ -262,13 +263,13 @@ async function setSleeveTask(ns, playerInfo, i, designatedTask, command, args) {
     lastReassignTime[i] = 0;
     // If working for a faction, it's possible he current work isn't supported, so try the next one.
     if (designatedTask.startsWith('work for faction')) {
-        const nextWorkIndex = (workByFaction[playerInfo.currentWorkFactionName] || 0) + 1;
+        let nextWorkIndex = (workByFaction[workInfo.factionName] || 0) + 1;
         if (nextWorkIndex >= works.length) {
             log(ns, `WARN: Failed to ${strAction}. None of the ${works.length} work types appear to be supported. Will loop back and try again.`, true, 'warning');
             nextWorkIndex = 0;
         } else
             log(ns, `INFO: Failed to ${strAction} - work type may not be supported. Trying the next work type (${works[nextWorkIndex]})`);
-        workByFaction[playerInfo.currentWorkFactionName] = nextWorkIndex;
+        workByFaction[workInfo.factionName] = nextWorkIndex;
     } else if (designatedTask.startsWith('Bladeburner')) { // Bladeburner action may be out of operations
         bladeburnerTaskFailed[i] = Date.now(); // There will be a cooldown before this task is assigned again.
     } else
