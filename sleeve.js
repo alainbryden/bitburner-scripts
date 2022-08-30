@@ -260,21 +260,20 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
  * @param {any[]} args - arguments consumed by the dynamic command
  * */
 async function setSleeveTask(ns, i, designatedTask, command, args) {
-    let strAction = `Set sleeve ${i} to ${designatedTask} `;
+    let strAction = `Set sleeve ${i} to ${designatedTask}`;
     try { // Assigning a task can throw an error rather than simply returning false. We must suppress this
         if (await getNsDataThroughFile(ns, command, `/Temp/sleeve-${command.slice(10, command.indexOf("("))}.txt`, args)) {
             task[i] = designatedTask;
-            log(ns, `SUCCESS: ${strAction} `);
+            log(ns, `SUCCESS: ${strAction}`);
             return true;
         }
     } catch { }
     // If assigning the task failed...
     lastReassignTime[i] = 0;
     // If working for a faction, it's possible he current work isn't supported, so try the next one.
-    const wffPrefix = 'work for faction '; // Hack: extract the faction from the designatedTask description
-    if (designatedTask.startsWith(wffPrefix)) {
-        const faction = designatedTask.slice(wffPrefix.length);
-        const nextWorkIndex = (workByFaction[faction] || 0) + 1;
+    if (designatedTask.startsWith('work for faction')) {
+        const faction = args[1]; // Hack: Not obvious, but the second argument will be the faction name in this case.
+        let nextWorkIndex = (workByFaction[faction] || 0) + 1;
         if (nextWorkIndex >= works.length) {
             log(ns, `WARN: Failed to ${strAction}. None of the ${works.length} work types appear to be supported. Will loop back and try again.`, true, 'warning');
             nextWorkIndex = 0;
@@ -284,7 +283,7 @@ async function setSleeveTask(ns, i, designatedTask, command, args) {
     } else if (designatedTask.startsWith('Bladeburner')) { // Bladeburner action may be out of operations
         bladeburnerTaskFailed[i] = Date.now(); // There will be a cooldown before this task is assigned again.
     } else
-        log(ns, `ERROR: Failed to ${strAction} `, true, 'error');
+        log(ns, `ERROR: Failed to ${strAction}`, true, 'error');
     return false;
 }
 
