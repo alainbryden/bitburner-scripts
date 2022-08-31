@@ -15,7 +15,8 @@ const argsSchema = [
     ['min-shock-recovery', 97], // Minimum shock recovery before attempting to train or do crime (Set to 100 to disable, 0 to recover fully)
     ['shock-recovery', 0.05], // Set to a number between 0 and 1 to devote that ratio of time to periodic shock recovery (until shock is at 0)
     ['crime', null], // If specified, sleeves will perform only this crime regardless of stats
-    ['homicide-chance-threshold', 0.25], // Sleeves will automatically start homicide once their chance of success exceeds this ratio
+    ['homicide-chance-threshold', 0.5], // Sleeves on crime will automatically start homicide once their chance of success exceeds this ratio
+    ['disable-gang-homicide-priority', false], // By default, sleeves will do homicide to farm Karma until we're in a gang. Set this flag to disable this priority.
     ['aug-budget', 0.1], // Spend up to this much of current cash on augs per tick (Default is high, because these are permanent for the rest of the BN)
     ['buy-cooldown', 60 * 1000], // Must wait this may milliseconds before buying more augs for a sleeve
     ['min-aug-batch', 20], // Must be able to afford at least this many augs before we pull the trigger (or fewer if buying all remaining augs)
@@ -27,7 +28,7 @@ const argsSchema = [
     ['train-to-dexterity', 70], // Sleeves will go to the gym until they reach this much Dex
     ['train-to-agility', 70], // Sleeves will go to the gym until they reach this much Agi
     ['training-reserve', null], // Defaults to global reserve.txt. Can be set to a negative number to allow debt. Sleeves will not train if money is below this amount.
-    ['training-cap-seconds', 8 * 60 * 60], // Time in seconds since the start of the bitnode (default 8 hours) after which we will no longer attempt to train sleeves
+    ['training-cap-seconds', 2 * 60 * 60 /* 2 hours */], // Time since the start of the bitnode after which we will no longer attempt to train sleeves to their target "train-to" settings
     ['disable-spending-hashes-for-gym-upgrades', false], // Set to true to disable spending hashes on gym upgrades when training up sleeves.
     ['enable-bladeburner-team-building', false], // Set to true to have one sleeve support the main sleeve, and another do recruitment. Otherwise, they will just do more "Infiltrate Synthoids"
 ];
@@ -112,7 +113,8 @@ async function mainLoop(ns) {
     numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
     const playerInfo = await getPlayerInfo(ns);
     const workInfo = await getCurrentWorkInfo(ns);
-    if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+    if (!playerInGang) playerInGang = !(3 in ownedSourceFiles) ? false :
+        await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
     // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
@@ -216,8 +218,11 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
         return [`work for company '${companyName}'`, `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`, [i, companyName],
         /*   */ `helping earn rep with company ${companyName}.`];
     }
+    // If gangs are available, prioritize homicide until we've got the requisite -54K karma to unlock them
+    if (!playerInGang && !options['disable-gang-homicide-priority'] && (3 in ownedSourceFiles) && ns.heart.break() > -54000)
+        return await crimeTask(ns, 'homicide', i, sleeve); // Ignore chance - even a failed homicide generates more Karma than every other crime
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
-    if (playerInfo.inBladeburner && playerInGang) {
+    if (playerInfo.inBladeburner) {
         // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
         const bbTasks = [
             // Note: Sleeve 0 might still be used for faction work (unless --disable-follow-player is set), so don't assign them a 'unique' task
@@ -244,13 +249,22 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
         /*   */ `ns.sleeve.setToBladeburnerAction(ns.args[0], ns.args[1], ns.args[2])`, [i, action, contractName || ""],
         /*   */ `doing ${action}${contractName ? ` - ${contractName}` : ''} in Bladeburner.`];
     }
-    // Finally, do crime for Karma. Homicide has the rate gain, if we can manage a decent success rate.
+    // Finally, do crime for Karma. Pick the best crime based on success chances
     var crime = options.crime || (await calculateCrimeChance(ns, sleeve, "homicide")) >= options['homicide-chance-threshold'] ? 'homicide' : 'mug';
+    return await crimeTask(ns, crime, i, sleeve);
+}
+
+/** Helper to prepare the crime task, since it is used in two places
+ * @param {NS} ns 
+ * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve 
+ * @returns {[string, string, any[], string]} a 4-tuple of task name, command, args, and status message */
+async function crimeTask(ns, crime, i, sleeve) {
     return [`commit ${crime} `, `ns.sleeve.setToCommitCrime(ns.args[0], ns.args[1])`, [i, crime],
     /*   */ `committing ${crime} with chance ${((await calculateCrimeChance(ns, sleeve, crime)) * 100).toFixed(2)}% ` +
     /*   */ (options.crime || crime == "homicide" ? '' : // If auto-criming, user may be curious how close we are to switching to homicide 
     /*   */     ` (Note: Homicide chance would be ${((await calculateCrimeChance(ns, sleeve, "homicide")) * 100).toFixed(2)}%)`)];
 }
+
 
 /** Sets a sleeve to its designated task, with some extra error handling logic for working for factions. 
  * @param {NS} ns 
