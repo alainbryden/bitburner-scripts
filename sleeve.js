@@ -113,7 +113,7 @@ async function mainLoop(ns) {
     numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
     const playerInfo = await getPlayerInfo(ns);
     const workInfo = await getCurrentWorkInfo(ns);
-    if (!playerInGang) playerInGang = !(3 in ownedSourceFiles) ? false :
+    if (!playerInGang) playerInGang = !(2 in ownedSourceFiles) ? false :
         await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
@@ -219,7 +219,7 @@ async function pickSleeveTask(ns, playerInfo, workInfo, i, sleeve, canTrain) {
         /*   */ `helping earn rep with company ${companyName}.`];
     }
     // If gangs are available, prioritize homicide until we've got the requisite -54K karma to unlock them
-    if (!playerInGang && !options['disable-gang-homicide-priority'] && (3 in ownedSourceFiles) && ns.heart.break() > -54000)
+    if (!playerInGang && !options['disable-gang-homicide-priority'] && (2 in ownedSourceFiles) && ns.heart.break() > -54000)
         return await crimeTask(ns, 'homicide', i, sleeve); // Ignore chance - even a failed homicide generates more Karma than every other crime
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
     if (playerInfo.inBladeburner) {
