@@ -344,7 +344,9 @@ export async function main(ns) {
     await getStaticServerData(ns, allServers); // Gather information about servers that will never change
     await buildServerList(ns, false, allServers); // create the exhaustive server list
     await establishMultipliers(ns); // figure out the various bitnode and player multipliers
-    maxTargets = stockFocus ? Object.keys(serverStockSymbols).length : options['initial-max-targets']; // Ensure we immediately attempt to target all servers that represent stocks if in stock-focus mode
+    maxTargets = options['initial-max-targets'];
+    if (stockFocus) // Ensure we attempt to target at least all servers that represent stocks if in stock-focus mode
+        maxTargets = Math.max(maxTargets, Object.keys(serverStockSymbols).length);
 
     // If we ascended less than 10 minutes ago, start with some study and/or XP cycles to quickly restore hack XP
     const shouldKickstartHackXp = (playerHackSkill() < 500 && playerInfo.playtimeSinceLastAug < 600000);
