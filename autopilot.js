@@ -152,7 +152,7 @@ async function initializeNewBitnode(ns, player) {
 async function mainLoop(ns) {
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
 	let stocksValue = 0;
-	try { await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
+	try { stocksValue = await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
 	await manageReservedMoney(ns, player, stocksValue);
 	await checkOnDaedalusStatus(ns, player, stocksValue);
 	await checkIfBnIsComplete(ns, player);
