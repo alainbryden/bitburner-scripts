@@ -58,6 +58,8 @@ export async function main(ns) {
 
 	// Find the button used to save the game
 	const btnSaveGame = await findRetry(ns, "//button[@aria-label = 'save game']");
+	if (!btnSaveGame)
+		return tailAndLog(ns, "ERROR: Sorry, couldn't find the Overview Save (💾) button. Is your \"Overview\" panel collapsed or modded?");
 	let inputWager, btnStartGame;
 
 	// Step 2: Try to navigate to the blackjack game until successful, in case something repeatedly steals focus
