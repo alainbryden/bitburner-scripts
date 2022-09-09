@@ -214,7 +214,7 @@ async function killAllOtherScripts(ns, removeRemoteFiles) {
 /** @param {NS} ns 
  *  Run when we can no longer gamble at the casino (presumably because we've been kicked out) **/
 async function onCompletion(ns) {
-	await ns.write(ran_flag, true, "w"); // Write an file indicating we think we've been kicked out of the casino.
+	await ns.write(ran_flag, "True", "w"); // Write an file indicating we think we've been kicked out of the casino.
 	log(ns, "SUCCESS: We've been kicked out of the casino.", true);
 
 	// Run the completion script before shutting down    

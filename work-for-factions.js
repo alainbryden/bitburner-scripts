@@ -749,7 +749,7 @@ async function daedalusSpecialCheck(ns, favorRepRequired, currentReputation) {
     if (currentReputation >= 0.9 * 2.500e6) return false;
     log(ns, `INFO: You have enough reputation with Daedalus (have ${formatNumberShort(currentReputation)}) that you will ` +
         `unlock donations (needed ${formatNumberShort(favorRepRequired)}) with them on your next reset.`, !notifiedAboutDaedalus, "info");
-    await ns.write("/Temp/Daedalus-donation-rep-attained.txt", true, "w"); // HACK: To notify autopilot that we can reset for rep now.
+    await ns.write("/Temp/Daedalus-donation-rep-attained.txt", "True", "w"); // HACK: To notify autopilot that we can reset for rep now.
     notifiedAboutDaedalus = true;
 }
 
