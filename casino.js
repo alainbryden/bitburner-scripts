@@ -114,7 +114,7 @@ export async function main(ns) {
 						log(ns, "ERROR: It looks like something stole focus while we were trying to automate the casino. Trying again.");
 						continue; // Loop back to start and try again
 					}
-					await ns.write(ran_flag, true, "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
+					await ns.write(ran_flag, "True", "w"); // Write a flag other scripts can check for indicating we think we've been kicked out of the casino.
 					return log(ns, "INFO: We appear to already have been previously kicked out of the casino.", true);
 				}
 				// Step 2.5.2: Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
