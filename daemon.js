@@ -795,7 +795,7 @@ async function doTargetingLoop(ns) {
             let lineBreak = errorMessage.indexOf('<br>', start); // Error strings can appear in different ways
             if (lineBreak == -1) lineBreak = errorMessage.indexOf(' ', start); // Try to handle them all
             if (lineBreak == -1) lineBreak = errorMessage.length; // To extract the name of the server deleted
-            let deletedHostName = errorMessage.substring(start, lineBreak);
+            let deletedHostName = errorMessage.substring(start, lineBreak).replaceAll("'", "").replaceAll('"', '');
             log(ns, 'INFO: The server "' + deletedHostName + '" appears to have been deleted. Removing it from our lists', true, 'info');
             removeServerByName(ns, deletedHostName);
         }
