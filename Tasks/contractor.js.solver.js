@@ -258,7 +258,7 @@ const codingContractTypesMetadata = [{
                 }
             }
         }
-        return ret
+        return ret.toString(); // Answer expected is the string representation of this array
     },
 },
 {
