@@ -169,14 +169,15 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
 			// TODO: There are 5 unused spaces, find a way to fit another booster
 		]
-	}, { // Lazily cram a defense fragment into the ample space without re-optimizing anything
-		"height": 8, "width": 9, "fragments": [ // ~BN 12.70
+	}, { // Took a minute and found a way to cram Defense and Strength in
+		"height": 8, "width": 9, "fragments": [
 			{ "id": 0, "x": 4, "y": 1, "rotation": 0 }, // Hacking Mult
 			{ "id": 1, "x": 4, "y": 4, "rotation": 0 }, // Hacking Mult
 			{ "id": 5, "x": 0, "y": 2, "rotation": 0 }, // Hacking Speed
 			{ "id": 6, "x": 3, "y": 0, "rotation": 2 }, // Hack power
 			{ "id": 7, "x": 2, "y": 0, "rotation": 0 }, // Grow power
-			{ "id": 12, "x": 7, "y": 1, "rotation": 3 }, // Defense *new*
+			{ "id": 10, "x": 4, "y": 6, "rotation": 2 }, // Strength *new*
+			{ "id": 12, "x": 6, "y": 5, "rotation": 0 }, // Defense *new*
 			{ "id": 14, "x": 1, "y": 5, "rotation": 1 }, // Dexterity
 			{ "id": 16, "x": 5, "y": 6, "rotation": 0 }, // Agility
 			{ "id": 18, "x": 3, "y": 4, "rotation": 1 }, // Charisma
