@@ -151,7 +151,8 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 103, "x": 4, "y": 3, "rotation": 0 }, // Booster
 			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
 		]
-	}, { // Adds Charisma, which even a small boost makes a huge difference (hours) in grinding company rep // TODO: Consider adding charisma boosts a little earlier on in the prior 2 layouts.
+	}, { // Adds Charisma, which even a small boost makes a huge difference (hours) in grinding company rep
+		// TODO: Consider adding charisma boosts a little earlier on in the prior 2 layouts.
 		"height": 8, "width": 8, "fragments": [ // ~BN 12.50
 			{ "id": 0, "x": 4, "y": 1, "rotation": 0 }, // Hacking Mult
 			{ "id": 1, "x": 4, "y": 4, "rotation": 0 }, // Hacking Mult
@@ -163,8 +164,8 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 18, "x": 3, "y": 4, "rotation": 1 }, // Charisma *new*
 			{ "id": 20, "x": 0, "y": 3, "rotation": 3 }, // Hacknet Production
 			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
-			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Reputation
-			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Bladeburner Stats
+			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Reputation
+			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Bladeburner Stats
 			{ "id": 101, "x": 6, "y": 2, "rotation": 1 }, // Booster
 			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
 			// TODO: There are 5 unused spaces, find a way to fit another booster
@@ -179,14 +180,14 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 10, "x": 4, "y": 6, "rotation": 2 }, // Strength *new*
 			{ "id": 12, "x": 6, "y": 5, "rotation": 0 }, // Defense *new*
 			{ "id": 14, "x": 1, "y": 5, "rotation": 1 }, // Dexterity
-			{ "id": 16, "x": 5, "y": 6, "rotation": 0 }, // Agility
+			{ "id": 16, "x": 7, "y": 0, "rotation": 3 }, // Agility
 			{ "id": 18, "x": 3, "y": 4, "rotation": 1 }, // Charisma
 			{ "id": 20, "x": 0, "y": 3, "rotation": 3 }, // Hacknet Production
 			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
-			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Reputation
-			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Bladeburner Stats
+			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Reputation
+			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Bladeburner Stats
 			{ "id": 101, "x": 6, "y": 2, "rotation": 1 }, // Booster
-			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
+			{ "id": 105, "x": 1, "y": 2, "rotation": 0 } // Booster
 		]
 	}
 ];
