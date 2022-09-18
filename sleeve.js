@@ -5,10 +5,11 @@ const minTaskWorkTime = 29000; // Sleeves assigned a new task should stick to it
 const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
 const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
+const sleeveBbContractNames = ["Tracking", "Bounty Hunter", "Retirement"];
 
 let cachedCrimeStats, workByFaction; // Cache of crime statistics and which factions support which work
 let task, lastStatusUpdateTime, lastPurchaseTime, lastPurchaseStatusUpdate, availableAugs, cacheExpiry, lastReassignTime; // State by sleeve
-let numSleeves, ownedSourceFiles, playerInGang, bladeburnerCityChaos, bladeburnerTaskFailed, followPlayerSleeve;
+let numSleeves, ownedSourceFiles, playerInGang, bladeburnerCityChaos, bladeburnerContractChances, bladeburnerTaskFailed, followPlayerSleeve;
 let options;
 
 const argsSchema = [
@@ -133,8 +134,12 @@ async function mainLoop(ns) {
     if (playerInfo.inBladeburner && (7 in ownedSourceFiles)) {
         const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
+        bladeburnerContractChances = await getNsDataThroughFile(ns,
+            // There is currently no way to get sleeve chance, so assume it is the same as player chance for now.
+            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionEstimatedSuccessChance("contract", c)[0]]))',
+            '/Temp/sleeve-bladeburner-success-chances.txt', sleeveBbContractNames);
     } else
-        bladeburnerCityChaos = 0;
+        bladeburnerCityChaos = 0, bladeburnerContractChances = {};
 
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
     let dictSleeveCommand = async (command) => await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.${command}(i))`,
@@ -245,10 +250,8 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
         ];
         let [action, contractName] = bbTasks[i];
         // If the sleeve is performing an action with a chance of failure, fallback to another task
-        // TODO: We've lost a way to detect sleeve chance, need to look for a new way
-        //if (sleeve.location.includes("%") && !sleeve.location.includes("100%"))
-        if (sleeve.hp.current != sleeve.hp.max) // Assume if HP is not at max, they have started failing this task
-            bladeburnerTaskFailed[i] = Date.now(); // If not, don't re-attempt this assignment for a while
+        if ((bladeburnerContractChances[contractName] || 0) <= 0.99)
+            bladeburnerTaskFailed[i] = Date.now(); // If not, don't attempt this assignment for a while
         // As current city chaos gets progressively bad, assign more and more sleeves to Diplomacy to help get it under control
         if (bladeburnerCityChaos > (10 - i) * 10) // Later sleeves are first to get assigned, sleeve 0 is last at 100 chaos.
             [action, contractName] = ["Diplomacy"]; // Fall-back to something long-term useful
