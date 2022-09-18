@@ -396,9 +396,10 @@ async function kickstartHackXp(ns) {
             let maxXpCycles = 10;
             const maxXpTime = options['initial-hack-xp-time'];
             const start = Date.now();
-            const minCycleTime = getBestXPFarmTarget().timeToWeaken();
+            const xpTarget = getBestXPFarmTarget();
+            const minCycleTime = xpTarget.timeToWeaken();
             if (minCycleTime > maxXpTime * 1000)
-                return log(ns, `INFO: Skipping XP cycle because the best target (${getBestXPFarmTarget().name}) time to weaken (${formatDuration(minCycleTime)})` +
+                return log(ns, `INFO: Skipping XP cycle because the best target (${xpTarget.name}) time to weaken (${formatDuration(minCycleTime)})` +
                     ` is greater than the configured --initial-hack-xp-time of ${maxXpTime} seconds.`);
             log(ns, `INFO: Running Hack XP-focused cycles for ${maxXpTime} seconds to further boost hack XP and speed up main hack cycle times. (set --initial-hack-xp-time 0 to disable this step.)`);
             while (maxXpCycles-- > 0 && Date.now() - start < maxXpTime * 1000) {
@@ -531,6 +532,7 @@ async function doRoot(ns, server) {
     if (verbose) log(ns, `Rooting Server ${server.name}`);
     const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), daemonHost, 1, server.name);
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
+    server.resetCaches(); // If rooted status was cached, we must now reset it
 }
 
 // Main targeting loop
@@ -547,10 +549,9 @@ async function doTargetingLoop(ns) {
             psCache = []; // Clear the cache of the process list we update once per loop
             await buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process
             await updatePortCrackers(ns); // Check if any new port crackers have been purchased
-            const playerInfo = await getPlayerInfo(ns); // Update player info
+            await getPlayerInfo(ns); // Force an update of _cachedPlayerInfo
             // Run some auxilliary processes that ease the ram burden of this daemon and add additional functionality (like managing hacknet or buying servers)
             await runPeriodicScripts(ns);
-
             if (stockMode) await updateStockPositions(ns); // In stock market manipulation mode, get our current position in all stocks
             const targetingOrder = await getAllServersByTargetOrder();
 
@@ -1507,9 +1508,9 @@ let lastCycleTotalRam = 0; // Cache of total ram on the server to check whether 
 
 /** @param {NS} ns
  * Grind hack XP by filling a bunch of RAM with hack() / grow() / weaken() against a relatively easy target */
-async function farmHackXp(ns, percentOfFreeRamToConsume = 1, verbose = false, targets = undefined) {
+async function farmHackXp(ns, fractionOfFreeRamToConsume = 1, verbose = false, numTargets = undefined) {
     if (!xpOnly || loopingMode) // Only use basic single-target hacking unless we're in XP mode (and not looping)
-        return await scheduleHackExpCycle(ns, getBestXPFarmTarget(), percentOfFreeRamToConsume, verbose, false); // Grind some XP from the single best target for farming XP
+        return await scheduleHackExpCycle(ns, getBestXPFarmTarget(), fractionOfFreeRamToConsume, verbose, false); // Grind some XP from the single best target for farming XP
     // Otherwise, target multiple servers until we can't schedule any more. Each next best host should get the next best (biggest) server
     getTool("grow").isThreadSpreadingAllowed = true; // Only true when in XP mode - where each grow thread is expected to give 1$. "weak" can always spread.
     const serversByMaxRam = getAllServersByMaxRam();
@@ -1517,10 +1518,10 @@ async function farmHackXp(ns, percentOfFreeRamToConsume = 1, verbose = false, ta
     if (jobHosts.length == 0) jobHosts = serversByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 16); // Lower our standards if we're early-game and nothing qualifies
     var homeRam = Math.max(0, ns.getServerMaxRam("home") - homeReservedRam); // If home ram is large enough, the XP contributed by additional targets is insignificant compared to the risk of increased lag/latency.
     let targetsByExp = getXPFarmTargetsByExp();
-    targets = Math.min(maxTargets, targetsByExp.length, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
+    numTargets = Math.min(maxTargets, targetsByExp.length, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
     if (options.i) { // To farm intelligence, use manual hack on only the current connected server
         if (currentTerminalServer.name != "home") {
-            targets = 1;
+            numTargets = 1;
             targetsByExp = [currentTerminalServer];
         }
     }
@@ -1532,10 +1533,10 @@ async function farmHackXp(ns, percentOfFreeRamToConsume = 1, verbose = false, ta
     }
     let tryAdvanceMode = bitnodeMults.ScriptHackMoneyGain != 0; // We can't attempt hack-based XP if it's impossible to gain hack income (XP will always be 1/4)
     let singleServerMode = false; // Start off maximizing hack threads for best targets by spreading their weaken/grow threads to other servers
-    for (let i = 0; i < targets; i++) {
+    for (let i = 0; i < numTargets; i++) {
         let lastSchedulingResult;
         singleServerMode = singleServerMode || (i >= (jobHosts.length - 1 - singleServerLimit) || jobHosts[i + 1].totalRam() < 1000); // Switch to single-server mode if running out of hosts with high ram
-        etas.push(lastSchedulingResult = (await scheduleHackExpCycle(ns, targetsByExp[i], percentOfFreeRamToConsume, verbose, tryAdvanceMode, jobHosts[i], singleServerMode)) || Number.MAX_SAFE_INTEGER);
+        etas.push(lastSchedulingResult = (await scheduleHackExpCycle(ns, targetsByExp[i], fractionOfFreeRamToConsume, verbose, tryAdvanceMode, jobHosts[i], singleServerMode)) || Number.MAX_SAFE_INTEGER);
         if (lastSchedulingResult == Number.MAX_SAFE_INTEGER) break; // Stop scheduling targets if the last attempt failed
     }
     // Wait for all job scheduling threads to return, and sleep for the smallest cycle time remaining
