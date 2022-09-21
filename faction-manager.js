@@ -211,13 +211,13 @@ function shorten(mult) {
 // Helper function to take a shortened multi name provided by the user and map it to a real multi
 function unshorten(strMult) {
     if (!strMult) return strMult;
-    if (stat_multis.includes(strMult)) return strMult + "_mult"; // They just omitted the "_mult" suffix shared by all
-    if (stat_multis.includes(strMult.replace("_mult", ""))) return strMult; // It's fine as is
-    if (strMult == "_") return "hacking_mult"; // Default if no stat was provided.
-    let match = stat_multis.find(m => shorten(m) == strMult) || // Match on the short-form of a multiplier|| // Match on the short-form of a multiplier
+    if (stat_multis.includes(strMult)) return strMult; // They just omitted the "_mult" suffix shared by all
+    if (stat_multis.includes(strMult.replace("_mult", ""))) return strMult.replace("_mult", ""); // _mult suffix no longer appears
+    if (strMult == "_") return "hacking"; // Default if no stat was provided.
+    let match = stat_multis.find(m => m == strMult || shorten(m) == strMult) || // Match exactly on the short-form of a multiplier
         stat_multis.find(m => m.startsWith(strMult)) || // Otherwise match on the first multiplier that starts with the provided string
         stat_multis.find(m => m.includes(strMult)); // Otherwise match on the first multiplier that contains the provided string
-    if (find !== undefined) return match + "_mult";
+    if (find !== undefined) return match;
     throw `The specified stat name '${strMult}' does not match any of the known stat names: ${stat_multis.join(', ')}`;
 }
 
