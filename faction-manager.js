@@ -15,7 +15,7 @@ const potentialGangFactions = ["Slum Snakes", "Tetrads", "The Black Hand", "The 
 const default_hidden_stats = ['bladeburner', 'hacknet']; // Hide from the summary table by default because they clearly all come from one faction.
 const output_file = "/Temp/affordable-augs.txt";
 const staneksGift = "Stanek's Gift - Genesis";
-const factionsWithoutDonation = ["Bladeburners", "Church of the Machine God"]; // Not allowed to donate to these factions for rep
+const factionsWithoutDonation = ["Bladeburners", "Church of the Machine God", "Shadows of Anarchy"]; // Not allowed to donate to these factions for rep
 
 // Factors used in calculations
 const nfCountMult = 1.14; // Factors that control how neuroflux prices scale
@@ -39,7 +39,8 @@ const argsSchema = [ // The set of all command line arguments
     ['v', false], // (Kept for backwards compatilily) this was an alias flag for setting --verbose to true when it previously defaulted to false.
     ['ignore-player-data', false], // Display stats for all factions and augs, despite what we already have (kind of a "mock" mode)
     ['i', false], // Flag alias for --ignore-player-data
-    ['ignore-faction', []], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
+    // By default, we ignore "Shadows of Anarchy" because they are tied to infiltration (manual action) and their aug prices don't follow normal conventions
+    ['ignore-faction', ["Shadows of Anarchy"]], // Factions to omit from all data, stats, and calcs, (e.g.) if you do not want to purchase augs from them, or do not want to see them because they are impractical to join at this time
     ['after-faction', []], // Pretend we were to buy all augs offered by these factions. Show us only what remains.
     ['force-join', null], // Always join these factions if we have an invite (useful to force join a gang faction)
     // Augmentation purchasing-related options. Controls what augmentations are included in cost calculations, and optionally purchased
