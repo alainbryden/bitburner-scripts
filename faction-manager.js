@@ -10,6 +10,7 @@ const easyAccessFactions = [
     "BitRunners", "CyberSec", "NiteSec", /* Hack Based */ "Netburners", /* Hacknet-based */ "Slum Snakes", "Tetrads", /* Early Crime */
 ];
 const default_priority_augs = ["The Red Pill", "The Blade's Simulacrum", "Neuroreceptor Management Implant"]; // By default, take these augs when they are accessible
+const default_desired_augs = ["CashRoot Starter Kit"] // By default, mark these augs as "desired" regardless of their stats
 // If not in a gang, and we are nearing unlocking gangs (54K Karma) we will attempt to join any/all of these factions
 const potentialGangFactions = ["Slum Snakes", "Tetrads", "The Black Hand", "The Syndicate", "The Dark Army", "Speakers for the Dead"];
 const default_hidden_stats = ['bladeburner', 'hacknet']; // Hide from the summary table by default because they clearly all come from one faction.
@@ -102,12 +103,16 @@ export async function main(ns) {
     factionData = {}, augmentationData = {};
 
     printToTerminal = (options.v || options.verbose === true || options.verbose === null) && !options['join-only'];
+    ignorePlayerData = options.i || options['ignore-player-data'];
     const afterFactions = options['after-faction'].map(f => f.replaceAll("_", " "));
     const omitAugs = options['omit-aug'].map(f => f.replaceAll("_", " "));
+    // Set up augs which should take priority (in our purchase budget) over all others
     priorityAugs = options['priority-aug']?.map(f => f.replaceAll("_", " "));
     if (priorityAugs.length == 0) priorityAugs = default_priority_augs;
-    let desiredAugs = priorityAugs.concat(options['aug-desired'].map(f => f.replaceAll("_", " ")));
-    ignorePlayerData = options.i || options['ignore-player-data'];
+    // Set up "desired augs" to always include in our purhase order (but with standard priority). Should include priority-augs as well
+    let desiredAugs = options['aug-desired'].map(f => f.replaceAll("_", " "));
+    if (desiredAugs.length == 0) desiredAugs = default_desired_augs;
+    desiredAugs = priorityAugs.concat(desiredAugs);
 
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
     playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
@@ -143,9 +148,10 @@ export async function main(ns) {
     // Determine the set of desired augmentation stats. If not specified by the user, it's based on our situation
     desiredStatsFilters = options['stat-desired'];
     if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
-        desiredStatsFilters = ownedAugmentations.length > 40 ? ['_'] : // Once we have more than N augs, switch to buying up anything and everything
-            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || playerData.factions.includes("Bladeburners") ? ['_'] : // If doing bladeburners, combat augs matter too, so just get everything
+        desiredStatsFilters = ownedAugmentations.length > 40 ? ['*'] : // Once we have more than N augs, switch to buying up anything and everything
+            playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || playerData.factions.includes("Bladeburners") ? ['*'] : // If doing bladeburners, combat augs matter too, so just get everything
                 ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
+    log(ns, 'Desired stats filter: ' + JSON.stringify(desiredStatsFilters));
 
     // Prepare global data sets of faction and augmentation information
     log(ns, 'Getting all faction data...');
@@ -213,7 +219,7 @@ function unshorten(strMult) {
     if (!strMult) return strMult;
     if (stat_multis.includes(strMult)) return strMult; // They just omitted the "_mult" suffix shared by all
     if (stat_multis.includes(strMult.replace("_mult", ""))) return strMult.replace("_mult", ""); // _mult suffix no longer appears
-    if (strMult == "_") return "hacking"; // Default if no stat was provided.
+    if (strMult == "*") return "hacking"; // Default if no one stat was provided (* is the wildcard)
     let match = stat_multis.find(m => m == strMult || shorten(m) == strMult) || // Match exactly on the short-form of a multiplier
         stat_multis.find(m => m.startsWith(strMult)) || // Otherwise match on the first multiplier that starts with the provided string
         stat_multis.find(m => m.includes(strMult)); // Otherwise match on the first multiplier that contains the provided string
@@ -288,9 +294,9 @@ async function updateAugmentationData(ns, desiredAugs) {
         price: dictAugPrices[aug],
         stats: Object.fromEntries(Object.entries(dictAugStats[aug]).filter(([k, v]) => v != 1)),
         prereqs: dictAugPrereqs[aug] || [],
-        // The best augmentations either have no stats (special effect like no Focus penalty, or Red Pill), or stats in the 'stat-desired' command line options
-        desired: desiredAugs.includes(aug) || Object.keys(dictAugStats[aug]).length == 0 ||
-            Object.keys(dictAugStats[aug]).some(key => desiredStatsFilters.some(filter => key.includes(filter))),
+        desired: desiredAugs.includes(aug) ||  // Mark as "desired" augs explicitly requested, or those with stats in the 'stat-desired' command line options
+            desiredStatsFilters.includes('*') || desiredStatsFilters.includes('_') || // Wildcards - all stats are desired (_ is for backwards compatibility when all stat names ended with '_mult')
+            Object.entries(dictAugStats[aug]).some(([k, v]) => v != 1 && desiredStatsFilters.some(filter => k.includes(filter))),
         // Get the name of the "most-early-game" faction from which we can buy this augmentation. Estimate this by cost of the most expensive aug the offer
         getFromAny: factionNames.map(f => factionData[f]).sort((a, b) => a.mostExpensiveAugCost - b.mostExpensiveAugCost)
             .filter(f => f.augmentations.includes(aug))[0]?.name ?? "(unknown)",
