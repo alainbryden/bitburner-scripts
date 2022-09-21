@@ -265,6 +265,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
             contractCount < 1 || // Cannot perform contract if there are none remaining
             sleeve.hp.current < lastSleeveHp[i] || sleeve.shock > lastSleeveShock[i])) { // Detect if the sleeve recently failed the task
             bladeburnerTaskFailed[i] = Date.now(); // We must have failed.
+            onCooldown = true;
             log(ns, `Assuming sleeve ${i} cannot perform its designated task '${action} - ${contractName}' - ` +
                 (contractChance <= 0.99 ? `Player chance is too low (${(contractChance * 100).toFixed(2)}%)` :
                     contractCount < 1 ? `Insufficient contract count (${contractCount})` :
