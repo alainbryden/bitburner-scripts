@@ -95,6 +95,7 @@ async function manageSleeveAugs(ns, i, budget) {
         if (await getNsDataThroughFile(ns, `ns.args.slice(1).reduce((s, aug) => s && ns.sleeve.purchaseSleeveAug(ns.args[0], aug), true)`,
             '/Temp/sleeve-purchase.txt', [i, ...toPurchase.map(a => a.name)])) {
             log(ns, `SUCCESS: ${strAction}`, true, 'success');
+            [lastSleeveHp[i], lastSleeveShock[i]] = [undefined, undefined]; // Sleeve stats are reset on installation of augs, so forget saved health info
         } else log(ns, `ERROR: Failed to ${strAction}`, true, 'error');
         lastPurchaseTime[i] = Date.now();
         return batchCost; // Even if we think we failed, return the predicted cost so if the purchase did go through, we don't end up over-budget
@@ -172,6 +173,9 @@ async function mainLoop(ns) {
         // Decide what we think the sleeve should be doing for the next little while
         let [designatedTask, command, args, statusUpdate] =
             await pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrain);
+
+        // After picking sleeve tasks, take a note of the sleeve's health at the end of the prior loop so we can detect failures
+        [lastSleeveHp[i], lastSleeveShock[i]] = [sleeve.hp.current, sleeve.shock];
 
         // Set the sleeve's new task if it's not the same as what they're already doing.
         let assignSuccess = undefined;
@@ -280,7 +284,6 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
                     `Player chance is too low (${(contractChance * 100).toFixed(2)}% < ${(minBbProbability * 100)}%). `) +
                 `Will try again in ${formatDuration(waitForContractCooldown)}`);
         }
-        [lastSleeveHp[i], lastSleeveShock[i]] = [sleeve.hp.current, sleeve.shock];
         // As current city chaos gets progressively bad, assign more and more sleeves to Diplomacy to help get it under control
         if (bladeburnerCityChaos > (10 - i) * 10) // Later sleeves are first to get assigned, sleeve 0 is last at 100 chaos.
             [action, contractName] = ["Diplomacy"];
