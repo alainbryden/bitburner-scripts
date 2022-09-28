@@ -90,7 +90,7 @@ async function manageSleeveAugs(ns, i, budget) {
         log(ns, `INFO: With budget ${formatMoney(budget)}, ${(lastPurchaseStatusUpdate[i] = purchaseUpdate)} ` +
             `(Min batch size: ${options['min-aug-batch']}, Cooldown: ${formatDuration(cooldownLeft)})`);
     if (cooldownLeft == 0 && batchCount > 0 && ((batchCount >= availableAugs[i].length - 1) || batchCount >= options['min-aug-batch'])) { // Don't require the last aug it's so much more expensive
-        let strAction = `Purchase ${batchCount} augmentations for sleeve ${i} at total cost of ${formatMoney(batchCost)}`;
+        let strAction = `Purchase ${batchCount}/${availableAugs[i].length} augmentations for sleeve ${i} at total cost of ${formatMoney(batchCost)}`;
         let toPurchase = availableAugs[i].splice(0, batchCount);
         if (await getNsDataThroughFile(ns, `ns.args.slice(1).reduce((s, aug) => s && ns.sleeve.purchaseSleeveAug(ns.args[0], aug), true)`,
             '/Temp/sleeve-purchase.txt', [i, ...toPurchase.map(a => a.name)])) {
@@ -160,8 +160,9 @@ async function mainLoop(ns) {
 
     // If not disabled, set the "follow player" sleeve to be the first sleeve with 0 shock
     followPlayerSleeve = options['disable-follow-player'] ? -1 : undefined;
-    for (let i = 0; followPlayerSleeve === undefined, i < numSleeves; i++)
-        if (sleeveStats[i].shock == 0) followPlayerSleeve = i;
+    for (let i = 0; i < numSleeves; i++) // Hack below: Prioritize sleeves doing bladeburner contracts, don't have them follow player
+        if (sleeveStats[i].shock == 0 && (i < i || i > 3 || !playerInfo.inBladeburner || options['disable-bladeburner']))
+            followPlayerSleeve ??= i; // Skips assignment if previously assigned
     followPlayerSleeve ??= 0; // If all have shock, use the first sleeve
 
     for (let i = 0; i < numSleeves; i++) {
