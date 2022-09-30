@@ -9,7 +9,7 @@ const argsSchema = [
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
-    ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
+    ['no-focus', true], // Disable focusing, and forces study/faction/company/crime work to be non-focused
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
     ['training-stat-per-multi-threshold', 100], // Heuristic: Estimate that we can train this many levels for every mult / exp_mult we have in a reasonable amount of time.
@@ -570,7 +570,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
                 log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
-            let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
+            let focusArg = shouldFocus === undefined ? false : shouldFocus; // Only undefined if running as imported function
             crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', '/Temp/commitCrime.txt', [crime, focusArg])
             if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
         }
@@ -825,8 +825,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             const repGainRate = await measureFactionRepGainRate(ns, factionName);
             const eta_milliseconds = 1000 * (factionRepRequired - currentReputation) / repGainRate;
             ns.print(`${status} Currently at ${Math.round(currentReputation).toLocaleString('en')}, ` +
-                `earning ${formatNumberShort(repGainRate)} rep/sec. ` +
-                (hasFocusPenalty && !shouldFocus ? '(after 20% non-focus Penalty) ' : '') + `(ETA: ${formatDuration(eta_milliseconds)})`);
+                `earning ${formatNumberShort(repGainRate)} rep/sec. (ETA: ${formatDuration(eta_milliseconds)})`);
         }
         await tryBuyReputation(ns);
         await ns.sleep(loopSleepInterval);
@@ -1062,9 +1061,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
-            // TODO: BITBURNER BUG: Game currently inverting this argument. Fix as soon as the game is updated. 
-            let focusArg = shouldFocus ? false : true; // TODO: REMOVE ON BUG FIX
-            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, '/Temp/workForCompany.txt', [companyName, focusArg])) {
+            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, '/Temp/workForCompany.txt', [companyName, shouldFocus])) {
                 isWorking = true;
                 if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {
@@ -1083,8 +1080,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName);
             const eta = !isWorking ? "?" : formatDuration(1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate);
             player = await getPlayerInfo(ns);
-            ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRate)} rep/sec. ` +
-                (hasFocusPenalty && !shouldFocus ? `(after 20% non-focus Penalty)` : '') + `\n` +
+            ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRate)} rep/sec. ` + `\n` +
                 `${status}\nCurrent player stats are Hack:${player.skills.hacking} ${player.skills.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +
                 `Cha:${player.skills.charisma} ${player.skills.charisma >= (requiredCha || 0) ? '✓' : '✗'} ` +
                 `Rep:${Math.round(currentReputation).toLocaleString('en')} ${currentReputation >= (requiredRep || repRequiredForFaction) ? '✓' : `✗ (ETA: ${eta})`}`);
