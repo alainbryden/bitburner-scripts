@@ -189,7 +189,29 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 			{ "id": 101, "x": 6, "y": 2, "rotation": 1 }, // Booster
 			{ "id": 105, "x": 1, "y": 2, "rotation": 0 } // Booster
 		]
+	}, { // Ample Space ~ BN 12.85 to get more boosts on all stats
+		"height": 9, "width": 9, "fragments": [
+			{ "id": 0, "x": 4, "y": 1, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 4, "y": 4, "rotation": 0 }, // Hacking Mult
+			{ "id": 5, "x": 0, "y": 2, "rotation": 0 }, // Hacking Speed
+			{ "id": 6, "x": 4, "y": 0, "rotation": 0 }, // Hack power
+			{ "id": 7, "x": 2, "y": 0, "rotation": 0 }, // Grow power
+			{ "id": 10, "x": 7, "y": 2, "rotation": 1 }, // Strength
+			{ "id": 12, "x": 5, "y": 7, "rotation": 0 }, // Defense
+			{ "id": 14, "x": 1, "y": 5, "rotation": 1 }, // Dexterity
+			{ "id": 16, "x": 5, "y": 6, "rotation": 0 }, // Agility
+			{ "id": 18, "x": 3, "y": 4, "rotation": 1 }, // Charisma
+			{ "id": 20, "x": 0, "y": 3, "rotation": 3 }, // Hacknet Production
+			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Reputation
+			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Bladeburner Stats
+			{ "id": 101, "x": 1, "y": 7, "rotation": 2 }, // Booster *new*
+			{ "id": 101, "x": 7, "y": 5, "rotation": 1 }, // Booster
+			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
+			{ "id": 105, "x": 6, "y": 0, "rotation": 0 } // Booster *new*
+		]
 	}
+
 ];
 
 // Not used for anything, but captures our rough priorities when designing the above layouts
