@@ -228,7 +228,7 @@ async function onTerritoryTick(ns, myGangInfo) {
     // Update gang members in case someone died in a clash
     myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()', '/Temp/gang-member-names.txt');
     const nextMemberCost = Math.pow(5, myGangMembers.length - (3 /*numFreeMembers*/ - 1));
-    if (myGangMembers.length < 12 /* Game Max */ && myGangInfo.respect * 0.75 > nextMemberCost) // Don't spend more than 75% of our respect on new members.
+    if (myGangMembers.length < 12 /* Game Max */ && myGangInfo.respect >= nextMemberCost)
         await doRecruitMember(ns) // Recruit new members if available
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
     if (!options['no-auto-ascending']) await tryAscendMembers(ns); // Ascend members if we deem it a good time
