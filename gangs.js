@@ -47,7 +47,7 @@ let importantStats = [];
 let options;
 const argsSchema = [
     ['training-percentage', 0.05], // Spend this percent of time randomly training gang members versus doing crime
-    ['no-training', false], // Don't train unless all other tasks generate no gains
+    ['no-training', false], // Don't train unless all other tasks generate no gains or the member ascended recently (--min-training-ticks)
     ['no-auto-ascending', false], // Don't ascend members
     ['ascend-multi-threshold', 1.05], // Ascend member #12 if a primary stat multi would increase by more than this amount
     ['ascend-multi-threshold-spacing', 0.05], // Members will space their acention multis by this amount to ensure they are ascending at different rates 
@@ -136,7 +136,7 @@ async function initialize(ns) {
             if (sf4Level < 3)
                 log(ns, `WARNING: This script makes use of singularity functions, which are quite expensive before you have SF4.3. ` +
                     `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
-            const augmentationNames = await getNsDataThroughFile(ns, `ns.singularity.getAugmentationsFromFaction('${myGangFaction}')`, '/Temp/gang-augs.txt');
+            const augmentationNames = await getNsDataThroughFile(ns, `ns.singularity.getAugmentationsFromFaction(ns.args[0])`, '/Temp/gang-augs.txt', [myGangFaction]);
             const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
             const dictAugRepReqs = await getDict(ns, augmentationNames, 'singularity.getAugmentationRepReq', '/Temp/aug-repreqs.txt');
             // Due to a bug, gangs appear to provide "The Red Pill" even when it's unavailable (outside of BN2), so ignore this one.
