@@ -351,10 +351,10 @@ export function scanAllServers(ns) {
     let infiniteLoopProtection = 9999; // In case you mess with this code, this should save you from getting stuck
     while (hostsToScan.length > 0 && infiniteLoopProtection-- > 0) { // Loop until the list of hosts to scan is empty
         let hostName = hostsToScan.pop(); // Get the next host to be scanned
-        for (const connectedHost of ns.scan(hostName)) // "scan" (list all hosts connected to this one)
-            if (!discoveredHosts.includes(connectedHost)) // If we haven't already scanned this host
-                hostsToScan.push(connectedHost); // Add it to the queue of hosts to be scanned
         discoveredHosts.push(hostName); // Mark this host as "scanned"
+        for (const connectedHost of ns.scan(hostName)) // "scan" (list all hosts connected to this one)
+            if (!discoveredHosts.includes(connectedHost) && !hostsToScan.includes(connectedHost)) // If we haven't found this host
+                hostsToScan.push(connectedHost); // Add it to the queue of hosts to be scanned
     }
     return discoveredHosts; // The list of scanned hosts should now be the set of all hosts in the game!
 }
