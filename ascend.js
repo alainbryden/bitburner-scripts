@@ -28,6 +28,7 @@ export function autocomplete(data, args) {
 /** @param {NS} ns 
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
+    const run = ns.run.bind(ns);
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
@@ -40,7 +41,7 @@ export async function main(ns) {
     const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
 
     // Kill every script except this one, since it can interfere with out spending
-    let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => ns.kill(s.pid));`,
+    let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => kill(ns, s.pid));`,
         '/Temp/kill-everything-but.js', [ns.getScriptName()]);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has shut down other scripts
 
@@ -52,7 +53,7 @@ export async function main(ns) {
 
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
-    ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
+    run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
     const stkSymbols = await getStockSymbols(ns);
     if (stkSymbols != null) {
         const countOwnedStocks = async () => await getNsDataThroughFile(ns, `ns.args.map(sym => ns.stock.getPosition(sym))` +
@@ -60,7 +61,7 @@ export async function main(ns) {
         let ownedStocks;
         do {
             log(ns, `INFO: Waiting for ${ownedStocks} owned stocks to be sold...`, false, 'info');
-            pid = ns.run(getFilePath('stockmaster.js'), 1, '--liquidate');
+            pid = run(getFilePath('stockmaster.js'), 1, '--liquidate');
             if (pid) await waitForProcessToComplete(ns, pid, true);
             else log(ns, `ERROR: Failed to run "stockmaster.js --liquidate" to sell ${ownedStocks} owned stocks. Will try again soon...`, false, 'true');
             await ns.sleep(1000);
@@ -70,8 +71,9 @@ export async function main(ns) {
 
     // STEP 2: Buy Home RAM Upgrades (more important than squeezing in a few extra augs)
     const spendOnHomeRam = async () => {
+        const run = ns.run.bind(ns);
         log(ns, 'Try Upgrade Home RAM...', true, 'info');
-        pid = ns.run(getFilePath('Tasks/ram-manager.js'), 1, '--reserve', '0', '--budget', '0.8');
+        pid = run(getFilePath('Tasks/ram-manager.js'), 1, '--reserve', '0', '--budget', '0.8');
         await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it has bought all it can.
     };
     if (options['prioritize-home-ram']) await spendOnHomeRam();
@@ -101,7 +103,7 @@ export async function main(ns) {
         log(ns, 'INFO: Sending the --ignore-stanek argument to faction-manager.js')
         facmanArgs.push('--ignore-stanek');
     }
-    pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
+    pid = run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
     // Sanity check, if we are not slated to install any augmentations, ABORT
@@ -126,14 +128,14 @@ export async function main(ns) {
     // STEP 6: (SF10) Buy whatever sleeve upgrades we can afford
     if (10 in dictSourceFiles) {
         log(ns, 'Try Upgrade Sleeves...', true, 'info');
-        ns.run(getFilePath('sleeve.js'), 1, '--reserve', '0', '--aug-budget', '1', '--min-aug-batch', '1', '--buy-cooldown', '0', '--disable-training');
+        run(getFilePath('sleeve.js'), 1, '--reserve', '0', '--aug-budget', '1', '--min-aug-batch', '1', '--buy-cooldown', '0', '--disable-training');
         await ns.sleep(500); // Give it time to make its initial purchases. Note that we do not block on the process shutting down - it will keep running.
     }
 
     // STEP 7: (SF2) Buy whatever gang equipment we can afford
     if (2 in dictSourceFiles) {
         log(ns, 'Try Upgrade Gangs...', true, 'info');
-        ns.run(getFilePath('gangs.js'), 1, '--reserve', '0', '--augmentations-budget', '1', '--equipment-budget', '1');
+        run(getFilePath('gangs.js'), 1, '--reserve', '0', '--augmentations-budget', '1', '--equipment-budget', '1');
         await ns.sleep(500); // Give it time to make its initial purchases. Note that we do not block on the process shutting down - it will keep running.
     }
 
@@ -168,11 +170,11 @@ export async function main(ns) {
     // STEP 4 REDUX: If somehow we have money left over and can afford some junk augs that weren't on our desired list, grab them too
     log(ns, 'Seeing if we can afford any other augmentations...', true, 'info');
     facmanArgs.push('--stat-desired', '_'); // Means buy any aug with any stats
-    pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
+    pid = run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
     // Clean up our temp folder - it's good to do this once in a while to reduce the save footprint.
-    await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')), true);
+    await waitForProcessToComplete(ns, run(getFilePath('cleanup.js')), true);
 
     // FINALLY: If configured, soft reset
     if (options.reset || options['install-augmentations']) {

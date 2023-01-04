@@ -24,6 +24,7 @@ export function autocomplete(data, args) {
  * - Backing up your save / scripts first (try `download *` in the terminal)
  * - Ensuring you have no local changes that you don't mind getting overwritten **/
 export async function main(ns) {
+    const run = ns.run.bind(ns);
     options = ns.flags(argsSchema);
     if (options.subfolder && !options.subfolder.startsWith('/'))
         options.subfolder = '/' + options.subfolder; // Game requires folders to have a leading slash. Add one if it's missing.
@@ -41,7 +42,7 @@ export async function main(ns) {
     ns.tprint(`INFO: Pull complete. If you have any questions or issues, head over to the Bitburner #alains-scripts Discord channel: ` +
         `https://discord.com/channels/415207508303544321/935667531111342200`);
     // Remove any temp files / scripts from the prior version
-    ns.run(`${options.subfolder}/cleanup.js`);
+    run(`${options.subfolder}/cleanup.js`);
 }
 
 /** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/

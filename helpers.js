@@ -132,9 +132,10 @@ export function getFnIsAliveViaNsPs(ns) {
  * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
  **/
 export async function getNsDataThroughFile(ns, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+    const run = ns.run.bind(ns);
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
-    return await getNsDataThroughFile_Custom(ns, ns.run, command, fName, args, verbose, maxRetries, retryDelayMs);
+    return await getNsDataThroughFile_Custom(ns, run, command, fName, args, verbose, maxRetries, retryDelayMs);
 }
 
 /**
@@ -190,9 +191,10 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
  * @param {bool=} verbose - (default false) If set to true, the evaluation result of the command is printed to the terminal
  */
 export async function runCommand(ns, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+    const run = ns.run.bind(ns);
     checkNsInstance(ns, '"runCommand"');
     if (!verbose) disableLogs(ns, ['run']);
-    return await runCommand_Custom(ns, ns.run, command, fileName, args, verbose, maxRetries, retryDelayMs);
+    return await runCommand_Custom(ns, run, command, fileName, args, verbose, maxRetries, retryDelayMs);
 }
 
 const _cachedExports = [];
@@ -262,9 +264,10 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
  * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
  **/
 export async function waitForProcessToComplete(ns, pid, verbose) {
+    const isRunning = ns.isRunning.bind(ns);
     checkNsInstance(ns, '"waitForProcessToComplete"');
     if (!verbose) disableLogs(ns, ['isRunning']);
-    return await waitForProcessToComplete_Custom(ns, ns.isRunning, pid, verbose);
+    return await waitForProcessToComplete_Custom(ns, isRunning, pid, verbose);
 }
 /**
  * An advanced version of waitForProcessToComplete that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
@@ -549,4 +552,14 @@ export function unEscapeArrayArgs(args) {
     // Otherwise, args wrapped in quotes should have those quotes removed.
     const escapeChars = ['"', "'", "`"];
     return args.map(arg => escapeChars.some(c => arg.startsWith(c) && arg.endsWith(c)) ? arg.slice(1, -1) : arg);
+}
+
+export function getServer(ns) {
+    const getServer = ns.getServer.bind(ns);
+    return getServer
+}
+
+export function kill(ns, pid) {
+    const kill = ns.kill.bind(ns);
+    return kill(pid)
 }

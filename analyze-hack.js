@@ -15,6 +15,7 @@ export function autocomplete(data, args) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
+    const getServer = ns.getServer.bind(ns);
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
     disableLogs(ns, ["scan", "sleep"]);
@@ -41,7 +42,7 @@ export async function main(ns) {
     //ns.print(JSON.stringify(player));
 
     if (options['at-hack-level']) player.skills.hacking = options['at-hack-level'];
-    var servers = serverNames.map(ns.getServer);
+    var servers = serverNames.map(getServer);
     // Compute the total RAM available to us on all servers (e.g. for running hacking scripts)
     var ram_total = servers.reduce(function (total, server) {
         if (!server.hasAdminRights || (server.hostname.startsWith('hacknet') && !options['include-hacknet-ram'])) return total;

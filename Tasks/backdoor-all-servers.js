@@ -6,6 +6,7 @@ const spawnDelay = 50; // Delay to allow time for `installBackdoor` to start run
  * Scan all servers, backdoor anything that can be backdoored, and leave a file to indicate it's been done
  * Requires: SF-4.1 **/
 export let main = async ns => {
+    const run = ns.run.bind(ns);
     let anyConnected = false;
     try {
         let servers = ["home"],
@@ -46,7 +47,7 @@ export let main = async ns => {
             }
             ns.print(`Installing backdoor on "${server}"...`);
             // Kick off a separate script that will run backdoor before we connect to home.
-            var pid = ns.run(getFilePath('/Tasks/backdoor-all-servers.js.backdoor-one.js'), 1, server);
+            var pid = run(getFilePath('/Tasks/backdoor-all-servers.js.backdoor-one.js'), 1, server);
             if (pid === 0)
                 return ns.print(`Couldn't initiate a new backdoor of "${server}"" (insufficient RAM?). Will try again later.`);
             await ns.sleep(spawnDelay); // Wait some time for the external backdoor script to initiate its backdoor of the current connected server

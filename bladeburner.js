@@ -415,8 +415,9 @@ async function canDoBladeburnerWork(ns) {
 /** @param {NS} ns 
  * Ensure we're in the Bladeburner division */
 async function beingInBladeburner(ns) {
+    const run = ns.run.bind(ns);
     // Ensure we're in the Bladeburner division. If not, wait until we've joined it.
-    while (!player.inBladeburner) {
+    while (!ns.bladeburner.inBladeburner()) {
         try {
             if (player.skills.strength < 100 || player.skills.defense < 100 || player.skills.dexterity < 100 || player.skills.agility < 100)
                 log(ns, `Waiting for physical stats >100 to join bladeburner ` +
@@ -443,7 +444,7 @@ async function beingInBladeburner(ns) {
     if (options['disable-spending-hashes'] || !(9 in ownedSourceFiles)) return;
     const fPath = getFilePath('spend-hacknet-hashes.js');
     const args = ['--spend-on', 'Exchange_for_Bladeburner_Rank', '--spend-on', 'Exchange_for_Bladeburner_SP', '--liquidate'];
-    if (ns.run(fPath, 1, ...args))
+    if (run(fPath, 1, ...args))
         log(ns, `INFO: Launched '${fPath}' to gain Bladeburner Rank and Skill Points more quickly (Can be disabled with --disable-spending-hashes)`)
     else
         log(ns, `WARNING: Failed to launch '${fPath}' (already running?)`)

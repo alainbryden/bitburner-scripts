@@ -39,6 +39,7 @@ let options, currentServer, maxCharges, idealReservedRam, chargeAttempts, sf4Lev
  *       Stanek stats benefit more from charges with a high avg RAM used per charge, rather than just more charges. 
  * @param {NS} ns **/
 export async function main(ns) {
+    const run = ns.run.bind(ns);
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
@@ -47,7 +48,7 @@ export async function main(ns) {
     // Validate whether we can run
     if ((await getActiveFragments(ns)).length == 0) {
         // Try to run our helper script to set up the grid
-        const pid = ns.run(getFilePath('stanek.js.create.js'));
+        const pid = run(getFilePath('stanek.js.create.js'));
         if (pid) await waitForProcessToComplete(ns, pid);
         else log(ns, "ERROR while attempting to run stanek.js.create.js (pid was 0)");
         // Verify that this worked.
@@ -65,7 +66,7 @@ export async function main(ns) {
         if (startupArgs.length == 0) startupArgs = defaultStartupArgs;
     }
     // If so configured, launch the start-up script to run alongside stanek and let it consume the RAM it needs before initiating stanek loops.
-    if (ns.run(startupScript, 1, ...startupArgs)) {
+    if (run(startupScript, 1, ...startupArgs)) {
         log(ns, `INFO: Stanek.js is launching accompanying 'on-startup-script': ${startupScript}...`, false, 'info');
         await ns.sleep(1000); // Give time for the accompanying script to start up and consume its required RAM footprint.
     } else
@@ -129,7 +130,7 @@ export async function main(ns) {
         completionScript = defaultCompletionScript;
         if (completionArgs.length == 0) completionArgs = defaultCompletionArgs;
     }
-    if (ns.run(completionScript, 1, ...completionArgs))
+    if (run(completionScript, 1, ...completionArgs))
         log(ns, `INFO: Stanek.js shutting down and launching ${completionScript}...`, false, 'info');
     else
         log(ns, `WARNING: Stanek.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
@@ -180,6 +181,7 @@ async function getFragmentsToCharge(ns) {
  * @param {NS} ns
  * @returns {Promise<bool>} whether all fragments were charged successfully **/
 async function tryChargeAllFragments(ns, fragmentsToCharge) {
+    const run = ns.run.bind(ns);
     // Charge each fragment one at a time
     for (const fragment of fragmentsToCharge) {
         let availableRam = ns.getServerMaxRam(currentServer) - ns.getServerUsedRam(currentServer);
@@ -190,7 +192,7 @@ async function tryChargeAllFragments(ns, fragmentsToCharge) {
                 `(${formatRam(availableRam)} free - ${formatRam(reservedRam)} reserved). Will try again later...`);
             continue;
         }
-        const pid = ns.run(chargeScript, threads, fragment.x, fragment.y);
+        const pid = run(chargeScript, threads, fragment.x, fragment.y);
         if (!pid) {
             log(ns, `WARNING: Failed to charge Stanek with ${threads} threads thinking there was ${formatRam(availableRam)} free on ${currentServer}. ` +
                 `Check if another script is fighting stanek.js for RAM. Will try again later...`);

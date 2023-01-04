@@ -138,7 +138,7 @@ async function mainLoop(ns) {
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
-    if (playerInfo.inBladeburner && (7 in ownedSourceFiles)) {
+    if (ns.bladeburner.inBladeburner() && (7 in ownedSourceFiles)) {
         const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
         bladeburnerContractChances = await getNsDataThroughFile(ns,
@@ -161,7 +161,7 @@ async function mainLoop(ns) {
     // If not disabled, set the "follow player" sleeve to be the first sleeve with 0 shock
     followPlayerSleeve = options['disable-follow-player'] ? -1 : undefined;
     for (let i = 0; i < numSleeves; i++) // Hack below: Prioritize sleeves doing bladeburner contracts, don't have them follow player
-        if (sleeveStats[i].shock == 0 && (i < i || i > 3 || !playerInfo.inBladeburner || options['disable-bladeburner']))
+        if (sleeveStats[i].shock == 0 && (i < i || i > 3 || !ns.bladeburner.inBladeburner() || options['disable-bladeburner']))
             followPlayerSleeve ??= i; // Skips assignment if previously assigned
     followPlayerSleeve ??= 0; // If all have shock, use the first sleeve
 
@@ -255,7 +255,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
     if (!playerInGang && !options['disable-gang-homicide-priority'] && (2 in ownedSourceFiles) && ns.heart.break() > -54000)
         return await crimeTask(ns, 'homicide', i, sleeve); // Ignore chance - even a failed homicide generates more Karma than every other crime
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
-    if (playerInfo.inBladeburner && !options['disable-bladeburner']) {
+    if (ns.bladeburner.inBladeburner() && !options['disable-bladeburner']) {
         // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
         const bbTasks = [
             // Note: Sleeve 0 might still be used for faction work (unless --disable-follow-player is set), so don't assign them a 'unique' task

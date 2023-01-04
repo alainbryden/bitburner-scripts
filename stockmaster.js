@@ -78,7 +78,7 @@ export async function main(ns) {
         if (!hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
         log(ns, 'INFO: Killing any other stockmaster processes...', false, 'info');
         await runCommand(ns, `ns.ps().filter(proc => proc.filename == '${ns.getScriptName()}' && !proc.args.includes('-l') && !proc.args.includes('--liquidate'))` +
-            `.forEach(proc => ns.kill(proc.pid))`, '/Temp/kill-stockmarket-scripts.js');
+            `.forEach(proc => kill(ns, proc.pid))`, '/Temp/kill-stockmarket-scripts.js');
         log(ns, 'INFO: Checking for and liquidating any stocks...', false, 'info');
         await liquidate(ns); // Sell all stocks
         return;

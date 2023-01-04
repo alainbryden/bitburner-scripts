@@ -208,7 +208,7 @@ async function checkIfBnIsComplete(ns, player) {
 	}
 	// Detect if a BN win condition has been met
 	let bnComplete = player.skills.hacking >= wdHack;
-	if (!bnComplete && player.inBladeburner && (7 in unlockedSFs)) // Detect the BB win condition
+	if (!bnComplete && ns.bladeburner.inBladeburner() && (7 in unlockedSFs)) // Detect the BB win condition
 		bnComplete = await getNsDataThroughFile(ns,
 			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
 			'/Temp/bladeburner-completed.txt');
@@ -286,7 +286,7 @@ async function killScript(ns, baseScriptName, runningScripts = null, processInfo
 	processInfo = processInfo || findScriptHelper(baseScriptName, runningScripts || (await getRunningScripts(ns)))
 	if (processInfo) {
 		log(ns, `INFO: Killing script ${baseScriptName} with pid ${processInfo.pid} and args: [${processInfo.args.join(", ")}].`, false, 'info');
-		return await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', '/Temp/kill.txt', [processInfo.pid]);
+		return await getNsDataThroughFile(ns, 'kill(ns, ns.args[0])', '/Temp/kill.txt', [processInfo.pid]);
 	}
 	log(ns, `WARNING: Skipping request to kill script ${baseScriptName}, no running instance was found...`, false, 'warning');
 	return false;
@@ -633,8 +633,9 @@ async function manageReservedMoney(ns, player, stocksValue) {
 /** Helper to launch a script and log whether if it succeeded or failed
  * @param {NS} ns */
 function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
+	const run = ns.run.bind(ns);
 	ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
-	const pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
+	const pid = run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
 	if (!pid)
 		log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
 	else

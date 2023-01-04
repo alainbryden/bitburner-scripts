@@ -282,7 +282,7 @@ export async function main(ns) {
         },
         {   // Script to create manage bladeburner for us
             name: "bladeburner.js", tail: openTailWindows,
-            shouldRun: () => 7 in dictSourceFiles && (_cachedPlayerInfo.inBladeburner || [6, 7].includes(playerBitnode))
+            shouldRun: () => 7 in dictSourceFiles && (ns.bladeburner.inBladeburner() || [6, 7].includes(playerBitnode))
         },
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
@@ -1722,7 +1722,7 @@ async function terminateScriptsManipulatingStock(ns, servers, toolName) {
 /** Helper to kill a list of process ids
  * @param {NS} ns **/
 async function killProcessIds(ns, processIds) {
-    return await runCommand(ns, `ns.args.forEach(ns.kill)`, '/Temp/kill-pids.js', processIds);
+    return await runCommand(ns, `ns.args.forEach(p => kill(ns, p))`, '/Temp/kill-pids.js', processIds);
 }
 
 /** @param {Server} server **/

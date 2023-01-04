@@ -98,6 +98,7 @@ function setStatus(ns, logMessage) {
 /** @param {NS} ns 
   * Attempts to buy a server at or better than your home machine. **/
 async function tryToBuyBestServerPossible(ns) {
+    const run = ns.run.bind(ns);
     // Gether the list of all purchased servers.
     const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/getPurchasedServers.txt');
     // Scan the set of all servers on the network that we own (or rooted) to get a sense of current RAM utilization
@@ -202,7 +203,7 @@ async function tryToBuyBestServerPossible(ns) {
 
         // It's only worth deleting our old server if the new server will be 16x bigger or more (or if it's the biggest we can buy)
         if (exponentLevel == maxPurchasableServerRamExponent || worstServerRam * 16 <= maxRamPossibleToBuy) {
-            ns.run("remove-worst-server.js");
+            run("remove-worst-server.js");
             return setStatus(ns, `hostmanager.js requested to delete server ${worstServerName} (${formatRam(worstServerRam)} RAM) ` +
                 `to make room for a new ${formatRam(maxRamPossibleToBuy)} Server.`);
         } else {

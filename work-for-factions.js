@@ -265,7 +265,7 @@ async function mainLoop(ns) {
         }
     }
     // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, whether we pause working.        
-    if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check'] && player.inBladeburner) {
+    if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check'] && ns.bladeburner.inBladeburner()) {
         if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working
             ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
             await stop(ns); // stop working so bladeburner can run
@@ -370,6 +370,7 @@ const reqHackingOrCombat = ["Daedalus"]; // Special case factions that require o
 
 /** @param {NS} ns */
 async function earnFactionInvite(ns, factionName) {
+    const run = ns.run.bind(ns);
     let player = await getPlayerInfo(ns);
     const joinedFactions = player.factions;
     if (joinedFactions.includes(factionName)) return true;
@@ -475,7 +476,7 @@ async function earnFactionInvite(ns, factionName) {
             player = await getPlayerInfo(ns);
             if (player.skills.hacking > requirement) {
                 ns.print(`Current hacking level ${player.skills.hacking} seems to now meet the backdoor requirement ${requirement}. Spawning backdoor-all-servers.js...`);
-                ns.run(getFilePath("/Tasks/backdoor-all-servers.js"));
+                run(getFilePath("/Tasks/backdoor-all-servers.js"));
             }
         }
     }

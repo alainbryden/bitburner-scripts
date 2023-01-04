@@ -32,6 +32,7 @@ function tailAndLog(ns, message) {
 
 /** @param {NS} ns **/
 export async function main(ns) {
+	const run = ns.run.bind(ns);
 	options = getConfiguration(ns, argsSchema);
 	if (!options) return; // Invalid options, or ran in --help mode.
 	_ns = ns;
@@ -121,7 +122,7 @@ export async function main(ns) {
 				if (options['kill-all-scripts'])
 					await killAllOtherScripts(ns, !options['no-deleting-remote-files']);
 				// Step 2.5.3: Clear the temp folder on home (all transient scripts / outputs)
-				await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+				await waitForProcessToComplete(ns, run(getFilePath('cleanup.js')));
 			}
 			break; // We achieved everthing we wanted, we can exit the while loop.
 		} catch (err) {
@@ -189,7 +190,7 @@ async function reload(ns) {
  *  Helper to kill all scripts on all other servers, except this one **/
 async function killAllOtherScripts(ns, removeRemoteFiles) {
 	// Kill processes on home (except this one)
-	let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => ns.kill(s.pid));`,
+	let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => kill(ns, s.pid));`,
 		'/Temp/kill-everything-but.js', [ns.getScriptName()]);
 	await waitForProcessToComplete(ns, pid);
 	log(ns, `INFO: Killed other scripts running on home...`, true);
@@ -214,6 +215,7 @@ async function killAllOtherScripts(ns, removeRemoteFiles) {
 /** @param {NS} ns 
  *  Run when we can no longer gamble at the casino (presumably because we've been kicked out) **/
 async function onCompletion(ns) {
+	const run = ns.run.bind(ns);
 	await ns.write(ran_flag, "True", "w"); // Write an file indicating we think we've been kicked out of the casino.
 	log(ns, "SUCCESS: We've been kicked out of the casino.", true);
 
@@ -221,7 +223,7 @@ async function onCompletion(ns) {
 	let completionScript = options['on-completion-script'];
 	if (!completionScript) return;
 	let completionArgs = options['on-completion-script-args'];
-	if (ns.run(completionScript, 1, ...completionArgs))
+	if (run(completionScript, 1, ...completionArgs))
 		log(ns, `INFO: casino.js shutting down and launching ${completionScript}...`, false, 'info');
 	else
 		log(ns, `WARNING: casino.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');

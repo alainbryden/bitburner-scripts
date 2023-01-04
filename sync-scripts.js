@@ -5,6 +5,7 @@ const home = "home";
 
 /** @param {NS} ns */
 export async function main(ns) {
+	const kill = ns.kill.bind(ns);
 	let scan = (server, parent) => ns.scan(server)
 		.map(newServer => newServer != parent ? scan(newServer, server) : server).flat();
 	["scan", "scp"].forEach(log => ns.disableLog(log));
@@ -23,7 +24,7 @@ export async function main(ns) {
 					const runningInstances = ns.ps(server).filter(p => p.filename == file);
 					runningInstances.forEach(p => { // Restart any running instances
 						ns.print(`Restarting script ${file} on ${server} (was running with pid ${p.pid})...`);
-						ns.kill(p.pid);
+						kill(p.pid);
 						ns.exec(p.filename, server, p.threads, ...p.args);
 					})
 				}
