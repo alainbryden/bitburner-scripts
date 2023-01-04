@@ -1722,7 +1722,7 @@ async function terminateScriptsManipulatingStock(ns, servers, toolName) {
 /** Helper to kill a list of process ids
  * @param {NS} ns **/
 async function killProcessIds(ns, processIds) {
-    return await runCommand(ns, `ns.args.forEach(ns.kill)`, '/Temp/kill-pids.js', processIds);
+    return await runCommand(ns, `ns.args.forEach(ns.kill.bind(ns))`, '/Temp/kill-pids.js', processIds);
 }
 
 /** @param {Server} server **/

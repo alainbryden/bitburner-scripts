@@ -134,7 +134,8 @@ export function getFnIsAliveViaNsPs(ns) {
 export async function getNsDataThroughFile(ns, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
-    return await getNsDataThroughFile_Custom(ns, ns.run, command, fName, args, verbose, maxRetries, retryDelayMs);
+    const run = ns.run.bind(ns)
+    return await getNsDataThroughFile_Custom(ns, run, command, fName, args, verbose, maxRetries, retryDelayMs);
 }
 
 /**
@@ -192,7 +193,8 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
 export async function runCommand(ns, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand"');
     if (!verbose) disableLogs(ns, ['run']);
-    return await runCommand_Custom(ns, ns.run, command, fileName, args, verbose, maxRetries, retryDelayMs);
+    const run = ns.run.bind(ns)
+    return await runCommand_Custom(ns, run, command, fileName, args, verbose, maxRetries, retryDelayMs);
 }
 
 const _cachedExports = [];
@@ -264,7 +266,8 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
 export async function waitForProcessToComplete(ns, pid, verbose) {
     checkNsInstance(ns, '"waitForProcessToComplete"');
     if (!verbose) disableLogs(ns, ['isRunning']);
-    return await waitForProcessToComplete_Custom(ns, ns.isRunning, pid, verbose);
+    const isRunning = ns.isRunning.bind(ns)
+    return await waitForProcessToComplete_Custom(ns, isRunning, pid, verbose);
 }
 /**
  * An advanced version of waitForProcessToComplete that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)

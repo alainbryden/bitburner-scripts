@@ -41,7 +41,8 @@ export async function main(ns) {
     //ns.print(JSON.stringify(player));
 
     if (options['at-hack-level']) player.skills.hacking = options['at-hack-level'];
-    var servers = serverNames.map(ns.getServer);
+    const getServer = ns.getServer.bind(ns)
+    var servers = serverNames.map(getServer);
     // Compute the total RAM available to us on all servers (e.g. for running hacking scripts)
     var ram_total = servers.reduce(function (total, server) {
         if (!server.hasAdminRights || (server.hostname.startsWith('hacknet') && !options['include-hacknet-ram'])) return total;
