@@ -70,16 +70,16 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
     const minCacheLevel = [...Array(ns.hacknet.numNodes()).keys()].reduce((min, i) => Math.min(min, ns.hacknet.getNodeStats(i).cache), Number.MAX_VALUE);
     // Note: Formulas API has a hashGainRate which should agree with these calcs, but this way they're available even without the formulas API
     const upgrades = [{ name: "none", cost: 0 }, {
-        name: "level", upgrade: ns.hacknet.upgradeLevel, cost: i => ns.hacknet.getLevelUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.level + 1,
+        name: "level", upgrade: ns.hacknet.upgradeLevel.bind(ns), cost: i => ns.hacknet.getLevelUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.level + 1,
         addedProduction: nodeStats => nodeStats.production * ((nodeStats.level + 1) / nodeStats.level - 1)
     }, {
-        name: "ram", upgrade: ns.hacknet.upgradeRam, cost: i => ns.hacknet.getRamUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.ram * 2,
+        name: "ram", upgrade: ns.hacknet.upgradeRam.bind(ns), cost: i => ns.hacknet.getRamUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.ram * 2,
         addedProduction: nodeStats => nodeStats.production * 0.07
     }, {
-        name: "cores", upgrade: ns.hacknet.upgradeCore, cost: i => ns.hacknet.getCoreUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.cores + 1,
+        name: "cores", upgrade: ns.hacknet.upgradeCore.bind(ns), cost: i => ns.hacknet.getCoreUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.cores + 1,
         addedProduction: nodeStats => nodeStats.production * ((nodeStats.cores + 5) / (nodeStats.cores + 4) - 1)
     }, {
-        name: "cache", upgrade: ns.hacknet.upgradeCache, cost: i => ns.hacknet.getCacheUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.cache + 1,
+        name: "cache", upgrade: ns.hacknet.upgradeCache.bind(ns), cost: i => ns.hacknet.getCacheUpgradeCost(i, 1), nextValue: nodeStats => nodeStats.cache + 1,
         addedProduction: nodeStats => nodeStats.cache > minCacheLevel || !haveHacknetServers ? 0 : nodeStats.production * 0.01 / nodeStats.cache // Note: Does not actually give production, but it has "worth" to us so we can buy more things
     }];
     // Find the best upgrade we can make to an existing node
