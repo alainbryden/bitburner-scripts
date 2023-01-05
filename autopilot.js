@@ -26,6 +26,7 @@ const argsSchema = [ // The set of all command line arguments
 	['wait-for-4s-threshold', 0.9], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
 	['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
 	['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
+	['disable-casino', false], // Set to true to disable running the casino.js script automatically
 	['on-completion-script', null], // Spawn this script when we defeat the bitnode
 	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
 ];
@@ -53,6 +54,10 @@ let bnCompletionSuppressed; // Flag if we've detected that we've won the BN, but
 /** @param {NS} ns **/
 export async function main(ns) {
 	const runOptions = getConfiguration(ns, argsSchema);
+
+	const installCountdown = Date.now() + runOptions['install-countdown'];
+	ns.toast(`Heads up: Autopilot plans to reset in ${formatDuration(installCountdown - Date.now())}`, 'info');
+
 	if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
 	options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
 
@@ -233,7 +238,7 @@ async function checkIfBnIsComplete(ns, player) {
 		if (numSleeves < shouldHaveSleeveCount) {
 			log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.` +
 				`\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
-				`\nNOTE: You can ONLY buy sleeves/memory from The Covenant in BN10, which is why it's important to do this before you leave.`);
+				`\nNOTE: You can ONLY buy sleeves/memory from The Covenant in BN10, which is why it's important to do this before you leave.`, true);
 			return bnCompletionSuppressed = true;
 		}
 	}
@@ -414,7 +419,7 @@ async function checkOnRunningScripts(ns, player) {
  * @param {NS} ns 
  * @param {Player} player */
 async function maybeDoCasino(ns, player) {
-	if (ranCasino) return;
+	if (ranCasino || options['disable-casino']) return;
 	const casinoRanFileSet = ns.read(casinoFlagFile);
 	const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
 	// If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
