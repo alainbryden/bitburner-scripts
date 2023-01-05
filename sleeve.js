@@ -38,7 +38,7 @@ const waitForContractCooldown = 60 * 1000; // 1 minute - Cooldown when contract 
 let cachedCrimeStats, workByFaction; // Cache of crime statistics and which factions support which work
 let task, lastStatusUpdateTime, lastPurchaseTime, lastPurchaseStatusUpdate, availableAugs, cacheExpiry,
     shockChance, lastRerollTime, bladeburnerCooldown, lastSleeveHp, lastSleeveShock; // State by sleeve
-let numSleeves, ownedSourceFiles, playerInGang, bladeburnerCityChaos, bladeburnerContractChances, bladeburnerContractCounts, followPlayerSleeve;
+let numSleeves, ownedSourceFiles, playerInGang, playerInBladeburner, bladeburnerCityChaos, bladeburnerContractChances, bladeburnerContractCounts, followPlayerSleeve;
 let options;
 
 export function autocomplete(data, _) {
@@ -115,12 +115,21 @@ async function getCurrentWorkInfo(ns) {
     return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt')) ?? {};
 }
 
+/** @param {NS} ns
+ * @param {number} numSleeves
+ * @returns {Promise<SleevePerson[]>} */
+async function getAllSleeves(ns, numSleeves) {
+    return await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getSleeve(i))`,
+        `/Temp/sleeve-getSleeve-all.txt`, [...Array(numSleeves).keys()]);
+}
+
 /** @param {NS} ns 
  * Main loop that gathers data, checks on all sleeves, and manages them. */
 async function mainLoop(ns) {
     // Update info
     numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
     const playerInfo = await getPlayerInfo(ns);
+    playerInBladeburner = await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
     const playerWorkInfo = await getCurrentWorkInfo(ns);
     if (!playerInGang) playerInGang = !(2 in ownedSourceFiles) ? false :
         await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
@@ -138,7 +147,7 @@ async function mainLoop(ns) {
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
-    if (playerInfo.inBladeburner && (7 in ownedSourceFiles)) {
+    if (playerInBladeburner && (7 in ownedSourceFiles)) {
         const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
         bladeburnerContractChances = await getNsDataThroughFile(ns,
@@ -151,22 +160,18 @@ async function mainLoop(ns) {
     } else
         bladeburnerCityChaos = 0, bladeburnerContractChances = {}, bladeburnerContractCounts = {};
 
-    // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
-    let dictSleeveCommand = async (command) => await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.${command}(i))`,
-        `/Temp/sleeve-${command}-all.txt`, [...Array(numSleeves).keys()]);
-    let sleeveStats = await dictSleeveCommand('getSleeveStats');
-    let sleeveInfo = await dictSleeveCommand('getInformation');
-    let sleeveTasks = await dictSleeveCommand('getTask');
+    // Update all sleeve information and loop over all sleeves to do some individual checks and task assignments
+    let sleeveInfo = await getAllSleeves(ns, numSleeves);
 
     // If not disabled, set the "follow player" sleeve to be the first sleeve with 0 shock
     followPlayerSleeve = options['disable-follow-player'] ? -1 : undefined;
     for (let i = 0; i < numSleeves; i++) // Hack below: Prioritize sleeves doing bladeburner contracts, don't have them follow player
-        if (sleeveStats[i].shock == 0 && (i < i || i > 3 || !playerInfo.inBladeburner || options['disable-bladeburner']))
+        if (sleeveInfo[i].shock == 0 && (i < i || i > 3 || !playerInBladeburner || options['disable-bladeburner']))
             followPlayerSleeve ??= i; // Skips assignment if previously assigned
     followPlayerSleeve ??= 0; // If all have shock, use the first sleeve
 
     for (let i = 0; i < numSleeves; i++) {
-        let sleeve = { ...sleeveStats[i], ...sleeveInfo[i], ...sleeveTasks[i] }; // For convenience, merge all sleeve stats/info into one object
+        let sleeve = sleeveInfo[i]; // For convenience, merge all sleeve stats/info into one object
         // Manage sleeve augmentations (if available)
         if (sleeve.shock == 0) // No augs are available augs until shock is 0
             budget -= await manageSleeveAugs(ns, i, budget);
@@ -192,20 +197,17 @@ async function mainLoop(ns) {
     }
 }
 
-/** Provide type hint information for sleeve tasks, lost in a recent update. */
-class SleeveTask { constructor() { this.type = ""; this.actionType = ""; this.actionName = ""; } }
-
 /** Picks the best task for a sleeve, and returns the information to assign and give status updates for that task.
  * @param {NS} ns 
  * @param {Player} playerInfo
  * @param {{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }} playerWorkInfo
- * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve
+ * @param {SleevePerson} sleeve
  * @returns {Promise<[string, string, any[], string]>} a 4-tuple of task name, command, args, and status message */
 async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrain) {
     // Initialize sleeve dicts on first loop
     if (lastSleeveHp[i] === undefined) lastSleeveHp[i] = sleeve.hp.current;
     if (lastSleeveShock[i] === undefined) lastSleeveShock[i] = sleeve.shock;
-    // Must synchronize first iif you haven't maxed memory on every sleeve.
+    // Must synchronize first iif you haven't maxed memory on every sleeve
     if (sleeve.sync < 100)
         return ["synchronize", `ns.sleeve.setToSynchronize(ns.args[0])`, [i], `syncing... ${sleeve.sync.toFixed(2)}%`];
     // Opt to do shock recovery if above the --min-shock-recovery threshold
@@ -227,12 +229,12 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
         if (untrainedStats.length > 0) {
             if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
-            if (sleeve.city != "Sector-12") {
+            if (sleeve.city != CityName.Sector12) {
                 log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Sector-12 so that they can study at Powerhouse Gym.`);
-                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', '/Temp/sleeve-travel.txt', [i, "Sector-12"]);
+                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', '/Temp/sleeve-travel.txt', [i, CityName.Sector12]);
             }
             var trainStat = untrainedStats.reduce((min, s) => sleeve[s] < sleeve[min] ? s : min, untrainedStats[0]);
-            var gym = 'Powerhouse Gym';
+            var gym = LocationName.Sector12PowerhouseGym;
             return [`train ${trainStat} (${gym})`, `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`, [i, gym, trainStat],
             /*   */ `training ${trainStat}... ${sleeve[trainStat]}/${(options[`train-to-${trainStat}`])}`];
         }
@@ -255,7 +257,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
     if (!playerInGang && !options['disable-gang-homicide-priority'] && (2 in ownedSourceFiles) && ns.heart.break() > -54000)
         return await crimeTask(ns, 'homicide', i, sleeve); // Ignore chance - even a failed homicide generates more Karma than every other crime
     // If the player is in bladeburner, and has already unlocked gangs with Karma, generate contracts and operations
-    if (playerInfo.inBladeburner && !options['disable-bladeburner']) {
+    if (playerInBladeburner && !options['disable-bladeburner']) {
         // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
         const bbTasks = [
             // Note: Sleeve 0 might still be used for faction work (unless --disable-follow-player is set), so don't assign them a 'unique' task
@@ -306,7 +308,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
 }
 
 /** Helper to prepare the shock recovery task
- * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve */
+ * @param {SleevePerson} sleeve */
 function shockRecoveryTask(sleeve, i) {
     return [`recover from shock`, `ns.sleeve.setToShockRecovery(ns.args[0])`, [i],
     /*   */ `recovering from shock... ${sleeve.shock.toFixed(2)}%`];
@@ -314,7 +316,7 @@ function shockRecoveryTask(sleeve, i) {
 
 /** Helper to prepare the crime task
  * @param {NS} ns 
- * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve 
+ * @param {SleevePerson} sleeve 
  * @returns {Promise<[string, string, any[], string]>} a 4-tuple of task name, command, args, and status message */
 async function crimeTask(ns, crime, i, sleeve) {
     const successChance = await calculateCrimeChance(ns, sleeve, crime);
@@ -374,6 +376,7 @@ async function promptForTrainingBudget(ns) {
 }
 
 /** @param {NS} ns 
+ * @param {SleevePerson} sleeve 
  * Calculate the chance a sleeve has of committing homicide successfully. */
 async function calculateCrimeChance(ns, sleeve, crimeName) {
     // If not in the cache, retrieve this crime's stats
@@ -384,12 +387,12 @@ async function calculateCrimeChance(ns, sleeve, crimeName) {
             crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :
                 undefined));
     let chance =
-        (crimeStats.hacking_success_weight || 0) * sleeve.hacking +
-        (crimeStats.strength_success_weight || 0) * sleeve.strength +
-        (crimeStats.defense_success_weight || 0) * sleeve.defense +
-        (crimeStats.dexterity_success_weight || 0) * sleeve.dexterity +
-        (crimeStats.agility_success_weight || 0) * sleeve.agility +
-        (crimeStats.charisma_success_weight || 0) * sleeve.charisma;
+        (crimeStats.hacking_success_weight || 0) * sleeve.skills.hacking +
+        (crimeStats.strength_success_weight || 0) * sleeve.skills.strength +
+        (crimeStats.defense_success_weight || 0) * sleeve.skills.defense +
+        (crimeStats.dexterity_success_weight || 0) * sleeve.skills.dexterity +
+        (crimeStats.agility_success_weight || 0) * sleeve.skills.agility +
+        (crimeStats.charisma_success_weight || 0) * sleeve.skills.charisma;
     chance /= 975;
     chance /= crimeStats.difficulty;
     return Math.min(chance, 1);
