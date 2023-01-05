@@ -154,21 +154,21 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 	}, { // Adds Charisma, which even a small boost makes a huge difference (hours) in grinding company rep
 		// TODO: Consider adding charisma boosts a little earlier on in the prior 2 layouts.
 		"height": 8, "width": 8, "fragments": [ // ~BN 12.50
-			{ "id": 0, "x": 4, "y": 1, "rotation": 0 }, // Hacking Mult
-			{ "id": 1, "x": 4, "y": 4, "rotation": 0 }, // Hacking Mult
-			{ "id": 5, "x": 0, "y": 2, "rotation": 0 }, // Hacking Speed
-			{ "id": 6, "x": 3, "y": 0, "rotation": 2 }, // Hack power
-			{ "id": 7, "x": 2, "y": 0, "rotation": 0 }, // Grow power
-			{ "id": 14, "x": 1, "y": 5, "rotation": 1 }, // Dexterity
-			{ "id": 16, "x": 5, "y": 6, "rotation": 0 }, // Agility
-			{ "id": 18, "x": 3, "y": 4, "rotation": 1 }, // Charisma *new*
+			{ "id": 0, "x": 3, "y": 0, "rotation": 0 }, // Hacking Mult
+			{ "id": 1, "x": 2, "y": 2, "rotation": 1 }, // Hacking Mult
+			{ "id": 5, "x": 0, "y": 0, "rotation": 3 }, // Hacking Speed
+			{ "id": 6, "x": 7, "y": 2, "rotation": 1 }, // Hack power
+			{ "id": 7, "x": 4, "y": 5, "rotation": 3 }, // Grow power
+			{ "id": 14, "x": 3, "y": 4, "rotation": 3 }, // Dexterity
+			{ "id": 16, "x": 5, "y": 1, "rotation": 1 }, // Agility
+			{ "id": 18, "x": 6, "y": 5, "rotation": 1 }, // Charisma *new*
 			{ "id": 20, "x": 0, "y": 3, "rotation": 3 }, // Hacknet Production
-			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
-			{ "id": 25, "x": 4, "y": 3, "rotation": 2 }, // Reputation
-			{ "id": 30, "x": 2, "y": 5, "rotation": 1 }, // Bladeburner Stats
-			{ "id": 101, "x": 6, "y": 2, "rotation": 1 }, // Booster
-			{ "id": 105, "x": 1, "y": 2, "rotation": 0 }, // Booster
-			// TODO: There are 5 unused spaces, find a way to fit another booster
+			{ "id": 21, "x": 6, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
+			{ "id": 25, "x": 2, "y": 5, "rotation": 3 }, // Reputation
+			{ "id": 30, "x": 0, "y": 6, "rotation": 0 }, // Bladeburner Stats
+			{ "id": 101, "x": 1, "y": 2, "rotation": 3 }, // Booster
+			{ "id": 105, "x": 4, "y": 2, "rotation": 1 }, // Booster
+			{ "id": 106, "x": 1, "y": 0, "rotation": 1 }, // Booster *new* (Thanks @aeroleo)
 		]
 	}, { // Took a minute and found a way to cram Defense and Strength in
 		"height": 8, "width": 9, "fragments": [
