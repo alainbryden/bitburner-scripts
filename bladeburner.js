@@ -416,7 +416,7 @@ async function canDoBladeburnerWork(ns) {
  * Ensure we're in the Bladeburner division */
 async function beingInBladeburner(ns) {
     // Ensure we're in the Bladeburner division. If not, wait until we've joined it.
-    while (!player.inBladeburner) {
+    while (!(await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt'))) {
         try {
             if (player.skills.strength < 100 || player.skills.defense < 100 || player.skills.dexterity < 100 || player.skills.agility < 100)
                 log(ns, `Waiting for physical stats >100 to join bladeburner ` +

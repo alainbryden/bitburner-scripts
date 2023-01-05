@@ -280,9 +280,9 @@ export async function main(ns) {
             name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
             shouldRun: () => 4 in dictSourceFiles && reqRam(256 / (2 ** dictSourceFiles[4]) && !studying) // Higher SF4 levels result in lower RAM requirements
         },
-        {   // Script to create manage bladeburner for us
+        {   // Script to manage bladeburner for us. Run automatically if not disabled and bladeburner API is available
             name: "bladeburner.js", tail: openTailWindows,
-            shouldRun: () => 7 in dictSourceFiles && (_cachedPlayerInfo.inBladeburner || [6, 7].includes(playerBitnode))
+            shouldRun: () => !options['disable-script'].includes('bladeburner.js') && 7 in dictSourceFiles && playerBitnode != 8
         },
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));

@@ -24,7 +24,7 @@ export async function main(ns) {
     const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
     let playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
     const bitNode = playerInfo.bitNodeN;
-    let inBladeburner = playerInfo.inBladeburner;
+    let playerInBladeburner = false;
     disableLogs(ns, ['sleep']);
 
     // Hook script exit to clean up after ourselves.
@@ -112,9 +112,9 @@ export async function main(ns) {
 
             // Show Bladeburner Rank and Skill Points
             if (7 in dictSourceFiles || 7 == bitNode) { // Bladeburner API unlocked
-                inBladeburner = inBladeburner || playerInfo?.inBladeburner || // Avoid RAM dodge call if we have this info already
-                    (playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt')).inBladeburner;
-                if (inBladeburner) {
+                // Check if we're in bladeburner. Once we find we are, we don't have to check again.
+                playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
+                if (playerInBladeburner) {
                     const bbRank = await getNsDataThroughFile(ns, 'ns.bladeburner.getRank()', '/Temp/bladeburner-getRank.txt');
                     const bbSP = await getNsDataThroughFile(ns, 'ns.bladeburner.getSkillPoints()', '/Temp/bladeburner-getSkillPoints.txt');
                     addHud("BB Rank", formatSixSigFigs(bbRank), "Your current bladeburner rank");

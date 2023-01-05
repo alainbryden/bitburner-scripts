@@ -9,7 +9,7 @@ const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produ
 const casinoFlagFile = "/Temp/ran-casino.txt";
 const defaultBnOrder = [4.3, 1.3, 5.1, 9.2, 10.1, 2.1, 8.2, 10.3, 9.3, 11.3, 13.3, 5.3, 7.1, 6.3, 7.3, 2.3, 8.3, 3.3, 12.999];
 
-let options = null; // The options used at construction time
+let options; // The options used at construction time
 const argsSchema = [ // The set of all command line arguments
 	['next-bn', 0], // If we destroy the current BN, the next BN to start
 	['disable-auto-destroy-bn', false], // Set to true if you do not want to auto destroy this BN when done
@@ -22,7 +22,8 @@ const argsSchema = [ // The set of all command line arguments
 	['interval', 2000], // Wake up this often (milliseconds) to check on things
 	['interval-check-scripts', 10000], // Get a listing of all running processes on home this frequently
 	['high-hack-threshold', 8000], // Once hack level reaches this, we start daemon in high-performance hacking mode
-	['enable-bladeburner', false], // Set to true to allow bladeburner progression (probably slows down BN completion)
+	['enable-bladeburner', null], // (Deprecated) Bladeburner is now always enabled if it's available. Use '--disable-bladeburner' to explicitly turn off
+	['disable-bladeburner', false], // This will instruct daemon.js not to run the bladeburner.js, even if bladeburner is available.
 	['wait-for-4s-threshold', 0.9], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
 	['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
 	['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
@@ -38,18 +39,19 @@ export function autocomplete(data, args) {
 	return [];
 }
 
-let playerInGang, rushGang; // Tells us whether we're should be trying to work towards getting into a gang
-let wdHack; // If the WD server is available (i.e. TRP is installed), caches the required hack level
-let ranCasino; // Flag to indicate whether we've stolen 10b from the casino yet
-let reservedPurchase; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
-let reserveForDaedalus, daedalusUnavailable; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
-let lastScriptsCheck; // Last time we got a listing of all running scripts
-let killScripts; // A list of scripts flagged to be restarted due to changes in priority
-let dictOwnedSourceFiles, unlockedSFs, bitnodeMults, nextBn; // Info for the current bitnode
-let installedAugmentations, playerInstalledAugCount, stanekLaunched; // Info for the current ascend
-let daemonStartTime; // The time we personally launched daemon.
-let installCountdown; // Start of a countdown before we install augmentations.
-let bnCompletionSuppressed; // Flag if we've detected that we've won the BN, but are suppressing a restart
+let playerInGang = false, rushGang = false; // Tells us whether we're should be trying to work towards getting into a gang
+let playerInBladeburner = false; // Whether we've joined bladeburner
+let wdHack = 0; // If the WD server is available (i.e. TRP is installed), caches the required hack level
+let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
+let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
+let reserveForDaedalus = false, daedalusUnavailable = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
+let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
+let killScripts = []; // A list of scripts flagged to be restarted due to changes in priority
+let dictOwnedSourceFiles = [], unlockedSFs = [], bitnodeMults, nextBn = 0; // Info for the current bitnode
+let installedAugmentations = [], playerInstalledAugCount = 0, stanekLaunched = false; // Info for the current ascend
+let daemonStartTime = 0; // The time we personally launched daemon.
+let installCountdown = 0; // Start of a countdown before we install augmentations.
+let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -63,7 +65,7 @@ export async function main(ns) {
 
 	log(ns, "INFO: Auto-pilot engaged...", true, 'info');
 	// The game does not allow boolean flags to be turned "off" via command line, only on. Since this gets saved, notify the user about how they can turn it off.
-	const flagsSet = ['disable-auto-destroy-bn', 'enable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs'].filter(f => options[f]);
+	const flagsSet = ['disable-auto-destroy-bn', 'disable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs'].filter(f => options[f]);
 	for (const flag of flagsSet)
 		log(ns, `WARNING: You have previously enabled the flag "--${flag}". Because of the way this script saves its run settings, the ` +
 			`only way to now turn this back off will be to manually edit or delete the file ${ns.getScriptName()}.config.txt`, true);
@@ -89,7 +91,7 @@ async function startUp(ns) {
 	await persistConfigChanges(ns);
 
 	// Reset global state
-	playerInGang = rushGang = ranCasino = reserveForDaedalus = daedalusUnavailable =
+	playerInGang = rushGang = playerInBladeburner = ranCasino = reserveForDaedalus = daedalusUnavailable =
 		bnCompletionSuppressed = stanekLaunched = false;
 	playerInstalledAugCount = wdHack = null;
 	installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
@@ -213,7 +215,10 @@ async function checkIfBnIsComplete(ns, player) {
 	}
 	// Detect if a BN win condition has been met
 	let bnComplete = player.skills.hacking >= wdHack;
-	if (!bnComplete && player.inBladeburner && (7 in unlockedSFs)) // Detect the BB win condition
+	// Detect the BB win condition (requires SF7 (bladeburner API) or being in BN6)
+	if (7 in unlockedSFs) // No point making this async check if bladeburner API is unavailable
+		playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
+	if (!bnComplete && playerInBladeburner)
 		bnComplete = await getNsDataThroughFile(ns,
 			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
 			'/Temp/bladeburner-completed.txt');
@@ -321,8 +326,14 @@ async function checkOnRunningScripts(ns, player) {
 		]);
 
 	// Launch sleeves and allow them to also ignore the reserve so they can train up to boost gang unlock speed
-	if ((10 in unlockedSFs) && (2 in unlockedSFs) && !findScript('sleeve.js'))
-		launchScriptHelper(ns, 'sleeve.js', ["--training-reserve", 300000]); // Only avoid training away our casino seed money
+	if ((10 in unlockedSFs) && (2 in unlockedSFs) && !findScript('sleeve.js')) {
+		let sleeveArgs = [];
+		if (!options["disable-casino"] && !ranCasino)
+			sleeveArgs.push("--training-reserve", 300000); // Avoid training away our casino seed money
+		if (options["disable-bladeburner"])
+			sleeveArgs.push("--disable-bladeburner");
+		launchScriptHelper(ns, 'sleeve.js', sleeveArgs);
+	}
 
 	// Spend hacknet hashes on our boosting best hack-income server once established
 	const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
@@ -334,7 +345,6 @@ async function checkOnRunningScripts(ns, player) {
 				'/Temp/servers-hack-req.txt', incomeByServer.map(s => s.hostname));
 			const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
 				.reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, 0]);
-			//ns.getServerRequiredHackingLevel
 			log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
 			launchScriptHelper(ns, 'spend-hacknet-hashes.js',
 				["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
@@ -352,8 +362,8 @@ async function checkOnRunningScripts(ns, player) {
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
 	// Hacking earns no money in BN8, so prioritize XP
 	if (player.bitNodeN == 8) daemonArgs.push("--xp-only");
-	// By default, don't join bladeburner, since it slows BN12 progression by requiring combat augs not used elsewhere
-	if (options['enable-bladeburner']) daemonArgs.push('--run-script', getFilePath('bladeburner.js'));
+	// Don't run the script to join and manage bladeburner if it is explicitly disabled
+	if (options['disable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
 		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
@@ -382,7 +392,7 @@ async function checkOnRunningScripts(ns, player) {
 		"--fast-crimes-only", // Essentially means we do mug until we can do homicide, then stick to homicide
 		"--get-invited-to-every-faction" // Join factions even we have all their augs. Good for having NeuroFlux providers
 	];
-	if (!options['enable-bladeburner']) workForFactionsArgs.push("--no-bladeburner-check")
+	if (options['disable-bladeburner']) workForFactionsArgs.push("--no-bladeburner-check")
 	// The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
 	const rushGangsArgs = workForFactionsArgs.concat(...[ // Everything above, plus...
 		"--crime-focus", // Start off by trying to work for each of the crime factions (generally have combat reqs)
