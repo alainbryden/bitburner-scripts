@@ -82,7 +82,7 @@ const waitForFactionInviteTime = 30 * 1000; // The game will only issue one new 
 
 let shouldFocus; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
-let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus;
+let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
 let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 
@@ -106,7 +106,7 @@ export async function main(ns) {
 
     // Reset globals whose value can persist between script restarts in weird situations
     lastTravel = crimeCount = 0;
-    notifiedAboutDaedalus = false;
+    notifiedAboutDaedalus = playerInBladeburner = false;
 
     // Process configuration options
     firstFactions = (options['first'] || []).map(f => f.replaceAll('_', ' ')); // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
@@ -264,13 +264,17 @@ async function mainLoop(ns) {
             }
         }
     }
-    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, whether we pause working.        
-    if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check'] && player.inBladeburner) {
-        if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working
-            ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
-            await stop(ns); // stop working so bladeburner can run
-            await ns.sleep(checkForNewPrioritiesInterval);
-            return;
+    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, we may choose to we pause working.        
+    if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
+        if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working in favour of bladeburner progress
+            // Check if the player has joined bladeburner (can stop checking once we see they are)
+            playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
+            if (playerInBladeburner) {
+                ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
+                await stop(ns); // stop working so bladeburner can run
+                await ns.sleep(checkForNewPrioritiesInterval);
+                return;
+            }
         }
     }
 
