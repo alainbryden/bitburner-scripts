@@ -374,26 +374,33 @@ async function kickstartHackXp(ns) {
                 const studyTime = options['initial-study-time'];
                 log(ns, `INFO: Studying for ${studyTime} seconds to kickstart hack XP and speed up initial cycle times. (set --initial-study-time 0 to disable this step.)`);
                 const money = ns.getServerMoneyAvailable("home")
-                if (money >= 200000) // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
-                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity("Volhaven")`, '/Temp/travel-to-city.txt');
-                const playerInfo = await getPlayerInfo(); // Update player stats to be certain of our new location.
-                const university = playerInfo.city == "Sector-12" ? "Rothman University" : playerInfo.city == "Aevum" ? "Summit University" : playerInfo.city == "Volhaven" ? "ZB Institute of Technology" : null;
+                if (money >= 200000) { // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
+                    log(ns, `INFO: Travelling to Volhaven for best study XP gain rate.`);
+                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel-to-city.txt', [ns.enums.CityName.Volhaven]);
+                }
+                const playerInfo = await getPlayerInfo(ns); // Update player stats to be certain of our new location.
+                const university = playerInfo.city == ns.enums.CityName.Sector12 ? ns.enums.LocationName.Sector12RothmanUniversity :
+                    playerInfo.city == ns.enums.CityName.Aevum ? ns.enums.LocationName.AevumSummitUniversity :
+                        playerInfo.city == ns.enums.CityName.Volhaven ? ns.enums.LocationName.VolhavenZBInstituteOfTechnology : null;
                 if (!university)
                     log(ns, `INFO: Cannot study, because you are in city ${playerInfo.city} which has no known university, and you cannot afford to travel to another city.`);
                 else {
-                    const course = playerInfo.city == "Sector-12" ? "Study Computer Science" : "Algorithms"; // Assume if we are still in Sector-12 we are poor and should only take the free course
-                    await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
-                    startedStudying = true;
-                    await ns.sleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
+                    const course = playerInfo.city == ns.enums.CityName.Sector12 ? ns.enums.UniversityClassType.computerScience : ns.enums.UniversityClassType.algorithms; // Assume if we are still in Sector-12 we are poor and should only take the free course
+                    log(ns, `INFO: Studying "${course}" at "${university}" because we are in city "${playerInfo.city}".`, false, 'warning');
+                    startedStudying = await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
+                    if (startedStudying)
+                        await ns.sleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
+                    else
+                        log(ns, `WARNING: Failed to study to kickstart hack XP: ns.singularity.universityCourse("${university}", "${course}", false) returned "false".`, false, 'warning');
                 }
-            } catch { log(ns, 'WARNING: Failed to study to kickstart hack XP', false, 'warning'); }
+            } catch (err) { log(ns, `WARNING: Caught error while trying to study to kickstart hack XP: ${typeof err === 'string' ? err : err.message || JSON.stringify(err)}`, false, 'warning'); }
         }
         // Immediately attempt to root initially-accessible targets before attempting any XP cycles
         for (const server of getAllServers().filter(s => !s.hasRoot() && s.canCrack()))
             await doRoot(ns, server);
         // Before starting normal hacking, fire a couple hack XP-focused cycle using a chunk of free RAM to further boost RAM
         if (!xpOnly) {
-            let maxXpCycles = 10;
+            let maxXpCycles = 10000; // Avoid an infinite loop if something goes wrong
             const maxXpTime = options['initial-hack-xp-time'];
             const start = Date.now();
             const xpTarget = getBestXPFarmTarget();
@@ -408,6 +415,7 @@ async function kickstartHackXp(ns) {
                     await ns.sleep(cycleTime);
                 else
                     return log(ns, 'WARNING: Failed to schedule an XP cycle', false, 'warning');
+                log(ns, `INFO: Hacked ${xpTarget.name} for ${cycleTime.toFixed(1)}ms, (${Date.now() - start}ms total) of ${maxXpTime * 1000}ms`);
             }
         }
     } catch {
@@ -570,7 +578,7 @@ async function doTargetingLoop(ns) {
                             `Manip: ${shouldManipulateGrow[s.name] ? "grow" : shouldManipulateHack[s.name] ? "hack" : '(disabled)'}`))
                         .join('\n  ');
                     log(ns, targetsLog);
-                    await ns.write("/Temp/targets.txt", targetsLog, "w");
+                    ns.write("/Temp/targets.txt", targetsLog, "w");
                 }
             }
             // Processed servers will be split into various lists for generating a summary at the end
