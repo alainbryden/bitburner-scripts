@@ -801,27 +801,41 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`--prioritize-invites Skipping working for faction for now...`);
 
     let lastStatusUpdateTime = 0;
-    let factionWork = null;
-    let isWorking = false;
+    let workAssigned = false; // Use to track whether work previously assigned by this script is being disrupted
+    let bestFactionJob = null;
     while ((currentReputation = (await getFactionReputation(ns, factionName))) < factionRepRequired) {
         if (breakToMainLoop()) return ns.print('INFO: Interrupting faction work to check on high-level priorities.');
-        factionWork ??= await detectBestFactionWork(ns, factionName); // When we first start working, determine what work gives the most rep/second for our current stats
         const currentWork = await getCurrentWorkInfo(ns);
-        if (currentWork.factionName != factionName) {
-            if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
-                log(ns, `Work for faction ${factionName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, false, 'warning');
-                isWorking = false;
-                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
-            }
-            if (await startWorkForFaction(ns, factionName, factionWork, shouldFocus)) {
-                isWorking = true;
+        let factionJob = currentWork.factionWorkType;
+        // Detect if faction work was interrupted and log a warning
+        if (workAssigned && currentWork.factionName != factionName) {
+            log(ns, `Work for faction ${factionName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
+            workAssigned = false;
+            ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
+        }
+        // Periodically check again what the best faction work is (may change with stats over time)
+        if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval)
+            workAssigned = false; // This will force us to redetermine the best faction work.
+        // Heads up! Current implementation of "detectBestFactionWork" changes the work currently being done, so we must always re-assign work afterwards 
+        if (!workAssigned)
+            bestFactionJob = await detectBestFactionWork(ns, factionName);
+        // For purposes of being informative, log a message if the detected "bestFactionJob" is different from what we were previously doing
+        if (currentWork.factionName == factionName && factionJob != bestFactionJob) {
+            log(ns, `INFO: Detected that "${bestFactionJob}" gives more rep than previous work "${factionJob}". Switching...`);
+            workAssigned = false;
+        }
+        // Ensure we are doing the best faction work (must always be done after "detect" routine is run)    
+        if (!workAssigned) {
+            if (await startWorkForFaction(ns, factionName, bestFactionJob, shouldFocus)) {
+                workAssigned = true;
                 if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {
-                log(ns, `ERROR: Something went wrong, failed to start "${factionWork}" work for faction "${factionName}" (Is gang faction, or not joined?)`, false, 'error');
+                log(ns, `ERROR: Something went wrong, failed to start "${bestFactionJob}" work for faction "${factionName}" (Is gang faction, or not joined?)`, false, 'error');
                 break;
             }
         }
-        let status = `Doing '${factionWork}' work for "${factionName}" until ${Math.round(factionRepRequired).toLocaleString('en')} rep.`;
+
+        let status = `Doing '${bestFactionJob}' work for "${factionName}" until ${Math.round(factionRepRequired).toLocaleString('en')} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             lastFactionWorkStatus = status;
             lastStatusUpdateTime = Date.now();
@@ -859,6 +873,7 @@ async function stop(ns) { return await getNsDataThroughFile(ns, `ns.singularity.
 /** Start the specified faction work
  * @param {NS} ns */
 async function startWorkForFaction(ns, factionName, work, focus) {
+    //log(ns, `INFO: startWorkForFaction(${factionName}, ${work}, ${focus})`);
     return await getNsDataThroughFile(ns, `ns.singularity.workForFaction(ns.args[0], ns.args[1], ns.args[2])`,
         '/Temp/workForFaction.txt', [factionName, work, focus])
 }
@@ -888,10 +903,12 @@ async function measureCompanyRepGainRate(ns, companyName) {
 }
 
 /** Try all work types and see what gives the best rep gain with this faction!
- * @param {NS} ns  */
+ * @param {NS} ns 
+ * @param {string} factionName The name of the faction to work for
+ * @returns {Promise<FactionWorkType>} The faction work type measured to give the best reputation gain rate */
 async function detectBestFactionWork(ns, factionName) {
     let bestWork, bestRepRate = 0;
-    for (const work of ["security", "field", "hacking"]) {
+    for (const work of Object.values(ns.enums.FactionWorkType)) {
         if (!(await startWorkForFaction(ns, factionName, work, shouldFocus))) {
             //ns.print(`"${factionName}": "${work}"" work not supported.`);
             continue; // This type of faction work must not be supported
@@ -1062,7 +1079,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // If not studying, ensure we are working for this company
         if (!isStudying && (!isWorking || currentWork.companyName != companyName)) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
-                log(ns, `Work for company ${companyName} was interrupted (Now: ${Json.stringify(currentWork)}). Restarting...`, false, 'warning');
+                log(ns, `Work for company ${companyName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
                 isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
