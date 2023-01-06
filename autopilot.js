@@ -439,15 +439,13 @@ async function maybeDoCasino(ns, player) {
 		await ns.sleep(200); // Wait a short while for the dust to settle.
 	} else if (casinoRanFileSet)
 		return ranCasino = true;
-	//If it's been less than 1 minute, wait a while to establish income
-	//Unless we have CashRoot Starter Kit, at which point we should head straight to the casino
-	//Or if BN8, as that also gives us plenty of starter cash to casino immediately
-	if (player.playtimeSinceLastAug < 60000 && !cashRootBought && !player.bitNodeN == 8)
+	// If it's been less than 1 minute, wait a while to establish income
+	// The exception is if we are in BN8 and have CashRoot Starter Kit. In this case we can head straight to the casino.
+	if (player.playtimeSinceLastAug < 60000 && !(player.bitNodeN == 8 && cashRootBought))
 		return;
-	//If we're making more than ~5b / minute, no need to run casino.
-	//Unless BN8, if BN8 we always need casino cash bootstrap
-	//Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
-	if ((cashRootBought ? player.money - 1e6 : player.money) / player.playtimeSinceLastAug > 5e9 / 60000 && !player.bitNodeN == 8)
+	// If we're making more than ~5b / minute, no need to run casino. (Unless BN8, if BN8 we always need casino cash bootstrap)
+	// Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
+	if (player.bitNodeN != 8 && (cashRootBought ? player.money - 1e6 : player.money) / player.playtimeSinceLastAug > 5e9 / 60000)
 		return ranCasino = true;
 	if (player.money > 10E9) // If we already have 10b, assume we ran and lost track, or just don't need the money
 		return ranCasino = true;
