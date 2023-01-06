@@ -374,18 +374,19 @@ async function kickstartHackXp(ns) {
                 const studyTime = options['initial-study-time'];
                 log(ns, `INFO: Studying for ${studyTime} seconds to kickstart hack XP and speed up initial cycle times. (set --initial-study-time 0 to disable this step.)`);
                 const money = ns.getServerMoneyAvailable("home")
+                const { CityName, LocationName, UniversityClassType } = ns.enums
                 if (money >= 200000) { // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
                     log(ns, `INFO: Travelling to Volhaven for best study XP gain rate.`);
-                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel-to-city.txt', [ns.enums.CityName.Volhaven]);
+                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel-to-city.txt', [CityName.Volhaven]);
                 }
                 const playerInfo = await getPlayerInfo(ns); // Update player stats to be certain of our new location.
-                const university = playerInfo.city == ns.enums.CityName.Sector12 ? ns.enums.LocationName.Sector12RothmanUniversity :
-                    playerInfo.city == ns.enums.CityName.Aevum ? ns.enums.LocationName.AevumSummitUniversity :
-                        playerInfo.city == ns.enums.CityName.Volhaven ? ns.enums.LocationName.VolhavenZBInstituteOfTechnology : null;
+                const university = playerInfo.city == CityName.Sector12 ? LocationName.Sector12RothmanUniversity :
+                    playerInfo.city == CityName.Aevum ? LocationName.AevumSummitUniversity :
+                        playerInfo.city == CityName.Volhaven ? LocationName.VolhavenZBInstituteOfTechnology : null;
                 if (!university)
                     log(ns, `WARN: Cannot study, because you are in city ${playerInfo.city} which has no known university, and you cannot afford to travel to another city.`, false, 'warning');
                 else {
-                    const course = playerInfo.city == ns.enums.CityName.Sector12 ? ns.enums.UniversityClassType.computerScience : ns.enums.UniversityClassType.algorithms; // Assume if we are still in Sector-12 we are poor and should only take the free course
+                    const course = playerInfo.city == CityName.Sector12 ? UniversityClassType.computerScience : UniversityClassType.algorithms; // Assume if we are still in Sector-12 we are poor and should only take the free course
                     log(ns, `INFO: Studying "${course}" at "${university}" because we are in city "${playerInfo.city}".`);
                     startedStudying = await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
                     if (startedStudying)
