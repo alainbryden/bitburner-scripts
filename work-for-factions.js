@@ -908,6 +908,7 @@ async function detectBestFactionWork(ns, factionName) {
         mainLoopStart = 0; // Force break out of whatever work loop we're in to update info (maybe we formed a gang with the faction we were working for?)
         throw Error(`The faction "${factionName}" does not support any of the known work types. Cannot work for this faction!`);
     }
+    startWorkForFaction(ns, factionName, bestWork, shouldFocus); //force to work for best work found
     return bestWork;
 }
 
