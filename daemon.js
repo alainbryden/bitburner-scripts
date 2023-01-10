@@ -794,18 +794,13 @@ async function doTargetingLoop(ns) {
             // Note netscript errors are raised as a simple string (no message property)
             var errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
             // Catch errors that appear to be caused by deleted servers, and remove the server from our lists.
-            const expectedDeletedHostPhrase = "Invalid hostname: ";
-            let expectedErrorPhraseIndex = errorMessage.indexOf(expectedDeletedHostPhrase);
-            if (expectedErrorPhraseIndex == -1) {
+            const expectedDeletedHostErr = /Invalid hostname: (['"])([\w-]*)\1/.exec(errorMessage);
+            if (!expectedDeletedHostErr) {
                 if (err?.stack) errorMessage += '\n' + err.stack;
                 log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
                 continue;
             }
-            let start = expectedErrorPhraseIndex + expectedDeletedHostPhrase.length;
-            let lineBreak = errorMessage.indexOf('<br>', start); // Error strings can appear in different ways
-            if (lineBreak == -1) lineBreak = errorMessage.indexOf(' ', start); // Try to handle them all
-            if (lineBreak == -1) lineBreak = errorMessage.length; // To extract the name of the server deleted
-            let deletedHostName = errorMessage.substring(start, lineBreak).replaceAll("'", "").replaceAll('"', '');
+            let deletedHostName = expectedDeletedHostErr[2];
             log(ns, 'INFO: The server "' + deletedHostName + '" appears to have been deleted. Removing it from our lists', true, 'info');
             removeServerByName(ns, deletedHostName);
         }
