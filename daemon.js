@@ -210,7 +210,7 @@ export async function main(ns) {
 
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
-    const competingDaemons = processList(ns, "home").filter(s => s.filename == scriptName && JSON.stringify(s.args) != JSON.stringify(ns.args));
+    const competingDaemons = processList(ns, "home").filter(s => s.filename == scriptName && s.pid != ns.pid);
     if (competingDaemons.length > 0) { // We expect only 1, due to this logic, but just in case, generalize the code below to support multiple.
         const daemonPids = competingDaemons.map(p => p.pid);
         log(ns, `Info: Restarting another '${scriptName}' instance running on home (pid: ${daemonPids} args: ` +
