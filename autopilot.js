@@ -232,7 +232,7 @@ async function checkIfBnIsComplete(ns, player) {
 
 	// Run the --on-completion-script if specified
 	if (options['on-completion-script']) {
-		pid = launchScriptHelper(ns, options['on-completion-script'], unEscapeArrayArgs(options['on-completion-script-args']), false);
+		const pid = launchScriptHelper(ns, options['on-completion-script'], unEscapeArrayArgs(options['on-completion-script-args']), false);
 		if (pid) await waitForProcessToComplete(ns, pid);
 	}
 
