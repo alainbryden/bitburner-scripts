@@ -547,11 +547,13 @@ async function goToCity(ns, cityName) {
 /** @param {NS} ns */
 export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
+    const bestGym = "powerhouse gym";
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
     let player = await getPlayerInfo(ns);
     let strRequirements = [];
-    let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER || reqStats >= Number.MAX_SAFE_INTEGER;
+    let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER;
+    let statForever = reqStats >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${Math.round(ns.heart.break()).toLocaleString('en')})`);
     if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have ` +
@@ -559,7 +561,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     let anyStatsDeficient = (p) => p.skills.strength < reqStats || p.skills.defense < reqStats ||
         /*                      */ p.skills.dexterity < reqStats || p.skills.agility < reqStats;
     let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
-    while (forever || (needStats = anyStatsDeficient(player)) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
+    while (forever || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
         let karma = -ns.heart.break();
@@ -591,6 +593,81 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 
         crimeCount++;
         player = await getPlayerInfo(ns);
+    }
+  
+    // Travels to Sector-12 since ns.singularity.gymWorkout(); requires that the location of the player is the same as the gym
+    await goToCity(ns, "Sector-12");
+    let isWorking = false;
+    let currentStat = 1;
+
+    while(statForever || (needStats = anyStatsDeficient(player))) {
+        
+        player = await getPlayerInfo(ns);
+        
+        let pStr = player.skills.strength;
+        let pDef = player.skills.defense;
+        let pDex = player.skills.dexterity;
+        let pAgi = player.skills.agility;
+
+        if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
+        switch (currentStat) {
+            case 1: 
+                if (!isWorking) {
+                    ns.singularity.gymWorkout(bestGym, "strength")
+                    isWorking = true;
+                }
+                ns.print(`Currently at ${pStr} strength, out of ${reqStats}`);
+                if (pStr >= reqStats) {
+                    currentStat = 2;
+                    ns.singularity.stopAction();
+                    isWorking = false;
+                    ns.print('SUCCESS: Strength stat requirement completed.');
+                }
+                break;
+            case 2:
+                if (!isWorking) {
+                    ns.singularity.gymWorkout(bestGym, "defense")
+                    isWorking = true;
+                }
+                ns.print(`Currently at ${pDef} defense, out of ${reqStats}`);
+                if (pDef >= reqStats) {
+                    currentStat = 3;
+                    ns.singularity.stopAction();
+                    isWorking = false;
+                    ns.print('SUCCESS: Defense stat requirement completed.');
+                }
+                break;
+            case 3:
+                if (!isWorking) {
+                    ns.singularity.gymWorkout(bestGym, "dexterity")
+                    isWorking = true;
+                }
+                ns.print(`Currently at ${pDex} dexterity, out of ${reqStats}`);
+                if (pDex >= reqStats) {
+                    currentStat = 4;
+                    ns.singularity.stopAction();
+                    isWorking = false;
+                    ns.print('SUCCESS: Dexterity stat requirement completed.');
+                }
+                break;
+            case 4:
+                if (!isWorking) {
+                    ns.singularity.gymWorkout(bestGym, "agility")
+                    isWorking = true;
+                }
+                ns.print(`Currently at ${pAgi} agility, out of ${reqStats}`);
+                if (pAgi >= reqStats) {
+                    currentStat = 1;
+                    ns.singularity.stopAction();
+                    isWorking = false;
+                    ns.print('SUCCESS: Agility stat requirement completed.');
+                }
+                break;
+
+        }
+        
+        // TODO: Give an ETA for the time to complete each required stat.
+        await ns.sleep(loopSleepInterval + 10000);
     }
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
     return true;
