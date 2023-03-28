@@ -31,7 +31,8 @@ const argsSchema = [
     ['x', false], // Focus on a strategy that produces the most hack EXP rather than money
     ['xp-only', false], // Same as above
     ['n', false], // Can toggle on using hacknet nodes for extra hacking ram (at the expense of hash production)
-    ['use-hacknet-nodes', false], // Same as above
+    ['use-hacknet-nodes', false], // Same as above (kept for backwards compatibility, but these are now called hacknet-servers)
+    ['use-hacknet-servers', false], // Same as above, but the game recently renamed these
     ['spend-hashes-for-money-when-under', 10E6], // (Default 10m) Convert 4 hashes to money whenever we're below this amount
     ['disable-spend-hashes', false], // An easy way to set the above to a very large negative number, thus never spending hashes for Money
     ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
@@ -240,7 +241,7 @@ export async function main(ns) {
     xpOnly = options.x || options['xp-only'];
     stockMode = (options.s || options['stock-manipulation'] || options['stock-manipulation-focus']) && !options['disable-stock-manipulation'];
     stockFocus = options['stock-manipulation-focus'] && !options['disable-stock-manipulation'];
-    useHacknetNodes = options.n || options['use-hacknet-nodes'];
+    useHacknetNodes = options.n || options['use-hacknet-nodes'] || options['use-hacknet-servers'];
     verbose = options.v || options['verbose'];
     runOnce = options.o || options['run-once'];
     loopingMode = options['looping-mode'];
@@ -893,7 +894,7 @@ class Server {
     canCrack() { return ownedCracks.length >= this.portsRequired; }
     canHack() { return this.requiredHackLevel <= playerHackSkill(); }
     shouldHack() {
-        return this.getMaxMoney() > 0 && this.name !== "home" && !this.name.startsWith('hacknet-node-') &&
+        return this.getMaxMoney() > 0 && this.name !== "home" && !this.name.startsWith('hacknet-server-') && !this.name.startsWith('hacknet-node-') &&
             !this.name.startsWith(purchasedServersName); // Hack, but beats wasting 2.25 GB on ns.getPurchasedServers()
     }
     // "Prepped" means current security is at the minimum, and current money is at the maximum
@@ -1347,10 +1348,10 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
         preferredServerOrder.unshift(home); // Send to front
     else
         preferredServerOrder.push(home); // Otherwise, send it to the back (reserve home for scripts that benefit from cores) and use only if there's no room on any other server.
-    // Push all "hacknet-node" servers to the end of the preferred list, since they will lose productivity if used
+    // Push all "hacknet servers" to the end of the preferred list, since they will lose productivity if used
     var anyHacknetNodes = [];
     let hnNodeIndex;
-    while (-1 !== (hnNodeIndex = preferredServerOrder.indexOf(s => s.name.startsWith('hacknet-node-'))))
+    while (-1 !== (hnNodeIndex = preferredServerOrder.indexOf(s => s.name.startsWith('hacknet-server-') || s.name.startsWith('hacknet-node-'))))
         anyHacknetNodes.push(preferredServerOrder.splice(hnNodeIndex, 1));
     preferredServerOrder.push(...anyHacknetNodes.sort((a, b) => b.totalRam != a.totalRam ? b.totalRam - a.totalRam : a.name.localeCompare(b.name)));
 
@@ -1766,7 +1767,7 @@ async function buildServerList(ns, verbose = false, allServers = undefined) {
     let scanResult = allServers.filter((hostName, i) => hostName == "home" || !flaggedForDeletion[i]);
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
-        scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-node-'))
+        scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-server-') && !hostName.startsWith('hacknet-node-'))
     // Remove all servers we currently have added that are no longer being returned by the above query
     for (const hostName of allHostNames.filter(hostName => !scanResult.includes(hostName)))
         removeServerByName(ns, hostName);
