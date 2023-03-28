@@ -593,7 +593,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     if (nextUpAug && options['neuroflux-disabled']) outputRows.push(nextUpAug); // Output this now if we will be exiting early, otherwise save for after the last table.
     if (augsAwaitingInstall > 0)
         outputRows.push(`WARNING: Prices all have a x ${formatNumberShort(augCountMult ** augsAwaitingInstall)} cost penalty, because ` +
-            `${augsAwaitingInstall} Augmentations are were previously purchased but are not yet installed.`);
+            `${augsAwaitingInstall} Augmentations were previously purchased but are not yet installed.`);
     if (inaccessiblePriorityAugs.length > 0)
         outputRows.push(`INFO: ${inaccessiblePriorityAugs.length} 'priority' augs are not yet accessible: ${inaccessiblePriorityAugs.map(n => `"${n}"`).join(", ")}`);
     const additionalDroppedPri = droppedPriorityAugs.filter(n => !inaccessiblePriorityAugs.includes(n));
