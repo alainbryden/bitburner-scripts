@@ -201,7 +201,7 @@ async function tryToBuyBestServerPossible(ns) {
                 `and all have the maximum possible RAM (${formatRam(maxPurchasableServerRam)}).`);
         }
 
-        cost -= costByRamExponent[worstServerRam]
+        cost -= costByRamExponent[Math.log2(worstServerRam)]
         purchasedServer = (await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
             '/Temp/upgradeServer.txt', [worstServerName, maxRamPossibleToBuy])) ? worstServerName : "";
     } else {
