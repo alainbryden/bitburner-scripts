@@ -153,14 +153,14 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
     const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
     // Pre-write contents to the file that will allow us to detect if our temp script never got run
     const initialContents = "<Insufficient RAM>";
-    await ns.write(fName, initialContents, 'w');
+    ns.write(fName, initialContents, 'w');
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
     const commandToFile = `let r;try{r=JSON.stringify(\n` +
         `    ${command}\n` +
         `);}catch(e){r="ERROR: "+(typeof e=='string'?e:e.message||JSON.stringify(e));}\n` +
-        `const f="${fName}"; if(ns.read(f)!==r) await ns.write(f,r,'w')`;
+        `const f="${fName}"; if(ns.read(f)!==r) ns.write(f,r,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs);
     // Wait for the process to complete. Note, as long as the above returned a pid, we don't actually have to check it, just the file contents
@@ -240,7 +240,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
                 ns.tprint(`WARNING: Had to overwrite temp script ${fileName}\nOld Contents:\n${oldContents}\nNew Contents:\n${script}` +
                     `\nThis warning is generated as part of an effort to switch over to using only 'immutable' temp scripts. ` +
                     `Please paste a screenshot in Discord at https://discord.com/channels/415207508303544321/935667531111342200`);
-            await ns.write(fileName, script, "w");
+            ns.write(fileName, script, "w");
             // Wait for the script to appear and be readable (game can be finicky on actually completing the write)
             await autoRetry(ns, () => ns.read(fileName), c => c == script, () => `Temporary script ${fileName} is not available, ` +
                 `despite having written it. (Did a competing process delete or overwrite it?)`, maxRetries, retryDelayMs, undefined, verbose, verbose);
@@ -351,10 +351,10 @@ export function scanAllServers(ns) {
     let infiniteLoopProtection = 9999; // In case you mess with this code, this should save you from getting stuck
     while (hostsToScan.length > 0 && infiniteLoopProtection-- > 0) { // Loop until the list of hosts to scan is empty
         let hostName = hostsToScan.pop(); // Get the next host to be scanned
-        for (const connectedHost of ns.scan(hostName)) // "scan" (list all hosts connected to this one)
-            if (!discoveredHosts.includes(connectedHost)) // If we haven't already scanned this host
-                hostsToScan.push(connectedHost); // Add it to the queue of hosts to be scanned
         discoveredHosts.push(hostName); // Mark this host as "scanned"
+        for (const connectedHost of ns.scan(hostName)) // "scan" (list all hosts connected to this one)
+            if (!discoveredHosts.includes(connectedHost) && !hostsToScan.includes(connectedHost)) // If we haven't found this host
+                hostsToScan.push(connectedHost); // Add it to the queue of hosts to be scanned
     }
     return discoveredHosts; // The list of scanned hosts should now be the set of all hosts in the game!
 }
@@ -453,7 +453,7 @@ export async function getStocksValue(ns) {
 /** @param {NS} ns 
  * Returns a helpful error message if we forgot to pass the ns instance to a function */
 export function checkNsInstance(ns, fnName = "this function") {
-    if (!ns.print) throw new Error(`The first argument to ${fnName} should be a 'ns' instance.`);
+    if (ns === undefined || !ns.print) throw new Error(`The first argument to ${fnName} should be a 'ns' instance.`);
     return ns;
 }
 

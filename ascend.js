@@ -119,9 +119,11 @@ export async function main(ns) {
     // STEP 5: Try to Buy 4S data / API if we haven't already and can afford it (although generally stockmaster.js would have bought these if it could)
     log(ns, 'Checking on Stock Market upgrades...', true, 'info');
     await getNsDataThroughFile(ns, 'ns.stock.purchaseWseAccount()', '/Temp/stock-purchaseWseAccount.txt');
-    await getNsDataThroughFile(ns, 'ns.stock.purchaseTixApi()', '/Temp/stock-purchaseTixApi.txt');
-    await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/stock-purchase4SMarketData.txt');
-    await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/stock-purchase4SMarketDataTixApi.txt');
+    let hasStockApi = await getNsDataThroughFile(ns, 'ns.stock.purchaseTixApi()', '/Temp/stock-purchaseTixApi.txt');
+    if (hasStockApi) {
+        await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketData()', '/Temp/stock-purchase4SMarketData.txt');
+        await getNsDataThroughFile(ns, 'ns.stock.purchase4SMarketDataTixApi()', '/Temp/stock-purchase4SMarketDataTixApi.txt');
+    }
 
     // STEP 6: (SF10) Buy whatever sleeve upgrades we can afford
     if (10 in dictSourceFiles) {
