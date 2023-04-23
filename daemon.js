@@ -1752,9 +1752,8 @@ function removeServerByName(ns, deletedHostName) {
 
 // Helper to construct our server lists from a list of all host names
 async function buildServerList(ns, verbose = false, allServers = undefined) {
-    // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans) that are not currently flagged for deletion
+    // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans)
     allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
-    // Indication that a server has been flagged for deletion (by the host manager).
     let scanResult = allServers;
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
