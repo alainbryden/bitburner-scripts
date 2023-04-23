@@ -593,7 +593,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     if (nextUpAug && options['neuroflux-disabled']) outputRows.push(nextUpAug); // Output this now if we will be exiting early, otherwise save for after the last table.
     if (augsAwaitingInstall > 0)
         outputRows.push(`WARNING: Prices all have a x ${formatNumberShort(augCountMult ** augsAwaitingInstall)} cost penalty, because ` +
-            `${augsAwaitingInstall} Augmentations are were previously purchased but are not yet installed.`);
+            `${augsAwaitingInstall} Augmentations were previously purchased but are not yet installed.`);
     if (inaccessiblePriorityAugs.length > 0)
         outputRows.push(`INFO: ${inaccessiblePriorityAugs.length} 'priority' augs are not yet accessible: ${inaccessiblePriorityAugs.map(n => `"${n}"`).join(", ")}`);
     const additionalDroppedPri = droppedPriorityAugs.filter(n => !inaccessiblePriorityAugs.includes(n));
@@ -628,7 +628,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         if (getFrom != factionsWithAug[0].name && factionsWithAug[0] != factionsWithAugAndInvite[0])
             outputRows.push(`SUGGESTION: Earn an invitation to faction ${factionsWithAug[0].name} to make it easier to get rep for ${strNF} since it has the most favor (${factionsWithAug[0].favor}).`);
         else if (factionsWithAug[0].joined && !factionsWithAug[0].donationsUnlocked)
-            outputRows.push(`SUGGESTION: Do some work for faction ${factionsWithAug[0].name} to qickly earn rep for ${strNF} since it has the most favor (${factionsWithAug[0].favor}).`);
+            outputRows.push(`SUGGESTION: Do some work for faction ${factionsWithAug[0].name} to quickly earn rep for ${strNF} since it has the most favor (${factionsWithAug[0].favor}).`);
         else if (!getFrom || (factionData[getFrom].favor < factionWithMostFavor.favor && factionWithMostFavor.invited)) {
             outputRows.push(`Attempting to join faction ${factionWithMostFavor.name} to make it easier to earn rep for ${strNF} since it has the most favor (${factionWithMostFavor.favor}).`);
             joined = await joinFactions(ns, [factionWithMostFavor.name]);
