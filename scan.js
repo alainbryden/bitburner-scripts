@@ -50,7 +50,7 @@ export function main(ns) {
             return `<span id="${serverName}">`
                 + `<a class="server${factionServers.includes(serverName) ? " faction" : ""}`
                 + `${rooted ? " rooted" : ""}">${serverName}</a>`
-                + ` <span class="hack ${(canHack ? 'green' : 'red')}">(${requiredHackLevel})</span>`
+                + (server.purchasedByPlayer ? '' : ` <span class="hack ${(canHack ? 'green' : 'red')}">(${requiredHackLevel})</span>`)
                 + `${(shouldBackdoor ? ' <span class="backdoor">[<a>backdoor</a>]</span>' : '')}`
                 + ` ${contracts.map(c => `<span class="cct" title="${c}">@</span>`)}`
                 + "</span>"
