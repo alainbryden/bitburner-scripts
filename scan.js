@@ -5,7 +5,6 @@
 export function main(ns) {
     const factionServers = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n", "fulcrumassets"],
         css = `    <style id="scanCSS">
-        .w  {white-space:nowrap}
         .serverscan {white-space:pre; color:#ccc; font:14px monospace; line-height: 16px; }
         .serverscan .server {color:#080;cursor:pointer;text-decoration:underline}
         .serverscan .faction {color:#088}
@@ -48,7 +47,7 @@ export function main(ns) {
                 shouldBackdoor = !server?.backdoorInstalled && canHack && serverName != 'home' && rooted && !server.purchasedByPlayer,
                 contracts = ns.ls(serverName, ".cct")
 
-            return `<span class="w" id="${serverName}">`
+            return `<span id="${serverName}">`
                 + `<a class="server${factionServers.includes(serverName) ? " faction" : ""}`
                 + `${rooted ? " rooted" : ""}">${serverName}</a>`
                 + ` <span class="hack ${(canHack ? 'green' : 'red')}">(${requiredHackLevel})</span>`
