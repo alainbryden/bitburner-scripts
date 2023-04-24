@@ -794,16 +794,9 @@ async function doTargetingLoop(ns) {
             if (err?.env?.stopFlag) return;
             // Note netscript errors are raised as a simple string (no message property)
             var errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
-            // Catch errors that appear to be caused by deleted servers, and remove the server from our lists.
-            const expectedDeletedHostErr = /Invalid hostname: (['"])([\w-]*)\1/.exec(errorMessage);
-            if (!expectedDeletedHostErr) {
-                if (err?.stack) errorMessage += '\n' + err.stack;
-                log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
-                continue;
-            }
-            let deletedHostName = expectedDeletedHostErr[2];
-            log(ns, 'INFO: The server "' + deletedHostName + '" appears to have been deleted. Removing it from our lists', true, 'info');
-            removeServerByName(ns, deletedHostName);
+			if (err?.stack) errorMessage += '\n' + err.stack;
+			log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
+			continue;
         }
     } while (!runOnce);
 }
@@ -1759,12 +1752,9 @@ function removeServerByName(ns, deletedHostName) {
 
 // Helper to construct our server lists from a list of all host names
 async function buildServerList(ns, verbose = false, allServers = undefined) {
-    // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans) that are not currently flagged for deletion
+    // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans)
     allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
-    // Indication that a server has been flagged for deletion (by the host manager).
-    const flaggedForDeletion = await getNsDataThroughFile(ns, `ns.args.slice(1).map(s => ns.fileExists(ns.args[0], s))`,
-        '/Temp/servers-have-file.txt', [getFilePath("/Flags/deleting.txt"), ...allServers]);
-    let scanResult = allServers.filter((hostName, i) => hostName == "home" || !flaggedForDeletion[i]);
+    let scanResult = allServers;
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
         scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-server-') && !hostName.startsWith('hacknet-node-'))
