@@ -9,7 +9,7 @@ export function main(ns) {
         .serverscan .server {color:#080;cursor:pointer;text-decoration:underline}
         .serverscan .faction {color:#088}
         .serverscan .rooted {color:#6f3}
-        .serverscan .rooted.faction {color:#688}
+        .serverscan .rooted.faction {color:#0ff}
         .serverscan .rooted::before {color:#6f3}
         .serverscan .hack {display:inline-block; font:12px monospace}
         .serverscan .red {color:red;}
