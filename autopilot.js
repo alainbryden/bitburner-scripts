@@ -480,10 +480,10 @@ async function maybeDoCasino(ns, player) {
  * @param {Player} player 
  * @param {number} stocksValue */
 async function maybeDoInfiltration(ns, player, stocksValue) {
-	if (options['disable-Infiltration']) return;
+	if (options['disable-Infiltration'] || ns.read("/Temp/stopInfiltration.txt")) return;
 
 	if (player.money < 200000 && player.bitNodeN == 8) 
-		return log(ns, `INFO: Player money is to low (${player.money}) and in this Bitnode is Infiltration Money = 0, maybe do Casino?`);
+		return log(ns, `INFO: Player money is too low (${player.money}) and in this Bitnode Infiltration Money = 0, maybe do Casino?`);
 
 	if (lastInfiltration > Date.now() - (options['interval-check-scripts'] * 3)) return;
 	lastInfiltration = Date.now();
@@ -505,7 +505,7 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
 	if ((player.money + stocksValue) < 3e10 && player.bitNodeN != 8 && bitnodeMults?.InfiltrationMoney > 0.5 && !ranGetMoney){
 		launchScriptHelper(ns, 'infiltrator.js', ["--getMoney", "", "--max-loop", 4]); 
 		ranGetMoney = true
-		// TODO: after Infiltration, if Money is to low run casino?
+		// TODO: after Infiltration, if Money is too low run casino?
 	} else if (player.money > 200000 && bitnodeMults?.InfiltrationRep > 0.5 && stack?.length > 0){
 		launchScriptHelper(ns, 'infiltrator.js');
 	}

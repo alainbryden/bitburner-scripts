@@ -11,6 +11,7 @@ import {
 	getFilePath,
 	waitForProcessToComplete,
 	autoRetry,
+	runCommand,
 } from "./helpers";
 
 // Global config
@@ -113,7 +114,7 @@ const argsSchema = [
 	["target", ""], // use only this target
 	["max-loop", 15], // Max Loops per Faction
 	["sleep-Between-Infiltration-Time", 5000], // Sleep between Infiltration
-	["getMoney", ""], // Use this to boost Player Money
+	["getMoney", undefined], // Use this to boost Player Money
 	["stock", true], // Use Stockvalue for getMoney
 	["verbose", false], // Print Output to terminal
 ];
@@ -158,6 +159,8 @@ export async function main(ns) {
 		if (!verbose) iargs.push("--quiet");
 		let pid = launchScriptHelper(ns, "infiltrate.js", iargs);
 		if (pid) await waitForProcessToComplete(ns, pid);
+		//close tail opened at launchScriptHelper
+		ns.closeTail()
 	}
 
 	const bnMults = await tryGetBitNodeMultipliers(ns);
@@ -175,25 +178,28 @@ export async function main(ns) {
 	if (options["info"]) {
 		await buildInfiltrationStack(ns, ignoreFaction, boostFaction, forceTarget);
 		if (infiltrationStack.length == 0) {
-			await ns.write(output_file, "", "w");
+			ns.write(output_file, "", "w");
 		} else {
-			await ns.write(output_file, JSON.stringify(infiltrationStack), "w");
+			ns.write(output_file, JSON.stringify(infiltrationStack), "w");
 		}
 		return;
 	}
 
-	if (!options["getMoney"]) {
+	if (!options["getMoney"] && !(options["getMoney"] === "")) {
 		await buildInfiltrationStack(ns, ignoreFaction, boostFaction, forceTarget);
-		if (infiltrationStack.length == 0) return log(ns, "No Faction need Reputation", verbose);
+		if (infiltrationStack.length == 0) return log(ns, "No Factions need Reputation", verbose);
 		if (options["info"]) return;
 		for (const stack of infiltrationStack) {
 			await infiltrateForFaction(ns, stack);
+			if (ns.read("/Temp/stopInfiltration.txt")) return
 		}
 	} else {
 		let maxMoney = options["getMoney"] == "" ? 1e39 : parseShortNumber(options["getMoney"]);
 		let stock = options["stock"];
 		await infiltrateForMoney(ns, player, maxMoney, forceTarget, stock);
 	}
+	//close our window so we don't clutter everything, but give the player time to read it
+	runCommand(ns,"await ns.sleep(10000);ns.closeTail("+ns.pid+")")
 }
 
 /**
@@ -209,6 +215,7 @@ async function infiltrateForFaction(ns, stack) {
 	let currentReputation = await getFactionReputation(ns, stack.faction);
 	while (currentReputation < highestRepAug) {
 		if (loop > options["max-loop"]) return log(ns, "maximum loops reached");
+		if (ns.read("/Temp/stopInfiltration.txt")) return
 
 		ns.tail();
 		if (options["sleep-Between-Infiltration-Time"]) await ns.sleep(options["sleep-Between-Infiltration-Time"]);
@@ -225,8 +232,7 @@ async function infiltrateForFaction(ns, stack) {
 		}
 
 		log(ns, `Infiltrating ${stack.target.name} at loop ${loop} to push ${stack.faction}´s Reputation`);
-		let completet = await infiltrate(ns, city, stack.target.name, stack.faction);
-		if (completet == true) {
+		if (await infiltrate(ns, city, stack.target.name, stack.faction)) {
 			loop++;
 			stack.loop--;
 		}
@@ -277,6 +283,7 @@ async function infiltrateForMoney(ns, player, maxMoney, target, stock = true) {
 
 	while (currentMoney < maxMoney) {
 		if (loop > options["max-loop"]) return log(ns, "maximum loops reached");
+		if (ns.read("/Temp/stopInfiltration.txt")) return
 
 		ns.tail();
 		if (options["sleep-Between-Infiltration-Time"]) await ns.sleep(options["sleep-Between-Infiltration-Time"]);
@@ -292,8 +299,7 @@ async function infiltrateForMoney(ns, player, maxMoney, target, stock = true) {
 		}
 
 		log(ns, `Infiltrating ${target.name} at loop ${loop} to get ${formatMoney(maxMoney)} (currently at ${formatMoney(currentMoney)})`, verbose);
-		let completet = await infiltrate(ns, city, target.name, faction);
-		if (completet == true) {
+		if (await infiltrate(ns, city, target.name, faction)) {
 			loop++;
 		}
 
@@ -531,7 +537,7 @@ async function getLocations(ns, display = false) {
 }
 
 /** SoA aug check
- * @param {NS } ns
+ * @param {NS} ns
  * @returns {Promise<Boolean>} */
 async function hasSoaAug(ns) {
 	try {
@@ -587,7 +593,7 @@ async function buildInfiltrationStack(ns, ignoreFaction = [], boostFaction = "",
 }
 
 /** Get optimized Target for faction
- * @param {NS } ns
+ * @param {NS} ns
  * @param {Array<{city: string, maxClearanceLevel: number, name: string, reward: {SoARep: number, tradeRep: number, sellCash: number, repScore: number, moneyScore: number}}>} locations - Array of locations
  * @param {[string, {repNeed: number, reputation: number}]} faction - The faction you want to boost.
  * @param {string} [target] - The target to infiltrate.
@@ -655,7 +661,7 @@ function getTarget(ns, locations, faction, target = undefined, loop = 1) {
 }
 
 /** Helper to launch a script and log whether if it succeeded or failed
- * @param {NS } ns  */
+ * @param {NS} ns  */
 function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
 	ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
 	const pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
@@ -668,7 +674,7 @@ function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = tru
 const dictCommand = (command) => `Object.fromEntries(ns.args.map(o => [o, ${command}]))`;
 
 /** Ram-dodge getting updated player info.
- * @param {NS } ns
+ * @param {NS} ns
  * @returns {Promise<Player>} */
 async function getPlayerInfo(ns) {
 	return await getNsDataThroughFile(ns, `ns.getPlayer()`, "/Temp/player-info.txt");
@@ -682,7 +688,7 @@ async function getGangInfo(ns) {
 }
 
 /** Ram-dodge getting Faction Reputation.
- * @param {NS } ns
+ * @param {NS} ns
  * @param {string} factionName
  * @returns {Promise<Number>} Current reputation with the specified faction */
 async function getFactionReputation(ns, factionName) {
@@ -746,4 +752,3 @@ async function findRetry(ns, xpath, expectFailure = false, retries = null) {
 		if (!expectFailure) throw e;
 	}
 }
-// <--
