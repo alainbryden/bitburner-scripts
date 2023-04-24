@@ -192,7 +192,8 @@ async function tryToBuyBestServerPossible(ns) {
         return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) on our budget of ` +
             `${formatMoney(spendableMoney)} is less than our previously purchased server ${bestServerName} RAM ${formatRam(bestServerRam)}`);
 
-    let purchasedServer
+    let purchasedServer,
+        isUpgrade = false
     // if we're at capacity, check to see if we can do better better than the current worst purchased server. If so, upgrade it.
     if (purchasedServers.length >= maxPurchasedServers) {
         if (worstServerRam == maxPurchasableServerRam) {
@@ -202,6 +203,7 @@ async function tryToBuyBestServerPossible(ns) {
         }
 
         cost -= costByRamExponent[Math.log2(worstServerRam)]
+        isUpgrade = true
         purchasedServer = (await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
             '/Temp/upgradeServer.txt', [worstServerName, maxRamPossibleToBuy])) ? worstServerName : "";
     } else {
@@ -209,8 +211,8 @@ async function tryToBuyBestServerPossible(ns) {
             '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     }
     if (!purchasedServer)
-        setStatus(ns, `${prefix}Could not purchase/upgrade a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
+        setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
     else
-        log(ns, `SUCCESS: Purchased/Upgraded server ${purchasedServer} with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
+        log(ns, `SUCCESS: ${isUpgrade ? 'Upgraded' : 'Purchased'} server ${purchasedServer} with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
 }
