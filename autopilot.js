@@ -30,6 +30,7 @@ const argsSchema = [ // The set of all command line arguments
 	['disable-casino', false], // Set to true to disable running the casino.js script automatically
 	['on-completion-script', null], // Spawn this script when we defeat the bitnode
 	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
+	['run-script', []], // Spawns a script if it isnt running already in the main loop, example [{"name": <name> ,"arg": [arguments] "bitnode": [bitnode] , "ram": <ram req> }]
 ];
 export function autocomplete(data, args) {
 	data.flags(argsSchema);
@@ -422,6 +423,22 @@ async function checkOnRunningScripts(ns, player) {
 		// If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also okay early income)
 		// NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
 		launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
+	}
+
+	// TODO: add that mutiple bitnodes in the requirements work
+	if (options['run-script']) {
+		options['run-script'].forEach(script => {
+			if(!script.ram){
+				script.ram =0
+			}
+			if (!findScript(script.name) && script.ram<=homeRam && (script.bitnode in unlockedSFs || script.bitnode==player.bitNodeN)) {
+				if(script.args) {
+					launchScriptHelper(ns, script.name, script.args) 
+				} else {
+					launchScriptHelper(ns, script.name)
+				}
+			}
+		});
 	}
 }
 
