@@ -166,7 +166,7 @@ export async function main(ns) {
 	const bnMults = await tryGetBitNodeMultipliers(ns);
 	const wks = await hasSoaAug(ns);
 
-	log(ns, `Infiltration multipliers: ${bnMults.InfiltrationRep}× rep, ${bnMults.InfiltrationMoney}× money`, verbose);
+	log(ns, `Infiltration multipliers: ${bnMults?.InfiltrationRep}× rep, ${bnMults?.InfiltrationMoney}× money`, verbose);
 	log(ns, `WKS harmonizer aug: ${wks ? "yes" : "no"}`, verbose);
 
 	player = await getPlayerInfo(ns);

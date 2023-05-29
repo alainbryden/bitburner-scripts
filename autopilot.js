@@ -27,10 +27,10 @@ const argsSchema = [ // The set of all command line arguments
 	['wait-for-4s-threshold', 0.9], // Set to 0 to not reset until we have 4S. If money is above this ratio of the 4S Tix API cost, don't reset until we buy it.
 	['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
 	['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
-	['disable-casino', false], // Set to true to disable running the casino.js script automatically
+	['disable-casino', true], // Set to true to disable running the casino.js script automatically
 	['on-completion-script', null], // Spawn this script when we defeat the bitnode
 	['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
-	['disable-Infiltration', true], // Set to false to enable automating infiltrations
+	['disable-Infiltration', false], // Set to false to enable automating infiltrations
 ];
 export function autocomplete(data, args) {
 	data.flags(argsSchema);
@@ -44,6 +44,7 @@ let playerInGang = false, rushGang = false; // Tells us whether we're should be 
 let playerInBladeburner = false; // Whether we've joined bladeburner
 let wdHack = 0; // If the WD server is available (i.e. TRP is installed), caches the required hack level
 let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
+let ranGetMoney = false; // Flag to indicate whether we've infiltrated to get Money
 let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
 let reserveForDaedalus = false, daedalusUnavailable = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
@@ -480,6 +481,7 @@ async function maybeDoCasino(ns, player) {
  * @param {Player} player 
  * @param {number} stocksValue */
 async function maybeDoInfiltration(ns, player, stocksValue) {
+	//needs to check if work-for-factions needs us
 	if (options['disable-Infiltration'] || ns.read("/Temp/stopInfiltration.txt")) return;
 
 	if (player.money < 200000 && player.bitNodeN == 8) 
@@ -490,8 +492,8 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
 
 	let infiltrator = findScriptHelper('infiltrator.js', await getRunningScripts(ns));
 	if (infiltrator) return
-	
-	if (!bitnodeMults) bitnodeMults = await tryGetBitNodeMultipliers(ns);
+
+	const bitnodeMults = await tryGetBitNodeMultipliers(ns) || {InfiltrationMoney: 1, InfiltrationRep: 1};
 
 	let pid = launchScriptHelper(ns, 'infiltrator.js', ['--info'], '', true);
 	if (pid) await waitForProcessToComplete(ns, pid);
@@ -502,12 +504,14 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
 		stack = JSON.parse(stack)
 	}
 
-	if ((player.money + stocksValue) < 3e10 && player.bitNodeN != 8 && bitnodeMults?.InfiltrationMoney > 0.5 && !ranGetMoney){
-		launchScriptHelper(ns, 'infiltrator.js', ["--getMoney", "", "--max-loop", 4]); 
+	if ((player.money + stocksValue) < 3e10 && player.bitNodeN != 8 && bitnodeMults?.InfiltrationMoney > 0.1 && !ranGetMoney){
+		launchScriptHelper(ns, 'infiltrator.js', ["--getMoney", "20e12", "--max-loop", 4]); 
 		ranGetMoney = true
-		// TODO: after Infiltration, if Money is too low run casino?
-	} else if (player.money > 200000 && bitnodeMults?.InfiltrationRep > 0.5 && stack?.length > 0){
+	} else if (player.money > 200000 && bitnodeMults?.InfiltrationRep > 0.1 && stack?.length > 0){
 		launchScriptHelper(ns, 'infiltrator.js');
+	} else if ((player.money + stocksValue) < 20e12 && player.bitNodeN != 8 && bitnodeMults?.InfiltrationMoney > 0.1) {
+		// Infiltrate for money until we have 20t, after which it is fairly certainly irrelevant (good infiltration is ~20b which means ~0.1% ROI on Stocks)
+		launchScriptHelper(ns, 'infiltrator.js', ["--getMoney", "20e12", "--max-loop", 1]);
 	}
 }
 
