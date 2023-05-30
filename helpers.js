@@ -139,7 +139,7 @@ export async function getNsDataThroughFile(ns, command, fName = null, args = [],
 
 /** Convert a command name like "ns.namespace.someFunction(args, args)" into
  * a default file path for running that command "/Temp/namespace-someFunction.txt" */
-function getDefaultCommandFileName(command) {
+function getDefaultCommandFileName(command, ext = '.txt') {
     // If prefixed with "ns.", strip that out
     let fname = command;
     if (fname.startsWith("ns.")) fname = fname.slice(3);
@@ -147,7 +147,7 @@ function getDefaultCommandFileName(command) {
     fname = fname.replace(/ *\([^)]*\) */g, "");
     // Replace any dereferencing (dots) with dashes
     fname = fname.replace(".", "-");
-    return `/Temp/${fname}.txt`
+    return `/Temp/${fname}${ext}`
 }
 
 /**
@@ -239,7 +239,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
     const required = getExports(ns).filter(e => command.includes(`${e}(`));
     let script = (required.length > 0 ? `import { ${required.join(", ")} } from 'helpers.js'\n` : '') +
         `export async function main(ns) { ${command} }`;
-    fileName = fileName || getDefaultCommandFileName(command);
+    fileName = fileName || getDefaultCommandFileName(command, '.js');
     if (verbose)
         log(ns, `INFO: Using a temporary script (${fileName}) to execute the command:` +
             `\n  ${command}\nWith the following arguments:    ${JSON.stringify(args)}`);
