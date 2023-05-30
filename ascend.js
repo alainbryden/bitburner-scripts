@@ -37,8 +37,6 @@ export async function main(ns) {
     if (options['prioritize-augmentations'])
         log(ns, "INFO: The --prioritize-augmentations flag is deprecated, as this is now the default behaviour. Use --prioritize-home-ram to get back the old behaviour.")
 
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
-
     // Kill every script except this one, since it can interfere with out spending
     let pid = await runCommand(ns, `ns.ps().filter(s => s.filename != ns.args[0]).forEach(s => ns.kill(s.pid));`,
         '/Temp/kill-everything-but.js', [ns.getScriptName()]);
@@ -78,10 +76,13 @@ export async function main(ns) {
 
     // STEP 3: (SF13) STANEK'S GIFT
     // There is now an API to accept stanek's gift without resorting to exploits. We must do this before installing augs for the first time
-    if (13 in dictSourceFiles)
+    if (13 in dictSourceFiles) {
+        // By feature request: Auto-skip stanek in BN8 (requires a separate API check to get current BN)
+        let isInBn8 = 8 === (await getNsDataThroughFile(ns, `ns.getResetInfo()`, '/Temp/getResetInfo.txt')).currentNode;
+
         if (options['skip-staneks-gift'])
             log(ns, 'INFO: --skip-staneks-gift was set, we will not accept it.');
-        else if (playerData.bitNodeN == 8) {
+        else if (isInBn8) {
             log(ns, 'INFO: Stanek\'s gift is useless in BN8, setting the --skip-staneks-gift argument automatically.');
             options['skip-staneks-gift'] = true;
         } else {
@@ -93,6 +94,7 @@ export async function main(ns) {
                 options['skip-staneks-gift'] = true; // Nothing we can do, no point in failing our augmentation install
             }
         }
+    }
 
     // STEP 4: Buy as many desired augmentations as possible
     log(ns, 'Purchasing augmentations...', true, 'info');

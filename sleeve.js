@@ -140,9 +140,11 @@ async function mainLoop(ns) {
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
     // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
     const costByNextLoop = interval / 1000 * task.filter(t => t.startsWith("train")).length * 12000; // TODO: Training cost/sec seems to be a bug. Should be 1/5 this ($2400/sec)
+    // Get time in current bitnode (to cap how long we'll train sleeves)
+    const timeInBitnode = Date.now() - (await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt')).lastNodeReset
     let canTrain = !options['disable-training'] &&
         // To avoid training forever when mults are crippling, stop training if we've been in the bitnode a certain amount of time
-        (options['training-cap-seconds'] * 1000 > playerInfo.playtimeSinceLastBitnode) &&
+        (options['training-cap-seconds'] * 1000 > timeInBitnode) &&
         // Don't train if we have no money (unless player has given permission to train into debt)
         (playerInfo.money - costByNextLoop) > (options['training-reserve'] ||
             (promptedForTrainingBudget ? ns.read(trainingReserveFile) : undefined) || globalReserve);

@@ -235,7 +235,7 @@ export async function main(ns) {
     // Try to get "resetInfo", with a fallback for a failed dynamic call (i.e. low-ram conditions)
     let resetInfo;
     try {
-        resetInfo = await getNsDataThroughFile(ns, `ns.getResetInfo()`, '/Temp/reset-info.txt');
+        resetInfo = await getNsDataThroughFile(ns, `ns.getResetInfo()`, '/Temp/getResetInfo.txt');
     } catch {
         resetInfo = { currentNode: 1, lastAugReset: Date.now() };
     }
@@ -358,8 +358,8 @@ export async function main(ns) {
         maxTargets = Math.max(maxTargets, Object.keys(serverStockSymbols).length);
 
     // If we ascended less than 10 minutes ago, start with some study and/or XP cycles to quickly restore hack XP
-    const playtimeSinceLastAug = Date.now() - resetInfo.lastAugReset;
-    const shouldKickstartHackXp = (playerHackSkill() < 500 && playtimeSinceLastAug < 600000);
+    const timeSinceLastAug = Date.now() - resetInfo.lastAugReset;
+    const shouldKickstartHackXp = (playerHackSkill() < 500 && timeSinceLastAug < 600000);
     studying = shouldKickstartHackXp ? true : false; // Flag will be used to prevent focus-stealing scripts from running until we're done studying.
 
     // Start helper scripts and run periodic scripts for the first time to e.g. buy tor and any hack tools available to us (we will continue studying briefly while this happens)

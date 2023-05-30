@@ -30,6 +30,7 @@ const expectedTickTime = 6000;
 const catchUpTickTime = 4000;
 let lastTick = 0;
 let sleepInterval = 1000;
+let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
 
 let options;
 const argsSchema = [
@@ -106,6 +107,7 @@ export async function main(ns) {
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
     let myStocks = [], allStocks = [];
     let player = await getPlayerInfo(ns);
+    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
 
     if (!hasTixApiAccess) { // You cannot use the stockmaster until you have API access
         if (options['disable-purchase-tix-api'])
@@ -247,6 +249,8 @@ export async function main(ns) {
 async function getPlayerInfo(ns) {
     return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
 }
+
+function getTimeInBitnode() { return Date.now() - resetInfo.lastNodeReset; }
 
 /* A sorting function to put stocks in the order we should prioritize investing in them */
 let purchaseOrder = (a, b) => (Math.ceil(a.timeToCoverTheSpread()) - Math.ceil(b.timeToCoverTheSpread())) || (b.absReturn() - a.absReturn());
@@ -574,13 +578,13 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
     if (!has4S) {
         if (await tryBuy(ns, 'purchase4SMarketData'))
             log(ns, `SUCCESS: Purchased 4SMarketData for ${formatMoney(cost4sData)} ` +
-                `(At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+                `(At ${formatDuration(getTimeInBitnode())} into BitNode)`, true, 'success');
         else
             log(ns, 'ERROR attempting to purchase 4SMarketData!', false, 'error');
     }
     if (await tryBuy(ns, 'purchase4SMarketDataTixApi')) {
         log(ns, `SUCCESS: Purchased 4SMarketDataTixApi for ${formatMoney(cost4sApi)} ` +
-            `(At ${formatDuration(playerStats.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+            `(At ${formatDuration(getTimeInBitnode())} into BitNode)`, true, 'success');
         return true;
     } else {
         log(ns, 'ERROR attempting to purchase 4SMarketDataTixApi!', false, 'error');
@@ -620,13 +624,13 @@ async function tryGetStockMarketAccess(ns, budget) {
     if (!hasWSE) {
         if (await tryBuy(ns, 'purchaseWseAccount'))
             log(ns, `SUCCESS: Purchased a WSE (stockmarket) account for ${formatMoney(costWseAccount)} ` +
-                `(At ${formatDuration((await getPlayerInfo(ns)).playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+                `(At ${formatDuration(getTimeInBitnode())} into BitNode)`, true, 'success');
         else
             log(ns, 'ERROR attempting to purchase WSE account!', false, 'error');
     }
     if (await tryBuy(ns, 'purchaseTixApi')) {
         log(ns, `SUCCESS: Purchased Tix (stockmarket) Api access for ${formatMoney(costTixApi)} ` +
-            `(At ${formatDuration((await getPlayerInfo(ns)).playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+            `(At ${formatDuration(getTimeInBitnode())} into BitNode)`, true, 'success');
         return true;
     } else
         log(ns, 'ERROR attempting to purchase Tix Api!', false, 'error');
