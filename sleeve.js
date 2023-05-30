@@ -79,7 +79,7 @@ async function manageSleeveAugs(ns, i, budget) {
     if (availableAugs[i] == null || Date.now() > cacheExpiry[i]) {
         cacheExpiry[i] = Date.now() + 60000;
         availableAugs[i] = (await getNsDataThroughFile(ns, `ns.sleeve.getSleevePurchasableAugs(ns.args[0])`,  // list of { name, cost }
-            '/Temp/sleeve-augs.txt', [i])).sort((a, b) => a.cost - b.cost);
+            null, [i])).sort((a, b) => a.cost - b.cost);
     }
     if (availableAugs[i].length == 0) return 0;
 
@@ -107,13 +107,13 @@ async function manageSleeveAugs(ns, i, budget) {
 /** @param {NS} ns
  * @returns {Promise<Player>} the result of ns.getPlayer() */
 async function getPlayerInfo(ns) {
-    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`);
 }
 
 /** @param {NS} ns
  * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
 async function getCurrentWorkInfo(ns) {
-    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt')) ?? {};
+    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {};
 }
 
 /** @param {NS} ns
@@ -128,20 +128,19 @@ async function getAllSleeves(ns, numSleeves) {
  * Main loop that gathers data, checks on all sleeves, and manages them. */
 async function mainLoop(ns) {
     // Update info
-    numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
+    numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`);
     const playerInfo = await getPlayerInfo(ns);
     // If we have not yet detected that we are in bladeburner, do that now (unless disabled)
     if (!options['disable-bladeburner'] && !playerInBladeburner)
-        playerInBladeburner = await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
+        playerInBladeburner = await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()');
     const playerWorkInfo = await getCurrentWorkInfo(ns);
-    if (!playerInGang) playerInGang = !(2 in ownedSourceFiles) ? false :
-        await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+    if (!playerInGang) playerInGang = !(2 in ownedSourceFiles) ? false : await getNsDataThroughFile(ns, 'ns.gang.inGang()');
     let globalReserve = Number(ns.read("reserve.txt") || 0);
     let budget = (playerInfo.money - (options['reserve'] || globalReserve)) * options['aug-budget'];
     // Estimate the cost of sleeves training over the next time interval to see if (ignoring income) we would drop below our reserve.
     const costByNextLoop = interval / 1000 * task.filter(t => t.startsWith("train")).length * 12000; // TODO: Training cost/sec seems to be a bug. Should be 1/5 this ($2400/sec)
     // Get time in current bitnode (to cap how long we'll train sleeves)
-    const timeInBitnode = Date.now() - (await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt')).lastNodeReset
+    const timeInBitnode = Date.now() - (await getNsDataThroughFile(ns, 'ns.getResetInfo()')).lastNodeReset
     let canTrain = !options['disable-training'] &&
         // To avoid training forever when mults are crippling, stop training if we've been in the bitnode a certain amount of time
         (options['training-cap-seconds'] * 1000 > timeInBitnode) &&
@@ -153,8 +152,8 @@ async function mainLoop(ns) {
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
     if (playerInBladeburner && (7 in ownedSourceFiles)) {
-        const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`, '/Temp/bladeburner-getCity.txt');
-        bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, '/Temp/bladeburner-getCityChaos.txt', [bladeburnerCity]);
+        const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`);
+        bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, null, [bladeburnerCity]);
         bladeburnerContractChances = await getNsDataThroughFile(ns,
             // There is currently no way to get sleeve chance, so assume it is the same as player chance for now. (EDIT: This is a terrible assumption)
             'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionEstimatedSuccessChance("contract", c)[0]]))',
@@ -236,7 +235,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
             if (sleeve.city != ns.enums.CityName.Sector12) {
                 log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Sector-12 so that they can study at Powerhouse Gym.`);
-                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', '/Temp/sleeve-travel.txt', [i, ns.enums.CityName.Sector12]);
+                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', null, [i, ns.enums.CityName.Sector12]);
             }
             var trainStat = untrainedStats.reduce((min, s) => sleeve.skills[s] < sleeve.skills[min] ? s : min, untrainedStats[0]);
             var gym = ns.enums.LocationName.Sector12PowerhouseGym;
@@ -386,7 +385,7 @@ async function promptForTrainingBudget(ns) {
 async function calculateCrimeChance(ns, sleeve, crimeName) {
     // If not in the cache, retrieve this crime's stats
     const crimeStats = cachedCrimeStats[crimeName] ?? (cachedCrimeStats[crimeName] = (4 in ownedSourceFiles ?
-        await getNsDataThroughFile(ns, `ns.singularity.getCrimeStats(ns.args[0])`, '/Temp/get-crime-stats.txt', [crimeName]) :
+        await getNsDataThroughFile(ns, `ns.singularity.getCrimeStats(ns.args[0])`, null, [crimeName]) :
         // Hack: To support players without SF4, hard-code values as of the current release
         crimeName == "homicide" ? { difficulty: 1, strength_success_weight: 2, defense_success_weight: 2, dexterity_success_weight: 0.5, agility_success_weight: 0.5 } :
             crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :

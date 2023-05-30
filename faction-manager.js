@@ -115,8 +115,8 @@ export async function main(ns) {
     desiredAugs = priorityAugs.concat(desiredAugs);
 
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-    bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`, '/Temp/getResetInfo.txt')).currentNode;
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`)).currentNode;
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
     const sf4Level = bitNode == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
@@ -132,7 +132,7 @@ export async function main(ns) {
     // Collect information about the player
     const gangInfo = await getGangInfo(ns);
     gangFaction = gangInfo ? gangInfo.faction : false;
-    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
+    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     startingPlayerMoney = playerData.money;
     stockValue = options['ignore-stocks'] ? 0 : await getStocksValue(ns);
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
@@ -237,10 +237,16 @@ let factionSortValue = faction => {
 // Ram-dodging helper, runs a command for all items in a list and returns a dictionary.
 const dictCommand = (command) => `Object.fromEntries(ns.args.map(o => [o, ${command}]))`;
 
+// Get a dictionary from retrieving the same infromation for every server name
+async function getSingularityDict(ns, command, listItems) {
+    return await getNsDataThroughFile(ns, dictCommand(`ns.singularity.${command}(o)`),
+        `/Temp/singularity-${command}-all.txt`, listItems);
+}
+
 /** @param {NS} ns **/
 async function updateFactionData(ns, factionsToOmit) {
     // Gather a list of all faction names to collect information about. Start with any player joined and invited factions
-    const invitations = await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()', '/Temp/checkFactionInvitations.txt');
+    const invitations = await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()');
     factionNames = joinedFactions.concat(invitations);
     // Add in factions the user hasn't seen. All factions by default, or a small subset of easy-access factions if --hide-locked-factions is set
     factionNames.push(...(options['hide-locked-factions'] ? easyAccessFactions : allFactions).filter(f => !factionNames.includes(f)));
@@ -253,9 +259,9 @@ async function updateFactionData(ns, factionsToOmit) {
     log(ns, `We "know" about ${factionNames.length} factions, and will omit ${factionsToOmit.length} of them.`);
     factionNames = factionNames.filter(f => !factionsToOmit.includes(f));
 
-    let dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', factionNames);
-    let dictFactionReps = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionRep(o)'), '/Temp/getFactionReps.txt', factionNames);
-    let dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', factionNames);
+    let dictFactionAugs = await getSingularityDict(ns, 'getAugmentationsFromFaction', factionNames);
+    let dictFactionReps = await getSingularityDict(ns, 'getFactionRep', factionNames);
+    let dictFactionFavors = await getSingularityDict(ns, 'getFactionFavor', factionNames);
 
     // Need information about our gang to work around a TRP bug - gang faction appears to have it available, but it's not (outside of BN2)  
     if (gangFaction && bitNode != 2)
@@ -283,10 +289,10 @@ async function updateFactionData(ns, factionsToOmit) {
 /** @param {NS} ns **/
 async function updateAugmentationData(ns, desiredAugs) {
     const augmentationNames = [...new Set(Object.values(factionData).flatMap(f => f.augmentations))]; // augmentations.slice();
-    const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationRepReq(o)'), '/Temp/getAugmentationRepReqs.txt', augmentationNames);
-    const dictAugPrices = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationPrice(o)'), '/Temp/getAugmentationPrices.txt', augmentationNames);
-    const dictAugStats = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationStats(o)'), '/Temp/getAugmentationStats.txt', augmentationNames);
-    const dictAugPrereqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationPrereq(o)'), '/Temp/getAugmentationPrereqs.txt', augmentationNames);
+    const dictAugRepReqs = await getSingularityDict(ns, 'getAugmentationRepReq', augmentationNames);
+    const dictAugPrices = await getSingularityDict(ns, 'getAugmentationPrice', augmentationNames);
+    const dictAugStats = await getSingularityDict(ns, 'getAugmentationStats', augmentationNames);
+    const dictAugPrereqs = await getSingularityDict(ns, 'getAugmentationPrereq', augmentationNames);
     augmentationData = Object.fromEntries(augmentationNames.map(aug => [aug, {
         name: aug,
         displayName: aug,
@@ -377,7 +383,7 @@ async function joinFactions(ns, forceJoinFactions) {
         else {
             log(ns, `Joining faction ${faction.name} which has ${desiredAugs.length} desired augmentations: ${desiredAugs}`);
             let response;
-            if (response = await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, '/Temp/join-faction.txt', [faction.name])) {
+            if (response = await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, null, [faction.name])) {
                 faction.joined = true;
                 faction.augmentations.forEach(aug => accessibleAugmentations.add(aug));
                 joinedFactions.push(faction.name);
@@ -551,7 +557,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
  * Note: Stores this info in global properties `purchaseableAugs` and `purchaseFactionDonations` so that a final action in the main method will do the purchase. */
 async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // Refresh player data to get an accurate read of current money
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     const budget = playerData.money + stockValue;
     let totalRepCost, totalAugCost, dropped, restart;
     // We will make every effort to keep "priority" augs in the purchase order, but start dropping them if we find we cannot afford them all
@@ -742,7 +748,7 @@ async function purchaseDesiredAugs(ns) {
     let totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(purchaseableAugs);
     // Refresh player data to get an accurate read of current money
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     if (stockValue > 0)
         return log(ns, `ERROR: For your own protection, --purchase will not run while you are holding stocks (current stock value: ${formatMoney(stockValue)}). ` +
             `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
@@ -772,7 +778,7 @@ async function purchaseDesiredAugs(ns) {
     else
         log(ns, `ERROR: We were only able to purchase ${purchased} of our ${purchaseableAugs.length} augmentations. ` +
             `Expected cost was ${getCostString(totalAugCost, totalRepCost)}. Player money was ${formatMoney(playerData.money)} right before purchase, ` +
-            `is now ${formatMoney(await getNsDataThroughFile(ns, 'ns.getPlayer().money', '/Temp/getPlayer-money.txt'))}`, printToTerminal, 'error');
+            `is now ${formatMoney(await getNsDataThroughFile(ns, 'ns.getPlayer().money'))}`, printToTerminal, 'error');
 }
 
 /** @param {NS} ns **/

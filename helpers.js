@@ -127,14 +127,27 @@ export function getFnIsAliveViaNsPs(ns) {
  * Has the capacity to retry if there is a failure (e.g. due to lack of RAM available). Not recommended for performance-critical code.
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {string=} fName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
  **/
-export async function getNsDataThroughFile(ns, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile(ns, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
     return await getNsDataThroughFile_Custom(ns, ns.run, command, fName, args, verbose, maxRetries, retryDelayMs);
+}
+
+/** Convert a command name like "ns.namespace.someFunction(args, args)" into
+ * a default file path for running that command "/Temp/namespace-someFunction.txt" */
+function getDefaultCommandFileName(command) {
+    // If prefixed with "ns.", strip that out
+    let fname = command;
+    if (fname.startsWith("ns.")) fname = fname.slice(3);
+    // Remove anything between parentheses
+    fname = fname.replace(/ *\([^)]*\) */g, "");
+    // Replace any dereferencing (dots) with dashes
+    fname = fname.replace(".", "-");
+    return `/Temp/${fname}.txt`
 }
 
 /**
@@ -145,12 +158,11 @@ export async function getNsDataThroughFile(ns, command, fName, args = [], verbos
  * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  **/
-export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     if (!verbose) disableLogs(ns, ['read']);
-    const commandHash = hashCode(command);
-    fName = fName || `/Temp/${commandHash}-data.txt`;
-    const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
+    fName = fName || getDefaultCommandFileName(command);
+    const fNameCommand = fName + '.js'
     // Pre-write contents to the file that will allow us to detect if our temp script never got run
     const initialContents = "<Insufficient RAM>";
     ns.write(fName, initialContents, 'w');
@@ -185,7 +197,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fileName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {string=} fileName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, the evaluation result of the command is printed to the terminal
  */
@@ -227,7 +239,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
     const required = getExports(ns).filter(e => command.includes(`${e}(`));
     let script = (required.length > 0 ? `import { ${required.join(", ")} } from 'helpers.js'\n` : '') +
         `export async function main(ns) { ${command} }`;
-    fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
+    fileName = fileName || getDefaultCommandFileName(command);
     if (verbose)
         log(ns, `INFO: Using a temporary script (${fileName}) to execute the command:` +
             `\n  ${command}\nWith the following arguments:    ${JSON.stringify(args)}`);

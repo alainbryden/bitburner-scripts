@@ -53,8 +53,8 @@ export async function main(ns) {
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['sleep'])
-    player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-	resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
+    player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+	resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     // Ensure we have access to bladeburner
     ownedSourceFiles = await getActiveSourceFiles(ns);
     //if (!(6 in ownedSourceFiles) && resetInfo.currentNode != 7) // NOTE: Despite the SF6 description, it seems you don't need SF6
@@ -84,8 +84,7 @@ function getTimeInBitnode() { return Date.now() - resetInfo.lastNodeReset; }
 
 // Ram dodging helper to execute a parameterless bladeburner function
 const getBBInfo = async (ns, strFunction, ...args) =>
-    await getNsDataThroughFile(ns, `ns.bladeburner.${strFunction}`,
-        `/Temp/bladeburner-${strFunction.split('(')[0]}.txt`, args);
+    await getNsDataThroughFile(ns, `ns.bladeburner.${strFunction}`, null, args);
 // Ram-dodging helper to get information for each item in a list (bit hacky). Temp script will be created such that
 // the first argument recieved is an array of values to map, and any additional arguments are appended afterwards.
 // The strFunction should contain a '%' sign indicating where the elements from the list should be mapped to a single call.
@@ -410,7 +409,7 @@ let lastCanWorkCheckIdle = true;
 async function canDoBladeburnerWork(ns) {
     if (options['ignore-busy-status'] || haveSimulacrum) return true;
     // Check if the player is busy doing something else
-    const busy = await getNsDataThroughFile(ns, 'ns.singularity.isBusy()', '/Temp/isBusy.txt');
+    const busy = await getNsDataThroughFile(ns, 'ns.singularity.isBusy()');
     if (!busy) return lastCanWorkCheckIdle = true;
     if (lastCanWorkCheckIdle)
         log(ns, `WARNING: Cannot perform Bladeburner actions because the player is busy ` +
@@ -422,7 +421,7 @@ async function canDoBladeburnerWork(ns) {
  * Ensure we're in the Bladeburner division */
 async function beingInBladeburner(ns) {
     // Ensure we're in the Bladeburner division. If not, wait until we've joined it.
-    while (!(await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt'))) {
+    while (!(await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()'))) {
         try {
             if (player.skills.strength < 100 || player.skills.defense < 100 || player.skills.dexterity < 100 || player.skills.agility < 100)
                 log(ns, `Waiting for physical stats >100 to join bladeburner ` +
@@ -436,7 +435,7 @@ async function beingInBladeburner(ns) {
                 break;
             } else
                 log(ns, 'WARNING: Failed to joined Bladeburner despite physical stats. Will try again...', false, 'warning');
-            player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+            player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
         }
         catch (err) {
             log(ns, `WARNING: bladeburner.js Caught (and suppressed) an unexpected error while waiting to join bladeburner, but will keep going:\n` +

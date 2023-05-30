@@ -104,8 +104,8 @@ async function startUp(ns) {
 	installedAugmentations = killScripts = [];
 
 	// Collect and cache some one-time data
-	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-	resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
+	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+	resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
 	dictOwnedSourceFiles = await getActiveSourceFiles(ns, false);
 	unlockedSFs = await getActiveSourceFiles(ns, true);
@@ -163,7 +163,7 @@ async function initializeNewBitnode(ns, player) {
 /** Logic run periodically throughout the BN
  * @param {NS} ns */
 async function mainLoop(ns) {
-	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
 	let stocksValue = 0;
 	try { stocksValue = await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
 	await manageReservedMoney(ns, player, stocksValue);
@@ -191,7 +191,7 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
 		return reserveForDaedalus = false;
 	}
 	if (reserveForDaedalus) { // Already waiting for a Daedalus invite, try joining them
-		return (4 in unlockedSFs) ? await getNsDataThroughFile(ns, 'ns.singularity.joinFaction(ns.args[0])', '/Temp/joinFaction.txt', ["Daedalus"]) :
+		return (4 in unlockedSFs) ? await getNsDataThroughFile(ns, 'ns.singularity.joinFaction(ns.args[0])', null, ["Daedalus"]) :
 			log(ns, "INFO: Please manually join the faction 'Daedalus' as soon as possible to proceed", false, 'info');
 	}
 	const bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || { DaedalusAugsRequirement: 1 };
@@ -223,7 +223,7 @@ async function checkIfBnIsComplete(ns, player) {
 	let bnComplete = player.skills.hacking >= wdHack;
 	// Detect the BB win condition (requires SF7 (bladeburner API) or being in BN6)
 	if (7 in unlockedSFs) // No point making this async check if bladeburner API is unavailable
-		playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
+		playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()');
 	if (!bnComplete && playerInBladeburner)
 		bnComplete = await getNsDataThroughFile(ns,
 			`ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
@@ -245,7 +245,7 @@ async function checkIfBnIsComplete(ns, player) {
 	// Check if there is some reason not to automatically destroy this BN
 	if (resetInfo.currentNode == 10) { // Suggest the user doesn't reset until they buy all sleeves and max memory
 		const shouldHaveSleeveCount = Math.min(8, 6 + (dictOwnedSourceFiles[10] || 0));
-		const numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
+		const numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`);
 		if (numSleeves < shouldHaveSleeveCount) {
 			log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.` +
 				`\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
@@ -283,7 +283,7 @@ async function checkIfBnIsComplete(ns, player) {
 /** Helper to get a list of all scripts running (on home)
  * @param {NS} ns */
 async function getRunningScripts(ns) {
-	return await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', ['home']);
+	return await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', null, ['home']);
 }
 
 /** Helper to get the first instance of a running script by name.
@@ -302,7 +302,7 @@ async function killScript(ns, baseScriptName, runningScripts = null, processInfo
 	processInfo = processInfo || findScriptHelper(baseScriptName, runningScripts || (await getRunningScripts(ns)))
 	if (processInfo) {
 		log(ns, `INFO: Killing script ${baseScriptName} with pid ${processInfo.pid} and args: [${processInfo.args.join(", ")}].`, false, 'info');
-		return await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', '/Temp/kill.txt', [processInfo.pid]);
+		return await getNsDataThroughFile(ns, 'ns.kill(ns.args[0])', null, [processInfo.pid]);
 	}
 	log(ns, `WARNING: Skipping request to kill script ${baseScriptName}, no running instance was found...`, false, 'warning');
 	return false;
@@ -322,7 +322,7 @@ async function checkOnRunningScripts(ns, player) {
 		await killScript(ns, killScripts.pop(), runningScripts);
 
 	// Hold back on launching certain scripts if we are low on home RAM
-	const homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
+	const homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
 
 	// Launch stock-master in a way that emphasizes it as our main source of income early-on
 	if (!findScript('stockmaster.js') && !reserveForDaedalus && homeRam >= 32)
@@ -407,7 +407,7 @@ async function checkOnRunningScripts(ns, player) {
 	// If gangs are unlocked, micro-manage how 'work-for-factions.js' is running by killing off unwanted instances
 	if (2 in unlockedSFs) {
 		// Check if we've joined a gang yet. (Never have to check again once we know we're in one)
-		if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+		if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', null);
 		rushGang = !options['disable-rush-gangs'] && !playerInGang;
 		// Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
 		// (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
@@ -463,7 +463,7 @@ async function maybeDoCasino(ns, player) {
 	await killScript(ns, 'work-for-factions.js');
 	// Kill any action, in case we are studying or working out, as it might steal focus or funds before we can bet it at the casino.
 	if (4 in unlockedSFs) // No big deal if we can't, casino.js has logic to find the stop button and click it.
-		await getNsDataThroughFile(ns, `ns.singularity.stopAction()`, '/Temp/stop-action.txt');
+		await getNsDataThroughFile(ns, `ns.singularity.stopAction()`);
 
 	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
 	if (pid) {
@@ -586,9 +586,9 @@ async function maybeInstallAugmentations(ns, player) {
 */
 async function shouldDelayInstall(ns, player, facmanOutput) {
 	// Are we close to being able to afford 4S TIX data?
-	if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`, `/Temp/stock-has4SDataTIXAPI.txt`))) {
+	if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`))) {
 		const totalWorth = player.money + await getStocksValue(ns);
-		const has4S = await getNsDataThroughFile(ns, `ns.stock.has4SData()`, `/Temp/stock-has4SData.txt`);
+		const has4S = await getNsDataThroughFile(ns, `ns.stock.has4SData()`);
 		const totalCost = 25E9 * (bitnodeMults?.FourSigmaMarketDataApiCost || 1) +
 			(has4S ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		const ratio = totalWorth / totalCost;

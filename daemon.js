@@ -145,7 +145,7 @@ let allTargetsPrepped = false;
  * @returns {Promise<Player>} */
 async function getPlayerInfo(ns) {
     // return _cachedPlayerInfo = ns.getPlayer();
-    return _cachedPlayerInfo = await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
+    return _cachedPlayerInfo = await getNsDataThroughFile(ns, `ns.getPlayer()`);
 }
 
 function playerHackSkill() { return _cachedPlayerInfo.skills.hacking; }
@@ -155,7 +155,7 @@ function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.mults.hacking_gr
 /** @param {NS} ns
  * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
 async function getCurrentWorkInfo(ns) {
-    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt')) ?? {};
+    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {};
 }
 
 /** Helper to check if a file exists.
@@ -185,7 +185,7 @@ function processList(ns, serverName, canUseCache = true) {
     const cachedResult = psCache[serverName];
     const processList = canUseCache && cachedResult !== undefined ? cachedResult :
         // Note: We experimented with ram-dodging `ps`, but there's so much data involed that serializing/deserializing generates a lot of latency
-        //(psCache[serverName] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', '/Temp/ps.txt', [serverName]));
+        //(psCache[serverName] = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0])', null, [serverName]));
         (psCache[serverName] = ns.ps(serverName));
     return processList;
 }
@@ -235,7 +235,7 @@ export async function main(ns) {
     // Try to get "resetInfo", with a fallback for a failed dynamic call (i.e. low-ram conditions)
     let resetInfo;
     try {
-        resetInfo = await getNsDataThroughFile(ns, `ns.getResetInfo()`, '/Temp/getResetInfo.txt');
+        resetInfo = await getNsDataThroughFile(ns, `ns.getResetInfo()`);
     } catch {
         resetInfo = { currentNode: 1, lastAugReset: Date.now() };
     }
@@ -349,7 +349,7 @@ export async function main(ns) {
     hackTools.forEach(tool => tool.name = getFilePath(tool.name));
 
     await buildToolkit(ns, [...asynchronousHelpers, ...periodicScripts, ...hackTools]); // build toolkit
-    const allServers = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    const allServers = await getNsDataThroughFile(ns, 'scanAllServers(ns)');
     await getStaticServerData(ns, allServers); // Gather information about servers that will never change
     await buildServerList(ns, false, allServers); // create the exhaustive server list
     await establishMultipliers(ns); // figure out the various bitnode and player multipliers
@@ -387,7 +387,7 @@ async function kickstartHackXp(ns) {
                 const { CityName, LocationName, UniversityClassType } = ns.enums
                 if (money >= 200000) { // If we can afford to travel, we're probably far enough along that it's worthwhile going to Volhaven where ZB university is.
                     log(ns, `INFO: Travelling to Volhaven for best study XP gain rate.`);
-                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel-to-city.txt', [CityName.Volhaven]);
+                    await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, null, [CityName.Volhaven]);
                 }
                 const playerInfo = await getPlayerInfo(ns); // Update player stats to be certain of our new location.
                 const university = playerInfo.city == CityName.Sector12 ? LocationName.Sector12RothmanUniversity :
@@ -398,7 +398,7 @@ async function kickstartHackXp(ns) {
                 else {
                     const course = playerInfo.city == CityName.Sector12 ? UniversityClassType.computerScience : UniversityClassType.algorithms; // Assume if we are still in Sector-12 we are poor and should only take the free course
                     log(ns, `INFO: Studying "${course}" at "${university}" because we are in city "${playerInfo.city}".`);
-                    startedStudying = await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, false]);
+                    startedStudying = await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, null, [university, course, false]);
                     if (startedStudying)
                         await ns.sleep(studyTime * 1000); // Wait for studies to affect Hack XP. This will often greatly reduce time-to-hack/grow/weaken, and avoid a slow first cycle
                     else
@@ -433,7 +433,7 @@ async function kickstartHackXp(ns) {
         log(ns, 'WARNING: Encountered an error while trying to kickstart hack XP (low RAM issues perhaps?)', false, 'warning');
     } finally {
         // Ensure we stop studying (in case no other running scripts end up stealing focus, so we don't keep studying forever)
-        if (startedStudying) await getNsDataThroughFile(ns, `ns.singularity.stopAction()`, '/Temp/stop-action.txt');
+        if (startedStudying) await getNsDataThroughFile(ns, `ns.singularity.stopAction()`);
         studying = false; // This will allow work-for-faction to launch
     }
 }
@@ -803,9 +803,9 @@ async function doTargetingLoop(ns) {
             if (err?.env?.stopFlag) return;
             // Note netscript errors are raised as a simple string (no message property)
             var errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
-			if (err?.stack) errorMessage += '\n' + err.stack;
-			log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
-			continue;
+            if (err?.stack) errorMessage += '\n' + err.stack;
+            log(ns, `WARNING: daemon.js Caught an error in the targeting loop: ${errorMessage}`, true, 'warning');
+            continue;
         }
     } while (!runOnce);
 }
@@ -813,8 +813,12 @@ async function doTargetingLoop(ns) {
 // How much a weaken thread is expected to reduce security by
 let actualWeakenPotency = () => bitnodeMults.ServerWeakenRate * weakenThreadPotency;
 
-// Dictionaries of server information
-let serversDictCommand = command => `Object.fromEntries(ns.args.map(server => [server, ${command}]))`;
+// Get a dictionary from retrieving the same infromation for every server name
+async function getServersDict(ns, command, serverNames) {
+    return await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(server => [server, ns.${command}(server)]))`,
+        `/Temp/${command}-all.txt`, serverNames);
+}
+
 let dictInitialServerInfos = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerRequiredHackinglevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerNumPortsRequired = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
@@ -826,13 +830,13 @@ let dictServerGrowths = (/**@returns{{[serverName: string]: number;}}*/() => und
 /** Gathers up arrays of server data via external request to have the data written to disk.
  * @param {NS} ns */
 async function getStaticServerData(ns, serverNames) {
-    dictServerRequiredHackinglevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerRequiredHackingLevel(server)'), '/Temp/servers-hack-req.txt', serverNames);
-    dictServerNumPortsRequired = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerNumPortsRequired(server)'), '/Temp/servers-num-ports.txt', serverNames);
-    dictServerGrowths = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerGrowth(server)'), '/Temp/servers-growth.txt', serverNames);
+    dictServerRequiredHackinglevels = await getServersDict(ns, 'getServerRequiredHackingLevel', serverNames);
+    dictServerNumPortsRequired = await getServersDict(ns, 'getServerNumPortsRequired', serverNames);
+    dictServerGrowths = await getServersDict(ns, 'getServerGrowth', serverNames);
     // The "GetServer" object result is now required to use the formulas API (due to type checking that the parameter is a valid "server" instance)
     // TODO: See if in the future they add a "ns.formulas.dummyServer()" function or similar, then we no longer need this.    
     // TODO: Iff this becomes permanent, might as well get other static server data from the resulting server objectswhy is it that every keystroke
-    dictInitialServerInfos = await getNsDataThroughFile(ns, serversDictCommand('ns.getServer(server)'), '/Temp/servers-getServer.txt', serverNames);
+    dictInitialServerInfos = await getServersDict(ns, 'getServer', serverNames);
     await refreshDynamicServerData(ns, serverNames);
 }
 
@@ -841,8 +845,8 @@ async function getStaticServerData(ns, serverNames) {
 async function refreshDynamicServerData(ns, serverNames) {
     if (verbose) log(ns, "refreshDynamicServerData");
     // Min Security / Max Money can be affected by Hashnet purchases, so we should update this occasionally
-    dictServerMinSecurityLevels = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMinSecurityLevel(server)'), '/Temp/servers-security.txt', serverNames);
-    dictServerMaxMoney = await getNsDataThroughFile(ns, serversDictCommand('ns.getServerMaxMoney(server)'), '/Temp/servers-max-money.txt', serverNames);
+    dictServerMinSecurityLevels = await getServersDict(ns, 'getServerMinSecurityLevel', serverNames);
+    dictServerMaxMoney = await getServersDict(ns, 'getServerMaxMoney', serverNames);
     // Get the information about the relative profitability of each server (affects targetting order)
     const pid = await exec(ns, getFilePath('analyze-hack.js'), daemonHost, 1, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
@@ -852,11 +856,11 @@ async function refreshDynamicServerData(ns, serverNames) {
     else
         dictServerProfitInfo = Object.fromEntries(JSON.parse(analyzeHackResult).map(s => [s.hostname, s]));
     // Determine whether we have purchased stock API accesses yet (affects reserving and attempts to manipulate stock markets)
-    haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.hasTIXAPIAccess()`, `/Temp/stock-hasTIXAPIAccess.txt`);
-    have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`, `/Temp/stock-has4SDataTIXAPI.txt`);
+    haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.hasTIXAPIAccess()`);
+    have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`);
     // If required, determine the current terminal server (used when intelligence farming)
     if (options.i)
-        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()', '/Temp/terminal-server.txt'));
+        currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()'));
 }
 
 class Server {
@@ -1413,8 +1417,7 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
                 missing_scripts.push(getFilePath('helpers.js')); // Some tools require helpers.js. Best to copy it around.
             if (verbose)
                 log(ns, `Copying ${tool.name} from ${daemonHost} to ${targetServer.name} so that it can be executed remotely.`);
-            await getNsDataThroughFile(ns, `await ns.scp(ns.args.slice(2), ns.args[0], ns.args[1])`,
-                '/Temp/copy-scripts.txt', [targetServer.name, daemonHost, ...missing_scripts])
+            await getNsDataThroughFile(ns, `ns.scp(ns.args.slice(2), ns.args[0], ns.args[1])`, '/Temp/copy-scripts.txt', [targetServer.name, daemonHost, ...missing_scripts])
             //await ns.sleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
         }
         let pid = await exec(ns, tool.name, targetServer.name, maxThreadsHere, ...(args || []));
@@ -1762,7 +1765,7 @@ function removeServerByName(ns, deletedHostName) {
 // Helper to construct our server lists from a list of all host names
 async function buildServerList(ns, verbose = false, allServers = undefined) {
     // Get list of servers (i.e. all servers on first scan, or newly purchased servers on subsequent scans)
-    allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    allServers ??= await getNsDataThroughFile(ns, 'scanAllServers(ns)');
     let scanResult = allServers;
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)

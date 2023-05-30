@@ -1,3 +1,4 @@
+// This is a proof-of-concept script that can continuously push changes to scripts on your home server to all other servers.
 // Run this script once to push the latest version of your scripts any other servers that have a copy.
 // Warning: If you keep try to edit and save a file while this script is running, it will probably crash your game the first time you save a file.
 const loopingMode = false;

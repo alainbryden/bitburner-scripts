@@ -95,12 +95,12 @@ async function initialize(ns) {
     pctTraining = options['no-training'] ? 0 : options['training-percentage'];
 
     let loggedWaiting = false;
-    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
+    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     const bitNode = resetInfo.currentNode;
     let haveJoinedAGang = false;
     while (!haveJoinedAGang) {
         try {
-            haveJoinedAGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', '/Temp/gang-inGang.txt');
+            haveJoinedAGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()');
             if (haveJoinedAGang) break;
             if (!loggedWaiting) {
                 log(ns, `Waiting to be in a gang. Will create the highest faction gang as soon as it is available...`);
@@ -115,9 +115,9 @@ async function initialize(ns) {
         }
         await ns.sleep(1000);
     }
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     log(ns, "Collecting gang information...");
-    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-getGangInformation.txt');
+    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()');
     myGangFaction = myGangInfo.faction;
     if (loggedWaiting)
         log(ns, `SUCCESS: Created gang ${myGangFaction} (At ${formatDuration(Date.now() - resetInfo.lastNodeReset)} into BitNode)`, true, 'success');
@@ -138,7 +138,7 @@ async function initialize(ns) {
             if (sf4Level < 3)
                 log(ns, `WARNING: This script makes use of singularity functions, which are quite expensive before you have SF4.3. ` +
                     `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
-            const augmentationNames = await getNsDataThroughFile(ns, `ns.singularity.getAugmentationsFromFaction(ns.args[0])`, '/Temp/gang-augs.txt', [myGangFaction]);
+            const augmentationNames = await getNsDataThroughFile(ns, `ns.singularity.getAugmentationsFromFaction(ns.args[0])`, null, [myGangFaction]);
             const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
             const dictAugRepReqs = await getDict(ns, augmentationNames, 'singularity.getAugmentationRepReq', '/Temp/aug-repreqs.txt');
             // Due to a bug, gangs appear to provide "The Red Pill" even when it's unavailable (outside of BN2), so ignore this one.
@@ -151,7 +151,7 @@ async function initialize(ns) {
     }
 
     // Initialize equipment information
-    const equipmentNames = await getNsDataThroughFile(ns, 'ns.gang.getEquipmentNames()', '/Temp/gang-getEquipmentNames.txt');
+    const equipmentNames = await getNsDataThroughFile(ns, 'ns.gang.getEquipmentNames()');
     const dictEquipmentTypes = await getGangInfoDict(ns, equipmentNames, 'getEquipmentType');
     const dictEquipmentCosts = await getGangInfoDict(ns, equipmentNames, 'getEquipmentCost');
     const dictEquipmentStats = await getGangInfoDict(ns, equipmentNames, 'getEquipmentStats');
@@ -163,10 +163,10 @@ async function initialize(ns) {
     })).sort((a, b) => a.cost - b.cost);
     //log(ns, JSON.stringify(equipments));
     // Initialize information about gang members and crimes
-    allTaskNames = await getNsDataThroughFile(ns, 'ns.gang.getTaskNames()', '/Temp/gang-getTaskNames.txt')
+    allTaskNames = await getNsDataThroughFile(ns, 'ns.gang.getTaskNames()')
     allTaskStats = await getGangInfoDict(ns, allTaskNames, 'getTaskStats');
     multGangSoftcap = (await tryGetBitNodeMultipliers(ns))?.GangSoftcap || 1;
-    myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()', '/Temp/gang-getMemberNames.txt');
+    myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()');
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
     for (const member of Object.values(dictMembers)) // Initialize the current activity of each member
         assignedTasks[member.name] = (member.task && member.task !== "Unassigned") ? member.task : ("Train " + (isHackGang ? "Hacking" : "Combat"));
@@ -181,10 +181,10 @@ async function initialize(ns) {
  * Executed every `interval` **/
 async function mainLoop(ns) {
     // Update gang information (specifically monitoring gang power to see when territory ticks)
-    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
+    const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()');
     const thisLoopStart = Date.now();
     if (!territoryTickDetected) { // Detect the first territory tick by watching for other gang's territory power to update.
-        const otherGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getOtherGangInformation()', '/Temp/gang-other-gang-info.txt'); // Returns dict of { [gangName]: { "power": Number, "territory": Number } }
+        const otherGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getOtherGangInformation()'); // Returns dict of { [gangName]: { "power": Number, "territory": Number } }
         if (lastOtherGangInfo != null && JSON.stringify(otherGangInfo) != JSON.stringify(lastOtherGangInfo)) {
             territoryNextTick = lastLoopTime + territoryTickTime;
             territoryTickDetected = true;
@@ -228,7 +228,7 @@ async function onTerritoryTick(ns, myGangInfo) {
     }
 
     // Update gang members in case someone died in a clash
-    myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()', '/Temp/gang-member-names.txt');
+    myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()');
     const nextMemberCost = Math.pow(5, myGangMembers.length - (3 /*numFreeMembers*/ - 1));
     if (myGangMembers.length < 12 /* Game Max */ && myGangInfo.respect >= nextMemberCost)
         await doRecruitMember(ns) // Recruit new members if available
@@ -274,11 +274,11 @@ async function optimizeGangCrime(ns, myGangInfo) {
         myGangInfo.respect > 200 ? -0.01 * myGangInfo.wantedLevel /* Recover from wanted penalty */ :
         currentWantedPenalty < -0.9 * wantedPenaltyThreshold && myGangInfo.wantedLevel >= (1.1 + myGangInfo.respect / 10000) ? 0 /* Sustain */ :
             Math.max(myGangInfo.respectGainRate / 1000, myGangInfo.wantedLevel / 10) /* Allow wanted to increase at a manageable rate */;
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     // Find out how much reputation we need, without SF4, we estimate gang faction rep based on current gang rep
     let factionRep = -1;
     if (ownedSourceFiles[4] > 0) {
-        try { factionRep = await getNsDataThroughFile(ns, `ns.singularity.getFactionRep(ns.args[0])`, `/Temp/getFactionRep.txt`, [myGangFaction]); }
+        try { factionRep = await getNsDataThroughFile(ns, `ns.singularity.getFactionRep(ns.args[0])`, null, [myGangFaction]); }
         catch { log(ns, 'INFO: Error suppressed. Falling back to estimating current gang faction rep.'); }
     }
     if (factionRep == -1) // Estimate current gang rep based on respect. Game gives 1/75 rep / respect. This is an underestimate, because it doesn't take into account spent/lost respect on ascend/recruit/death. 
@@ -399,7 +399,7 @@ async function tryAscendMembers(ns) {
         const ascResult = dictAscensionResults[member];
         if (!ascResult || !importantStats.some(stat => ascResult[stat] >= ascMultiThreshold))
             continue;
-        if (undefined !== (await getNsDataThroughFile(ns, `ns.gang.ascendMember(ns.args[0])`, '/Temp/gang-ascend-member.txt', [member]))) {
+        if (undefined !== (await getNsDataThroughFile(ns, `ns.gang.ascendMember(ns.args[0])`, null, [member]))) {
             log(ns, `SUCCESS: Ascended member ${member} to increase multis by ${importantStats.map(s => `${s} -> ${ascResult[s].toFixed(2)}x`).join(", ")}`, false, 'success');
             lastMemberReset[member] = Date.now();
         }
@@ -416,7 +416,7 @@ async function tryUpgradeMembers(ns, dictMembers) {
     equipments.forEach(e => e.cost = dictEquipmentCosts[e.name])
     // Upgrade members, spending no more than x% of our money per tick (and respecting the global reseve)
     const purchaseOrder = [];
-    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    const playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     const homeMoney = playerData.money - (options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0));
     const maxBudget = 0.99; // Note: To avoid rounding issues and micro-spend race-conditions, only allow budgeting up to 99% of money per tick
     let budget = Math.min(maxBudget, (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment)) * homeMoney;
@@ -472,7 +472,7 @@ async function waitForGameUpdate(ns, oldGangInfo) {
     const waitInterval = 100;
     const start = Date.now()
     while (Date.now() < start + maxWaitTime) {
-        var latestGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-info.txt');
+        var latestGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()');
         if (JSON.stringify(latestGangInfo) != JSON.stringify(oldGangInfo))
             return latestGangInfo;
         await ns.sleep(Math.min(waitInterval, start + maxWaitTime - Date.now()));
@@ -487,7 +487,7 @@ async function waitForGameUpdate(ns, oldGangInfo) {
 async function enableOrDisableWarfare(ns, myGangInfo) {
     warfareFinished = Math.round(myGangInfo.territory * 2 ** 20) / 2 ** 20 /* Handle API imprecision */ >= 1;
     if (warfareFinished && !myGangInfo.territoryWarfareEngaged) return; // No need to engage once we hit 100%
-    const otherGangs = await getNsDataThroughFile(ns, 'ns.gang.getOtherGangInformation()', '/Temp/gang-other-gang-info.txt'); // Returns dict of { [gangName]: { "power": Number, "territory": Number } }
+    const otherGangs = await getNsDataThroughFile(ns, 'ns.gang.getOtherGangInformation()'); // Returns dict of { [gangName]: { "power": Number, "territory": Number } }
     let lowestWinChance = 1, totalWinChance = 0, totalActiveGangs = 0;
     let lowestWinChanceGang = "";
     for (const otherGang in otherGangs) {
@@ -504,7 +504,7 @@ async function enableOrDisableWarfare(ns, myGangInfo) {
             (!warfareFinished ? `Lowest win chance is ${(100 * lowestWinChance).toFixed(2)}% with ${lowestWinChanceGang} (power ${formatNumberShort(otherGangs[lowestWinChanceGang]?.power)}). ` +
                 `Average win chance ${(100 * averageWinChance).toFixed(2)}% across ${totalActiveGangs} active gangs.` :
                 'We have destroyed all other gangs and earned 100% territory'), false, warfareFinished ? 'info' : 'success');
-        await runCommand(ns, `ns.gang.setTerritoryWarfare(ns.args[0])`, '/Temp/gang-set-warfare.js', [shouldEngage]);
+        await runCommand(ns, `ns.gang.setTerritoryWarfare(ns.args[0])`, null, [shouldEngage]);
     }
 }
 

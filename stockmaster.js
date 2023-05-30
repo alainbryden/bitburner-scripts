@@ -74,7 +74,7 @@ export async function main(ns) {
 
     // If given the "liquidate" command, try to kill any versions of this script trading in stocks
     // NOTE: We must do this immediately before we start resetting / overwriting global state below (which is shared between script instances)
-    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()', '/Temp/hasTIX.txt');
+    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()');
     if (runOptions.l || runOptions.liquidate) {
         if (!hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
         log(ns, 'INFO: Killing any other stockmaster processes...', false, 'info');
@@ -107,7 +107,7 @@ export async function main(ns) {
     lastTick = 0, totalProfit = 0, lastLog = "", marketCycleDetected = false, detectedCycleTick = 0, inversionAgreementThreshold = 6;
     let myStocks = [], allStocks = [];
     let player = await getPlayerInfo(ns);
-    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
+    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
 
     if (!hasTixApiAccess) { // You cannot use the stockmaster until you have API access
         if (options['disable-purchase-tix-api'])
@@ -247,7 +247,7 @@ export async function main(ns) {
  * @param {NS} ns
  * @returns {Promise<Player>} */
 async function getPlayerInfo(ns) {
-    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`);
 }
 
 function getTimeInBitnode() { return Date.now() - resetInfo.lastNodeReset; }
@@ -452,7 +452,7 @@ let buyShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym,
 let sellStockWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'sellStock'); // ns.stock.sellStock(sym, numShares);
 let sellShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'sellShort'); // ns.stock.sellShort(sym, numShares);
 let transactStock = async (ns, sym, numShares, action) =>
-    await getNsDataThroughFile(ns, `ns.stock.${action}(ns.args[0], ns.args[1])`, `/Temp/stock-${action}.txt`, [sym, numShares]);
+    await getNsDataThroughFile(ns, `ns.stock.${action}(ns.args[0], ns.args[1])`, null, [sym, numShares]);
 
 /** @param {NS} ns 
  * Automatically buys either a short or long position depending on the outlook of the stock. */
@@ -601,14 +601,14 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
  * @param {"hasWSEAccount"|"hasTIXAPIAccess"|"has4SData"|"has4SDataTIXAPI"} stockFn
  * Helper to check for one of the stock access functions */
 async function checkAccess(ns, stockFn) {
-    return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`, `/Temp/stock-${stockFn}.txt`)
+    return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`)
 }
 
 /** @param {NS} ns 
  * @param {"purchaseWseAccount"|"purchaseTixApi"|"purchase4SMarketData"|"purchase4SMarketDataTixApi"} stockFn
  * Helper to try and buy a stock access. Yes, the code is the same as above, but I wanted to be explicit. */
 async function tryBuy(ns, stockFn) {
-    return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`, `/Temp/stock-${stockFn}.txt`)
+    return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`)
 }
 
 /** @param {NS} ns 
