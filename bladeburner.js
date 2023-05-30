@@ -54,7 +54,7 @@ export async function main(ns) {
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['sleep'])
     player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
-	resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
+    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     // Ensure we have access to bladeburner
     ownedSourceFiles = await getActiveSourceFiles(ns);
     //if (!(6 in ownedSourceFiles) && resetInfo.currentNode != 7) // NOTE: Despite the SF6 description, it seems you don't need SF6

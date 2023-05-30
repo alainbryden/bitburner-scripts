@@ -75,7 +75,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     // Show what bitNode we're currently playing in
     {
         const val = ["BitNode", true, `${bitNode}.${1 + (dictSourceFiles[bitNode] || 0)}`,
-        `Detected as being one more than your current owned SF level (${dictSourceFiles[bitNode] || 0}) in the current bitnode (${bitNode}).`]
+            `Detected as being one more than your current owned SF level (${dictSourceFiles[bitNode] || 0}) in the current bitnode (${bitNode}).`]
         hudData.push(val)
     }
 
@@ -87,7 +87,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
             const hashes = await getNsDataThroughFile(ns, '[ns.hacknet.numHashes(), ns.hacknet.hashCapacity()]', '/Temp/hash-stats.txt')
             if (hashes[1] > 0) {
                 val1.push(true, `${formatNumberShort(hashes[0], 3, 1)}/${formatNumberShort(hashes[1], 3, 1)}`,
-                `Current Hashes ${hashes[0].toLocaleString('en')} / Current Hash Capacity ${hashes[1].toLocaleString('en')}`)
+                    `Current Hashes ${hashes[0].toLocaleString('en')} / Current Hash Capacity ${hashes[1].toLocaleString('en')}`)
             } else val1.push(false)
             // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)               
             if (ns.isRunning('spend-hacknet-hashes.js', 'home', '--liquidate') || ns.isRunning('spend-hacknet-hashes.js', 'home', '-l')) {
@@ -96,7 +96,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
         } else {
             val1.push(false)
             val2.push(false)
-        } 
+        }
         hudData.push(val1, val2)
     }
 
