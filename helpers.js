@@ -166,6 +166,11 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     // Pre-write contents to the file that will allow us to detect if our temp script never got run
     const initialContents = "<Insufficient RAM>";
     ns.write(fName, initialContents, 'w');
+    // TODO: Workaround for v2.3.0 deprecation. Remove when the warning is gone.
+    // Avoid serializing ns.getPlayer() properties that generate warnings
+    if (command === "ns.getPlayer()")
+        command = "ns.getPlayer(), (key, value) => ['playtimeSinceLastAug', 'playtimeSinceLastBitnode', 'bitNodeN'].includes(key) ? undefined : value"
+
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
