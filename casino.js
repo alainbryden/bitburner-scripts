@@ -101,7 +101,7 @@ export async function main(ns) {
 			}
 
 			// Step 2.5: Clean up temp files and kill other running scripts to speed up the reload cycle
-			if (ns.ls("home", "/Temp/").length > 0) { // Do a little clean-up to speed up save/load.
+			if (ns.ls("home", "Temp/").length > 0) { // Do a little clean-up to speed up save/load.
 				// Step 2.5.1: Test that we aren't already kicked out of the casino before doing drastic things like killing scripts
 				await setText(inputWager, `1`); // Bet just a dollar and quick the game right away, no big deal
 				await click(btnStartGame);
