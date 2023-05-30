@@ -597,7 +597,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
     return true;
 }
 
-async function doGymTraining(reqStats, ns, player) {
+async function doGymTraining(reqStats, ns) {
     async function getGymCost(etaMilli) {
         // TODO: if the gym gets backdoored, a 10% discount will be applied.
         return baseGymCost * bestGymCostMult * (etaMilli / 1000);
