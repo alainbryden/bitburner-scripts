@@ -1081,9 +1081,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
-            // TODO: BITBURNER BUG: Game currently inverting this argument. Fix as soon as the game is updated. 
-            let focusArg = shouldFocus ? false : true; // TODO: REMOVE ON BUG FIX
-            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, null, [companyName, focusArg])) {
+            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, null, [companyName, shouldFocus])) {
                 isWorking = true;
                 if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {
