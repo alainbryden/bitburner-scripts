@@ -547,26 +547,22 @@ async function goToCity(ns, cityName) {
 /** @param {NS} ns */
 export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
-    const bestGym = "powerhouse gym";
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
     let player = await getPlayerInfo(ns);
     let strRequirements = [];
     let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER;
-    let statForever = reqStats >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${Math.round(ns.heart.break()).toLocaleString('en')})`);
     if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have ` +
         `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
-    let anyStatsDeficient = (p) => p.skills.strength < reqStats || p.skills.defense < reqStats ||
-        /*                      */ p.skills.dexterity < reqStats || p.skills.agility < reqStats;
-    let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
+    let crime, lastCrime, crimeTime, lastStatusUpdateTime;
     while (forever || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
         let karma = -ns.heart.break();
         crime = crimeCount < 2 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
-            (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
+            (!anyStatsDeficient(player, reqStats) && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly && index <= 1 ? 0 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         // Warn if current crime is disrupted
         let currentWork = await getCurrentWorkInfo(ns);
@@ -594,122 +590,77 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         crimeCount++;
         player = await getPlayerInfo(ns);
     }
-  
-    // Travels to Sector-12 since ns.singularity.gymWorkout(); requires that the location of the player is the same as the gym
-    await goToCity(ns, "Sector-12");
-    let isWorking = false;
-    let currentStat = 1;
 
-    while(statForever || (needStats = anyStatsDeficient(player))) {
-        
-        player = await getPlayerInfo(ns);
-        
-        let pStr = player.skills.strength;
-        let pDef = player.skills.defense;
-        let pDex = player.skills.dexterity;
-        let pAgi = player.skills.agility;
+    await doGymTraining(reqStats, ns, player)
 
-        if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
-        switch (currentStat) {
-            case 1: 
-                if (!isWorking) {
-                    ns.singularity.gymWorkout(bestGym, "strength")
-                    isWorking = true;
-                }
-                ns.print(`Currently at ${pStr} strength, out of ${reqStats}` + ` (ETA: ${formatDuration(await getSkillEta(ns, "strength", reqStats))})`);
-                if (pStr >= reqStats) {
-                    currentStat = 2;
-                    ns.singularity.stopAction();
-                    isWorking = false;
-                    ns.print('SUCCESS: Strength stat requirement completed.');
-                }
-                break;
-            case 2:
-                if (!isWorking) {
-                    ns.singularity.gymWorkout(bestGym, "defense")
-                    isWorking = true;
-                }
-                ns.print(`Currently at ${pDef} defense, out of ${reqStats}` + ` (ETA: ${formatDuration(await getSkillEta(ns, "defense", reqStats))})`);
-                if (pDef >= reqStats) {
-                    currentStat = 3;
-                    ns.singularity.stopAction();
-                    isWorking = false;
-                    ns.print('SUCCESS: Defense stat requirement completed.');
-                }
-                break;
-            case 3:
-                if (!isWorking) {
-                    ns.singularity.gymWorkout(bestGym, "dexterity")
-                    isWorking = true;
-                }
-                ns.print(`Currently at ${pDex} dexterity, out of ${reqStats}` + ` (ETA: ${formatDuration(await getSkillEta(ns, "dexterity", reqStats))})`);
-                if (pDex >= reqStats) {
-                    currentStat = 4;
-                    ns.singularity.stopAction();
-                    isWorking = false;
-                    ns.print('SUCCESS: Dexterity stat requirement completed.');
-                }
-                break;
-            case 4:
-                if (!isWorking) {
-                    ns.singularity.gymWorkout(bestGym, "agility")
-                    isWorking = true;
-                }
-                ns.print(`Currently at ${pAgi} agility, out of ${reqStats}` + ` (ETA: ${formatDuration(await getSkillEta(ns, "agility", reqStats))})`);
-                if (pAgi >= reqStats) {
-                    currentStat = 1;
-                    ns.singularity.stopAction();
-                    isWorking = false;
-                    ns.print('SUCCESS: Agility stat requirement completed.');
-                }
-                break;
-
-        }
-        
-        // TODO: Maybe configure the loop update to match the ETA for the stat to not over train stat (it probably doesn't matter since it's a matter of seconds).
-        await ns.sleep(loopSleepInterval + 5000);
-    }
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
     return true;
 }
 
-// TODO: Finish cost check before working at the gym.
-/** @param {NS} ns */
-async function getGymCost(ns, etaMilli) {
-    let baseGymCost = 120;
-    let powerHouseGymCostMult = 20;
-    // TODO: Apparently, if the gym gets backdoored, a 10% discount will be applied.
-    return baseGymCost * powerHouseGymCostMult * (etaMilli / 1000);
+async function doGymTraining(reqStats, ns, player) {
+    const bestGym = "powerhouse gym",
+        bestGymCity = "Sector-12",
+        bestGymSkillMult = 10,
+        bestGymCostMult = 20,
+        baseGymCost = 120,
+        stats = ["strength", "defense", "dexterity", "agility"];
+    let isWorking = false,
+        currentStat = 0,
+        statForever = reqStats >= Number.MAX_SAFE_INTEGER;
+
+    // Travels to gyms city since ns.singularity.gymWorkout() requires that the location of the player is the same as the gym
+    await goToCity(ns, bestGymCity);
+
+    async function getGymCost(etaMilli) {
+        // TODO: if the gym gets backdoored, a 10% discount will be applied.
+        return baseGymCost * bestGymCostMult * (etaMilli / 1000);
+    }
+
+    // Gets the time to fill Exp requirements.
+    async function getSkillEta(skill, reqStats, player) {
+        const statExpMult = player.mults[skill + "_exp"],
+            expPerMilli = ((Math.ceil(statExpMult * 10000) / 10000) * bestGymSkillMult) / 1000,
+            currentExp = player.exp[skill],
+            statMult = player.mults[skill],
+            totalExpForLevel = Math.exp((reqStats / statMult + 200) / 32) - 534.6,
+            requiredExp = totalExpForLevel - currentExp
+
+        return (requiredExp / expPerMilli);
+    }
+
+    while (statForever || anyStatsDeficient(player, reqStats)) {
+        player = await getPlayerInfo(ns);
+
+        let statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility],
+            eta = await getSkillEta(stats[currentStat], reqStats, player),
+            gymCost = await getGymCost(eta)
+
+        if (player.money < gymCost) return ns.print(`Warn: You're too poor to finish training, get at least ${gymCost} money`)
+        if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
+        if (!isWorking) {
+            // ToDo: unfocus after unavoidable focus steal if no-focus
+            ns.singularity.gymWorkout(bestGym, stats[currentStat])
+            isWorking = true;
+        }
+        ns.print(`Currently at ${statValues[currentStat]} ${stats[currentStat]}, out of ${reqStats}` + ` (ETA: ${formatDuration(eta)})`);
+        if (statValues[currentStat] >= reqStats) {
+            ns.print(`SUCCESS: ${stats[currentStat]} stat requirement completed.`);
+            currentStat += 1;
+            if (currentStat >= stats.length) currentStat = 0; 
+            ns.singularity.stopAction();
+            isWorking = false;
+        }
+
+        await ns.sleep(eta < loopSleepInterval ? eta : loopSleepInterval);
+    }
 }
 
-// Gets the time to fill Exp requirements.
-/** @param {NS} ns */
-async function getSkillEta(ns, skill, reqStats) {
-    let player = await getPlayerInfo(ns);
-    let skill1 = skill + "_exp";
-    let statExpMult = player.mults[skill1];
-    let powerHouseGymSkillMult = 10;
-
-    let expPerMilli = ((Math.ceil(statExpMult * 10000) / 10000) * powerHouseGymSkillMult) / 1000;
-    //                             ^ While this seems unneccessairy, it actually makes the ETA more precise.
-
-    return (await getReqExp(ns, skill, reqStats) / expPerMilli);
+function anyStatsDeficient(player, reqStats) {
+    return player.skills.strength < reqStats
+        || player.skills.defense < reqStats
+        || player.skills.dexterity < reqStats
+        || player.skills.agility < reqStats;
 }
-// Gets the required exp to bring a stat level to a reuqired stat level.
-/** @param {NS} ns */
-async function getReqExp(ns, _wStat, reqStats) {
-    let player = await getPlayerInfo(ns);
-
-    let actExp = player.exp[_wStat];
-    let mult = player.mults[_wStat];
-    let reqExp = calculateExp(reqStats, mult);
-
-    return reqExp - actExp;
-}
-// Calculates the exp for a given stat level (game accurate).
-export function calculateExp(skill, mult = 1) {
-    return Math.exp((skill / mult + 200) / 32) - 534.6;
-}  
 
 /** @param {NS} ns */
 async function studyForCharisma(ns, focus) {
