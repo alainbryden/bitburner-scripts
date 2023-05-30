@@ -591,26 +591,13 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         player = await getPlayerInfo(ns);
     }
 
-    await doGymTraining(reqStats, ns, player)
+    await doGymTraining(reqStats, ns)
 
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
     return true;
 }
 
 async function doGymTraining(reqStats, ns, player) {
-    const bestGym = "powerhouse gym",
-        bestGymCity = "Sector-12",
-        bestGymSkillMult = 10,
-        bestGymCostMult = 20,
-        baseGymCost = 120,
-        stats = ["strength", "defense", "dexterity", "agility"];
-    let isWorking = false,
-        currentStat = 0,
-        statForever = reqStats >= Number.MAX_SAFE_INTEGER;
-
-    // Travels to gyms city since ns.singularity.gymWorkout() requires that the location of the player is the same as the gym
-    await goToCity(ns, bestGymCity);
-
     async function getGymCost(etaMilli) {
         // TODO: if the gym gets backdoored, a 10% discount will be applied.
         return baseGymCost * bestGymCostMult * (etaMilli / 1000);
@@ -628,18 +615,33 @@ async function doGymTraining(reqStats, ns, player) {
         return (requiredExp / expPerMilli);
     }
 
+    let player = await getPlayerInfo(ns),
+        isWorking = false,
+        currentStat = 0,
+        statForever = reqStats >= Number.MAX_SAFE_INTEGER
+
+    const bestGym = "powerhouse gym",
+        bestGymCity = "Sector-12",
+        bestGymSkillMult = 10,
+        bestGymCostMult = 20,
+        baseGymCost = 120,
+        stats = ["strength", "defense", "dexterity", "agility"],
+        gymCost = await getGymCost(await getSkillEta(stats[currentStat], reqStats, player)),
+        travelCost = (player.city != bestGymCity) ? 200000 : 0
+
+    if ((player.money - travelCost) < gymCost) return ns.print(`Warn: You're too poor to finish training, get at least ${gymCost + travelCost} money`)
+    // Travels to gyms city since ns.singularity.gymWorkout() requires that the location of the player is the same as the gym
+    if (travelCost > 0) await goToCity(ns, bestGymCity);
+
     while (statForever || anyStatsDeficient(player, reqStats)) {
         player = await getPlayerInfo(ns);
 
         let statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility],
-            eta = await getSkillEta(stats[currentStat], reqStats, player),
-            gymCost = await getGymCost(eta)
+            eta = await getSkillEta(stats[currentStat], reqStats, player)
 
-        if (player.money < gymCost) return ns.print(`Warn: You're too poor to finish training, get at least ${gymCost} money`)
         if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
         if (!isWorking) {
-            // ToDo: unfocus after unavoidable focus steal if no-focus
-            ns.singularity.gymWorkout(bestGym, stats[currentStat])
+            ns.singularity.gymWorkout(bestGym, stats[currentStat], shouldFocus)
             isWorking = true;
         }
         ns.print(`Currently at ${statValues[currentStat]} ${stats[currentStat]}, out of ${reqStats}` + ` (ETA: ${formatDuration(eta)})`);
