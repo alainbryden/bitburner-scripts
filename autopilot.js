@@ -359,15 +359,14 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.	
 	const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
-	const daemonArgs = (player.skills.hacking < hackThreshold || resetInfo.currentNode == 8) ? [] :
+	const daemonArgs = (player.skills.hacking < hackThreshold) ? [] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
-		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
-			"--stock-manipulation-focus", "--silent-misfires", "--no-share",
+		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share",
 			// Use recovery thread padding sparingly until our hack level is significantly higher
 			"--recovery-thread-padding", 1.0 + (player.skills.hacking - hackThreshold) / 1000.0];
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
-	// Hacking earns no money in BN8, so prioritize XP
-	if (resetInfo.currentNode == 8) daemonArgs.push("--xp-only");
+	// In BN8, always run in a mode that prioritizes stock market manipulation
+	if (resetInfo.currentNode == 8) daemonArgs.push("--stock-manipulation-focus");
 	// Don't run the script to join and manage bladeburner if it is explicitly disabled
 	if (options['disable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
@@ -384,10 +383,10 @@ async function checkOnRunningScripts(ns, player) {
 		stanekRunning = true;
 	}
 
-	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
+	// Launch daemon with the desired arguments (or re-launch if we recently decided to switch to looping mode) - so long as stanek isn't charging
 	const daemon = findScript('daemon.js');
-	if ((!daemon || player.skills.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
-		if (player.skills.hacking >= hackThreshold && !(resetInfo.currentNode == 8))
+	if (!stanekRunning && (!daemon || player.skills.hacking >= hackThreshold && !daemon.args.includes("--looping-mode"))) {
+		if (player.skills.hacking >= hackThreshold)
 			log(ns, `INFO: Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
 		daemonStartTime = Date.now();
