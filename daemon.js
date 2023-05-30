@@ -126,7 +126,7 @@ let hasFormulas = true;
 let currentTerminalServer = ""; // Periodically updated when intelligence farming, the current connected terminal server.
 let dictSourceFiles = (/**@returns{{[bitnode: number]: number;}}*/() => undefined)(); // Available source files
 let bitnodeMults = null; // bitnode multipliers that can be automatically determined after SF-5
-let playerBitnode = 0;
+let isInBn8 = false; // Flag indicating whether we are in BN8 (where lots of rules change)
 let haveTixApi = false, have4sApi = false; // Whether we have WSE API accesses
 let _cachedPlayerInfo = (/**@returns{Player}*/() => undefined)(); // stores multipliers for player abilities and other player info
 let _ns = (/**@returns{NS}*/() => undefined)(); // Globally available ns reference, for convenience
@@ -229,9 +229,17 @@ export async function main(ns) {
     maxTargets = 2;
     lowUtilizationIterations = highUtilizationIterations = 0;
     allHostNames = [], _allServers = [], psCache = [];
-
+    // Get information about the player's current stats (also populates a cache)    
     const playerInfo = await getPlayerInfo(ns);
-    playerBitnode = playerInfo.bitNodeN;
+
+    // Try to get "resetInfo", with a fallback for a failed dynamic call (i.e. low-ram conditions)
+    let resetInfo;
+    try {
+        resetInfo = await getNsDataThroughFile(ns, `ns.getResetInfo()`, '/Temp/getResetInfo.txt');
+    } catch {
+        resetInfo = { currentNode: 1, lastAugReset: Date.now() };
+    }
+    isInBn8 = resetInfo.currentNode === 8; // We do some things differently if we're in BN8 (Stock Market BN)
     dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     log(ns, "The following source files are active: " + JSON.stringify(dictSourceFiles));
 
@@ -283,7 +291,7 @@ export async function main(ns) {
         },
         {   // Script to manage bladeburner for us. Run automatically if not disabled and bladeburner API is available
             name: "bladeburner.js", tail: openTailWindows,
-            shouldRun: () => !options['disable-script'].includes('bladeburner.js') && 7 in dictSourceFiles && playerBitnode != 8
+            shouldRun: () => !options['disable-script'].includes('bladeburner.js') && 7 in dictSourceFiles && !isInBn8
         },
     ];
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
@@ -294,7 +302,7 @@ export async function main(ns) {
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
     let shouldUpgradeHacknet = async () => ((await whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)) === null) && reservedMoney(ns) < ns.getServerMoneyAvailable("home");
     // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
-    let shouldImproveHacking = () => bitnodeMults.ScriptHackMoneyGain != 0 && playerBitnode != 8 || ns.getServerMoneyAvailable("home") > 1e12;
+    let shouldImproveHacking = () => bitnodeMults.ScriptHackMoneyGain != 0 && !isInBn8 || ns.getServerMoneyAvailable("home") > 1e12;
     // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
     periodicScripts = [
         // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
@@ -350,8 +358,9 @@ export async function main(ns) {
         maxTargets = Math.max(maxTargets, Object.keys(serverStockSymbols).length);
 
     // If we ascended less than 10 minutes ago, start with some study and/or XP cycles to quickly restore hack XP
-    const shouldKickstartHackXp = (playerHackSkill() < 500 && playerInfo.playtimeSinceLastAug < 600000);
-    studying = shouldKickstartHackXp ? true : false; // Flag will prevent focus-stealing scripts from running until we're done studying.
+    const timeSinceLastAug = Date.now() - resetInfo.lastAugReset;
+    const shouldKickstartHackXp = (playerHackSkill() < 500 && timeSinceLastAug < 600000);
+    studying = shouldKickstartHackXp ? true : false; // Flag will be used to prevent focus-stealing scripts from running until we're done studying.
 
     // Start helper scripts and run periodic scripts for the first time to e.g. buy tor and any hack tools available to us (we will continue studying briefly while this happens)
     await runStartupScripts(ns);
@@ -1220,7 +1229,7 @@ function getFlagsArgs(toolName, target, allowLooping = true) {
         args.push(stockMode && (toolName == "hack" && shouldManipulateHack[target] || toolName == "grow" && shouldManipulateGrow[target]) ? 1 : 0);
     if (["hack", "weak"].includes(toolName))
         args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
-            (toolName == "hack" && (bitnodeMults.ScriptHackMoneyGain == 0 || playerBitnode == 8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
+            (toolName == "hack" && (bitnodeMults.ScriptHackMoneyGain == 0 || isInBn8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
     args.push(allowLooping && loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
     return args;
 }

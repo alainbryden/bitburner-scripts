@@ -2,7 +2,7 @@ import { log, waitForProcessToComplete, formatDuration, getFilePath } from './he
 
 /** @param {NS} ns */
 export async function main(ns) {
-    const timeSinceLastAug = ns.getPlayer().playtimeSinceLastAug;
+    const timeSinceLastAug = Date.now() - ns.getResetInfo().lastAugReset;
     if (timeSinceLastAug > 20 * 60 * 1000) {
         return log(ns, `WARNING: It's been ${formatDuration(timeSinceLastAug)} since your last reset. ` +
             `For your protection, we will not soft-reset. Either install augs or soft-reset manually ` +

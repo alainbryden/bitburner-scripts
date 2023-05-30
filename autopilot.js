@@ -52,6 +52,11 @@ let installedAugmentations = [], playerInstalledAugCount = 0, stanekLaunched = f
 let daemonStartTime = 0; // The time we personally launched daemon.
 let installCountdown = 0; // Start of a countdown before we install augmentations.
 let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
+let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
+
+// Replacements for player properties deprecated since 2.3.0
+function getTimeInAug() { return Date.now() - resetInfo.lastAugReset; }
+function getTimeInBitnode() { return Date.now() - resetInfo.lastNodeReset; }
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -100,6 +105,7 @@ async function startUp(ns) {
 
 	// Collect and cache some one-time data
 	const player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+	resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
 	bitnodeMults = await tryGetBitNodeMultipliers(ns);
 	dictOwnedSourceFiles = await getActiveSourceFiles(ns, false);
 	unlockedSFs = await getActiveSourceFiles(ns, true);
@@ -114,12 +120,12 @@ async function startUp(ns) {
 		log(ns, `WARNING: You only have SF4 level ${unlockedSFs[4]}. Without level 3, some singularity functions will be ` +
 			`too expensive to run until you have bought a lot of home RAM.`, true);
 	}
-	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
+	if (getTimeInBitnode() < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
 		await initializeNewBitnode(ns, player);
 
 	// Decide what the next-up bitnode should be
-	const getSFLevel = bn => Number(bn + "." + ((dictOwnedSourceFiles[bn] || 0) + (player.bitNodeN == bn ? 1 : 0)));
-	const nextSfEarned = getSFLevel(player.bitNodeN);
+	const getSFLevel = bn => Number(bn + "." + ((dictOwnedSourceFiles[bn] || 0) + (resetInfo.currentNode == bn ? 1 : 0)));
+	const nextSfEarned = getSFLevel(resetInfo.currentNode);
 	const nextRecommendedSf = defaultBnOrder.find(v => v - Math.floor(v) > getSFLevel(Math.floor(v)) - Math.floor(v));
 	const nextRecommendedBn = Math.floor(nextRecommendedSf);
 	nextBn = options['next-bn'] || nextRecommendedBn;
@@ -224,8 +230,8 @@ async function checkIfBnIsComplete(ns, player) {
 			'/Temp/bladeburner-completed.txt');
 	if (!bnComplete) return false; // No win conditions met
 
-	const text = `BN ${player.bitNodeN}.${(dictOwnedSourceFiles[player.bitNodeN] || 0) + 1} completed at ` +
-		`${formatDuration(player.playtimeSinceLastBitnode)} ` +
+	const text = `BN ${resetInfo.currentNode}.${(dictOwnedSourceFiles[resetInfo.currentNode] || 0) + 1} completed at ` +
+		`${formatDuration(getTimeInBitnode())} ` +
 		`(${(player.skills.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
 	await persist_log(ns, text);
 	log(ns, `SUCCESS: ${text}`, true, 'success');
@@ -237,7 +243,7 @@ async function checkIfBnIsComplete(ns, player) {
 	}
 
 	// Check if there is some reason not to automatically destroy this BN
-	if (player.bitNodeN == 10) { // Suggest the user doesn't reset until they buy all sleeves and max memory
+	if (resetInfo.currentNode == 10) { // Suggest the user doesn't reset until they buy all sleeves and max memory
 		const shouldHaveSleeveCount = Math.min(8, 6 + (dictOwnedSourceFiles[10] || 0));
 		const numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`, '/Temp/sleeve-count.txt');
 		if (numSleeves < shouldHaveSleeveCount) {
@@ -337,7 +343,7 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Spend hacknet hashes on our boosting best hack-income server once established
 	const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
-	if ((9 in unlockedSFs) && !spendingHashesOnHacking && player.playtimeSinceLastAug >= options['time-before-boosting-best-hack-server'] && !(player.bitNodeN == 8)) {
+	if ((9 in unlockedSFs) && !spendingHashesOnHacking && getTimeInAug() >= options['time-before-boosting-best-hack-server'] && !(resetInfo.currentNode == 8)) {
 		const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
 		if (strServerIncomeInfo) {
 			const incomeByServer = JSON.parse(strServerIncomeInfo);
@@ -353,7 +359,7 @@ async function checkOnRunningScripts(ns, player) {
 
 	// Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.	
 	const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
-	const daemonArgs = (player.skills.hacking < hackThreshold || player.bitNodeN == 8) ? [] :
+	const daemonArgs = (player.skills.hacking < hackThreshold || resetInfo.currentNode == 8) ? [] :
 		// Launch daemon in "looping" mode if we have sufficient hack level
 		["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63",
 			"--stock-manipulation-focus", "--silent-misfires", "--no-share",
@@ -361,7 +367,7 @@ async function checkOnRunningScripts(ns, player) {
 			"--recovery-thread-padding", 1.0 + (player.skills.hacking - hackThreshold) / 1000.0];
 	daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
 	// Hacking earns no money in BN8, so prioritize XP
-	if (player.bitNodeN == 8) daemonArgs.push("--xp-only");
+	if (resetInfo.currentNode == 8) daemonArgs.push("--xp-only");
 	// Don't run the script to join and manage bladeburner if it is explicitly disabled
 	if (options['disable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
@@ -381,7 +387,7 @@ async function checkOnRunningScripts(ns, player) {
 	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
 	const daemon = findScript('daemon.js');
 	if ((!daemon || player.skills.hacking >= hackThreshold && !daemon.args.includes("--looping-mode") && !daemon.args.includes("--xp-only")) && !stanekRunning) {
-		if (player.skills.hacking >= hackThreshold && !(player.bitNodeN == 8))
+		if (player.skills.hacking >= hackThreshold && !(resetInfo.currentNode == 8))
 			log(ns, `INFO: Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
 		daemonStartTime = Date.now();
@@ -434,18 +440,18 @@ async function maybeDoCasino(ns, player) {
 	const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
 	// If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
 	// it's likely a sign that the flag is wrong and we should run cleanup and let casino get run again to be safe.
-	if (player.playtimeSinceLastAug < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns)) < 8E9) {
+	if (getTimeInAug() < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns)) < 8E9) {
 		launchScriptHelper(ns, 'cleanup.js');
 		await ns.sleep(200); // Wait a short while for the dust to settle.
 	} else if (casinoRanFileSet)
 		return ranCasino = true;
 	// If it's been less than 1 minute, wait a while to establish income
 	// The exception is if we are in BN8 and have CashRoot Starter Kit. In this case we can head straight to the casino.
-	if (player.playtimeSinceLastAug < 60000 && !(player.bitNodeN == 8 && cashRootBought))
+	if (getTimeInAug() < 60000 && !(resetInfo.currentNode == 8 && cashRootBought))
 		return;
 	// If we're making more than ~5b / minute, no need to run casino. (Unless BN8, if BN8 we always need casino cash bootstrap)
 	// Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
-	if (player.bitNodeN != 8 && (cashRootBought ? player.money - 1e6 : player.money) / player.playtimeSinceLastAug > 5e9 / 60000)
+	if (resetInfo.currentNode != 8 && (cashRootBought ? player.money - 1e6 : player.money) / getTimeInAug() > 5e9 / 60000)
 		return ranCasino = true;
 	if (player.money > 10E9) // If we already have 10b, assume we ran and lost track, or just don't need the money
 		return ranCasino = true;
@@ -505,7 +511,7 @@ async function maybeInstallAugmentations(ns, player) {
 	playerInstalledAugCount = facman.owned_count;
 
 	// Determine whether we can afford enough augmentations to merit a reset
-	const reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * player.playtimeSinceLastAug / 3.6E6);
+	const reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * getTimeInAug() / 3.6E6);
 	const augsNeeded = Math.max(1, options['install-at-aug-count'] - reducedAugReq);
 	const augsNeededInclNf = Math.max(1, options['install-at-aug-plus-nf-count'] - reducedAugReq);
 	const uniqueAugCount = affordableAugCount - Math.sign(facman.affordable_nf_count); // Don't count NF if included
@@ -526,7 +532,7 @@ async function maybeInstallAugmentations(ns, player) {
 
 	// If not ready to reset, set a status with our progress and return
 	if (!shouldReset) {
-		setStatus(ns, `Currently at ${formatDuration(player.playtimeSinceLastAug)} since last aug. ` +
+		setStatus(ns, `Currently at ${formatDuration(getTimeInAug())} since last aug. ` +
 			`Waiting for ${augsNeeded} new augs (or ${augsNeededInclNf} including NeuroFlux levels) before installing.` +
 			`\nCan currently get: ${augSummary}` +
 			`\n  Total Cost: ${formatMoney(totalCost)} (\`run faction-manager.js\` for details)`, augSummary);
@@ -554,7 +560,7 @@ async function maybeInstallAugmentations(ns, player) {
 	}
 
 	// Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
-	const resetLog = `Invoking ascend.js at ${formatDuration(player.playtimeSinceLastAug).padEnd(11)} since last aug to install: ${augSummary}`;
+	const resetLog = `Invoking ascend.js at ${formatDuration(getTimeInAug()).padEnd(11)} since last aug to install: ${augSummary}`;
 	await persist_log(ns, log(ns, resetLog, true, 'info'));
 
 	// Kick off ascend.js
@@ -597,7 +603,7 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
 	}
 	// In BN8, money is hard to come by, so if we're in Daedalus, but can't access TRP rep yet, wait until we have
 	// enough rep, or enough money to donate for rep to buy TRP (Reminder: donations always unlocked in BN8)
-	if (player.bitNodeN == 8 && player.factions.includes("Daedalus") && (wdHack || 0) == 0) {
+	if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && (wdHack || 0) == 0) {
 		// Sanity check, ensure the player hasn't manually purchased (but not yet installed) TRP
 		const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
 		if (!facmanOutput.affordable_augs.includes("The Red Pill") && !ownedAugmentations.includes("The Red Pill")) {
@@ -622,7 +628,7 @@ async function manageReservedMoney(ns, player, stocksValue) {
 	// It also acts as a decent way to save up for augmentations
 	const minStockValue = 8E9; // At a minimum 8 of the 10 billion earned from the casino must be reserved for buying stock
 	// As we earn more money, reserve a percentage of it for further investing in stock. Decrease this as the BN progresses.
-	const minStockPercent = Math.max(0, 0.8 - 0.1 * player.playtimeSinceLastBitnode / 3.6E6); // Reduce by 10% per hour in the BN
+	const minStockPercent = Math.max(0, 0.8 - 0.1 * getTimeInBitnode() / 3.6E6); // Reduce by 10% per hour in the BN
 	const reserveCap = 1E12; // As we start start to earn crazy money, we will hit the stock market cap, so cap the maximum reserve
 	// Dynamically update reserved cash based on how much money is already converted to stocks.
 	const reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));

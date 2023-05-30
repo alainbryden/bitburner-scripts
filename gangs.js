@@ -35,6 +35,7 @@ let assignedTasks = {}; // Each member will independently attempt to scale up th
 let lastMemberReset = {}; // Tracks when each member last ascended
 
 // Global state
+let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
 let ownedSourceFiles;
 let myGangFaction = "";
 let isHackGang = false;
@@ -94,7 +95,8 @@ async function initialize(ns) {
     pctTraining = options['no-training'] ? 0 : options['training-percentage'];
 
     let loggedWaiting = false;
-    const bitNode = await getNsDataThroughFile(ns, 'ns.getPlayer().bitNodeN', '/Temp/getPlayer-bitNodeN.txt');
+    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/getResetInfo.txt');
+    const bitNode = resetInfo.currentNode;
     let haveJoinedAGang = false;
     while (!haveJoinedAGang) {
         try {
@@ -118,7 +120,7 @@ async function initialize(ns) {
     const myGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()', '/Temp/gang-getGangInformation.txt');
     myGangFaction = myGangInfo.faction;
     if (loggedWaiting)
-        log(ns, `SUCCESS: Created gang ${myGangFaction} (At ${formatDuration(playerData.playtimeSinceLastBitnode)} into BitNode)`, true, 'success');
+        log(ns, `SUCCESS: Created gang ${myGangFaction} (At ${formatDuration(Date.now() - resetInfo.lastNodeReset)} into BitNode)`, true, 'success');
     isHackGang = myGangInfo.isHacking;
     strWantedReduction = isHackGang ? "Ethical Hacking" : "Vigilante Justice";
     importantStats = isHackGang ? ["hack"] : ["str", "def", "dex", "agi"];
@@ -420,7 +422,7 @@ async function tryUpgradeMembers(ns, dictMembers) {
     let budget = Math.min(maxBudget, (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment)) * homeMoney;
     let augBudget = Math.min(maxBudget, (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment)) * homeMoney;
     // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when BitnodeMults are such that gang income is severely nerfed)
-    if (!ns.stock.has4SDataTIXAPI() || playerData.bitNodeN === 8) {
+    if (!ns.stock.has4SDataTIXAPI() || resetInfo.currentNode === 8) {
         budget /= 100;
         augBudget /= 100;
     }

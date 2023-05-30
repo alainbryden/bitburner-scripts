@@ -215,7 +215,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
                     `(${purchased - likelyHacknet.length} servers + ${likelyHacknet.length} hacknet servers)` : `(${purchased})`));
             const home = servers.find(s => s.hostname == "home");
             // Add Home RAM and Utilization
-            val2.push(true, `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
+            val2.push(true, `${formatRam(home.maxRam)} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
                 `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
                 `${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
             // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
@@ -223,7 +223,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
             const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-node-")))
                 .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
             // Add Total Network RAM and Utilization
-            val3.push(true, `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
+            val3.push(true, `${formatRam(totalMax)} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
                 `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                     (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
                 `\nDetails: Using ${formatRam(totalUsed)} of ${formatRam(totalMax)} (${formatRam(totalMax - totalUsed)} free)`);
@@ -257,8 +257,8 @@ export async function main(ns) {
     if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
 
     const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
-    const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-    const bitNode = playerInfo.bitNodeN;
+    let resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt');
+    const bitNode = resetInfo.currentNode;
     disableLogs(ns, ['sleep']);
 
     // Hook script exit to clean up after ourselves.
