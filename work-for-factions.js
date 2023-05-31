@@ -599,8 +599,9 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 
 async function doGymTraining(reqStats, ns) {
     async function getGymCost(etaMilli) {
-        // TODO: if the gym gets backdoored, a 10% discount will be applied.
-        return baseGymCost * bestGymCostMult * (etaMilli / 1000);
+        const bestGymServer = "powerhouse-fitness";
+        const backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, bestGymServer);
+        return baseGymCost * bestGymCostMult * (etaMilli / 1000) * (backdoored ? .9 : 1);
     }
 
     // Gets the time to fill Exp requirements.
