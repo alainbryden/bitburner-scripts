@@ -7,7 +7,7 @@ const argsSchema = [
     ['new-file', []], // If a repository listing fails, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
     ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
     ['extension', ['.js', '.ns', '.txt', '.script']], // Files to download by extension
-    ['omit-folder', ['/Temp/']], // Folders to omit
+    ['omit-folder', ['Temp/']], // Folders to omit when getting a list of files to update (TODO: This may be obsolete now that we get a list of files from github itself.)
 ];
 
 export function autocomplete(data, args) {
@@ -25,33 +25,46 @@ export function autocomplete(data, args) {
  * - Ensuring you have no local changes that you don't mind getting overwritten **/
 export async function main(ns) {
     options = ns.flags(argsSchema);
-    if (options.subfolder && !options.subfolder.startsWith('/'))
-        options.subfolder = '/' + options.subfolder; // Game requires folders to have a leading slash. Add one if it's missing.
+    // Once upon a time, the game API required folders to have a leading slash
+    // As of 2.3.1, not only is this no longer needed, but it can break the game.
+    if (options.subfolder)
+        options.subfolder = trimSlash(options.subfolder); // Remove the leading slash
     const baseUrl = `raw.githubusercontent.com/${options.github}/${options.repository}/${options.branch}/`;
     const filesToDownload = options['new-file'].concat(options.download.length > 0 ? options.download : await repositoryListing(ns));
     for (const localFilePath of filesToDownload) {
         let fullLocalFilePath = pathJoin(options.subfolder, localFilePath);
         const remoteFilePath = `https://` + pathJoin(baseUrl, localFilePath);
         ns.print(`Trying to update "${fullLocalFilePath}" from ${remoteFilePath} ...`);
-        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, fullLocalFilePath) && await rewriteFileForSubfolder(ns, fullLocalFilePath))
-            ns.tprint(`SUCCESS: Updated "${localFilePath}" to the latest from ${remoteFilePath}`);
+        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, fullLocalFilePath) && rewriteFileForSubfolder(ns, fullLocalFilePath))
+            ns.tprint(`SUCCESS: Updated "${fullLocalFilePath}" to the latest from ${remoteFilePath}`);
         else
-            ns.tprint(`WARNING: "${localFilePath}" was not updated. (Currently running or not located at ${remoteFilePath} )`)
+            ns.tprint(`WARNING: "${fullLocalFilePath}" was not updated. (Currently running, or not located at ${remoteFilePath}?)`)
     }
     ns.tprint(`INFO: Pull complete. If you have any questions or issues, head over to the Bitburner #alains-scripts Discord channel: ` +
         `https://discord.com/channels/415207508303544321/935667531111342200`);
     // Remove any temp files / scripts from the prior version
-    ns.run(`${options.subfolder}/cleanup.js`);
+    ns.run(pathJoin(options.subfolder, `cleanup.js`));
+}
+
+/** Removes leading and trailing slashes from the specified string */
+function trimSlash(s) {
+    // Once upon a time, the game API required folders to have a leading slash
+    // As of 2.3.1, not only is this no longer needed, but it can break the game.
+    if (s.startsWith('/'))
+        s = s.slice(1);
+    if (s.endsWith('/'))
+        s = s.slice(0, -1);
+    return s;
 }
 
 /** Joins all arguments as components in a path, e.g. pathJoin("foo", "bar", "/baz") = "foo/bar/baz" **/
 function pathJoin(...args) {
-    return args.filter(s => !!s).join('/').replace(/\/\/+/g, '/');
+    return trimSlash(args.filter(s => !!s).join('/').replace(/\/\/+/g, '/'));
 }
 
 /** @param {NS} ns
  * Rewrites a file with path substitions to handle downloading to a subfolder. **/
-export async function rewriteFileForSubfolder(ns, path) {
+export function rewriteFileForSubfolder(ns, path) {
     if (!options.subfolder || path.includes('git-pull.js'))
         return true;
     let contents = ns.read(path);
@@ -59,7 +72,7 @@ export async function rewriteFileForSubfolder(ns, path) {
     contents = contents.replace(`const subfolder = ''`, `const subfolder = '${options.subfolder}/'`);
     // Replace any imports, which can't use getFilePath:
     contents = contents.replace(/from '(\.\/)?(.*)'/g, `from '${pathJoin(options.subfolder, '$2')}'`);
-    await ns.write(path, contents, 'w');
+    ns.write(path, contents, 'w');
     return true;
 }
 

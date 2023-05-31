@@ -75,7 +75,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     // Show what bitNode we're currently playing in
     {
         const val = ["BitNode", true, `${bitNode}.${1 + (dictSourceFiles[bitNode] || 0)}`,
-        `Detected as being one more than your current owned SF level (${dictSourceFiles[bitNode] || 0}) in the current bitnode (${bitNode}).`]
+            `Detected as being one more than your current owned SF level (${dictSourceFiles[bitNode] || 0}) in the current bitnode (${bitNode}).`]
         hudData.push(val)
     }
 
@@ -87,7 +87,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
             const hashes = await getNsDataThroughFile(ns, '[ns.hacknet.numHashes(), ns.hacknet.hashCapacity()]', '/Temp/hash-stats.txt')
             if (hashes[1] > 0) {
                 val1.push(true, `${formatNumberShort(hashes[0], 3, 1)}/${formatNumberShort(hashes[1], 3, 1)}`,
-                `Current Hashes ${hashes[0].toLocaleString('en')} / Current Hash Capacity ${hashes[1].toLocaleString('en')}`)
+                    `Current Hashes ${hashes[0].toLocaleString('en')} / Current Hash Capacity ${hashes[1].toLocaleString('en')}`)
             } else val1.push(false)
             // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)               
             if (ns.isRunning('spend-hacknet-hashes.js', 'home', '--liquidate') || ns.isRunning('spend-hacknet-hashes.js', 'home', '-l')) {
@@ -96,7 +96,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
         } else {
             val1.push(false)
             val2.push(false)
-        } 
+        }
         hudData.push(val1, val2)
     }
 
@@ -173,7 +173,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     {
         const val = ["Kills"]
         if (options['show-peoplekilled']) {
-            const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
+            const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()');
             const numPeopleKilled = playerInfo.numPeopleKilled;
             val.push(true, formatSixSigFigs(numPeopleKilled), "Count of successful Homicides. Note: The most kills you need is 30 for 'Speakers for the Dead'");
         } else val.push(false)
@@ -187,9 +187,9 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
         // Bladeburner API unlocked
         if ((7 in dictSourceFiles || 7 == bitNode)
             // Check if we're in bladeburner. Once we find we are, we don't have to check again.
-            && (playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt'))) {
-            const bbRank = await getNsDataThroughFile(ns, 'ns.bladeburner.getRank()', '/Temp/bladeburner-getRank.txt');
-            const bbSP = await getNsDataThroughFile(ns, 'ns.bladeburner.getSkillPoints()', '/Temp/bladeburner-getSkillPoints.txt');
+            && (playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()'))) {
+            const bbRank = await getNsDataThroughFile(ns, 'ns.bladeburner.getRank()');
+            const bbSP = await getNsDataThroughFile(ns, 'ns.bladeburner.getSkillPoints()');
             val1.push(true, formatSixSigFigs(bbRank), "Your current bladeburner rank");
             val2.push(true, formatSixSigFigs(bbSP), "Your current unspent bladeburner skill points");
         } else {
@@ -215,7 +215,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
                     `(${purchased - likelyHacknet.length} servers + ${likelyHacknet.length} hacknet servers)` : `(${purchased})`));
             const home = servers.find(s => s.hostname == "home");
             // Add Home RAM and Utilization
-            val2.push(true, `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
+            val2.push(true, `${formatRam(home.maxRam)} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
                 `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
                 `${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
             // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
@@ -223,7 +223,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
             const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-node-")))
                 .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
             // Add Total Network RAM and Utilization
-            val3.push(true, `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
+            val3.push(true, `${formatRam(totalMax)} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
                 `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                     (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
                 `\nDetails: Using ${formatRam(totalUsed)} of ${formatRam(totalMax)} (${formatRam(totalMax - totalUsed)} free)`);
@@ -238,7 +238,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     // Show current share power
     {
         const val = ["Share Pwr"]
-        const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()', '/Temp/getSharePower.txt');
+        const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()');
         // Bitburner bug: Trace amounts of share power sometimes left over after we stop sharing
         if (sharePower > 1.0001) {
             val.push(true, formatNumberShort(sharePower, 3, 2),
@@ -257,8 +257,8 @@ export async function main(ns) {
     if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
 
     const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
-    const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-    const bitNode = playerInfo.bitNodeN;
+    let resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
+    const bitNode = resetInfo.currentNode;
     disableLogs(ns, ['sleep']);
 
     // Hook script exit to clean up after ourselves.
@@ -300,7 +300,7 @@ async function getGangInfo(ns) {
 /** @param {NS} ns 
  * @returns {Promise<Server[]>} **/
 async function getAllServersInfo(ns) {
-    const serverNames = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
+    const serverNames = await getNsDataThroughFile(ns, 'scanAllServers(ns)');
     return await getNsDataThroughFile(ns, 'ns.args.map(ns.getServer)', '/Temp/getServers.txt', serverNames);
 }
 

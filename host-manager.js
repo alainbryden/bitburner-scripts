@@ -42,13 +42,14 @@ export async function main(ns) {
     ns.disableLog('ALL')
 
     // Get the maximum number of purchased servers in this bitnode
-    maxPurchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServerLimit()', '/Temp/getPurchasedServerLimit.txt');
+    maxPurchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServerLimit()');
     log(ns, `INFO: Max purchasable servers has been detected as ${maxPurchasedServers.toFixed(0)}.`);
     if (maxPurchasedServers == 0)
         return log(ns, `INFO: Shutting down due to host purchasing being disabled in this BN...`);
 
     // Get the maximum size of purchased servers in this bitnode
-    maxPurchasableServerRamExponent = await getNsDataThroughFile(ns, 'Math.log2(ns.getPurchasedServerMaxRam())', '/Temp/host-max-ram-exponent.txt');
+    const purchasedServerMaxRam = await getNsDataThroughFile(ns, 'ns.getPurchasedServerMaxRam()');
+    maxPurchasableServerRamExponent = Math.log2(purchasedServerMaxRam);
     log(ns, `INFO: Max purchasable RAM has been detected as 2^${maxPurchasableServerRamExponent} (${formatRam(2 ** maxPurchasableServerRamExponent)}).`);
 
     // Gather one-time info in advance about how much RAM each size of server costs (Up to 2^30 to be future-proof, but we expect everything abouve 2^20 to be Infinity)
@@ -99,13 +100,13 @@ function setStatus(ns, logMessage) {
   * Attempts to buy a server at or better than your home machine. **/
 async function tryToBuyBestServerPossible(ns) {
     // Gether the list of all purchased servers.
-    const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', '/Temp/getPurchasedServers.txt');
+    const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()');
     // Scan the set of all servers on the network that we own (or rooted) to get a sense of current RAM utilization
-    let rootedServers = scanAllServers(ns).filter(s => ns.hasRootAccess(s));
+    let rootedServers = await getNsDataThroughFile(ns, 'scanAllServers(ns).filter(s => ns.hasRootAccess(s))', '/Temp/rooted-servers.txt');
 
     // If some of the servers are hacknet servers, and they aren't being used for scripts, ignore the RAM they have available
     // with the assumption that these are reserved for generating hashes
-    const likelyHacknet = rootedServers.filter(s => s.startsWith("hacknet-node-"));
+    const likelyHacknet = rootedServers.filter(s => s.startsWith("hacknet-node-") || s.startsWith('hacknet-server-'));
     if (likelyHacknet.length > 0) {
         const totalHacknetUsedRam = likelyHacknet.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
         if (totalHacknetUsedRam == 0) {
@@ -129,12 +130,12 @@ async function tryToBuyBestServerPossible(ns) {
     let prefix = 'Host-manager wants to buy another server, but ';
 
     // Determine our budget for spending money on home RAM
-    let spendableMoney = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, `/Temp/getServerMoneyAvailable.txt`, ["home"]);
+    let spendableMoney = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, null, ["home"]);
     if (options['reserve-by-time']) { // Option to vary pctReservedMoney by time since augment. 
         // Decay factor of 0.2 = Starts willing to spend 95% of our money, backing down to ~75% at 1 hour, ~60% at 2 hours, ~25% at 6 hours, and ~10% at 10 hours.
         // Decay factor of 0.3 = Starts willing to spend 95% of our money, backing down to ~66% at 1 hour, ~45% at 2 hours, ~23% at 4 hours, ~10% at 6 hours
         // Decay factor of 0.5 = Starts willing to spend 95% of our money, then halving every hour (to ~48% at 1 hour, ~24% at 2 hours, ~12% at 3 hours, etc)
-        const timeSinceLastAug = await getNsDataThroughFile(ns, 'ns.getTimeSinceLastAug()', '/Temp/getTimeSinceLastAug.txt');
+        const timeSinceLastAug = await getNsDataThroughFile(ns, 'ns.getTimeSinceLastAug()');
         const t = timeSinceLastAug / (60 * 60 * 1000); // Time since last aug, in hours.
         const decayFactor = 0.5;
         pctReservedMoney = 1 - 0.95 * Math.pow(1 - decayFactor, t);
@@ -204,11 +205,11 @@ async function tryToBuyBestServerPossible(ns) {
 
         cost -= costByRamExponent[Math.log2(worstServerRam)]
         isUpgrade = true
-        purchasedServer = (await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
-            '/Temp/upgradeServer.txt', [worstServerName, maxRamPossibleToBuy])) ? worstServerName : "";
+        purchasedServer = (await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`, null,
+            [worstServerName, maxRamPossibleToBuy])) ? worstServerName : "";
     } else {
-        purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`,
-            '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
+        purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`, null,
+            [purchasedServerName, maxRamPossibleToBuy]);
     }
     if (!purchasedServer)
         setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
