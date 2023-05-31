@@ -55,7 +55,7 @@ export async function main(ns) {
             return log(ns, "ERROR: You must manually populate your stanek grid with your desired fragments before you run this script to charge them.", true, 'error');
     }
 
-    currentServer = await getNsDataThroughFile(ns, `ns.getHostname()`, '/Temp/getHostname.txt');
+    currentServer = await getNsDataThroughFile(ns, `ns.getHostname()`);
     maxCharges = options['max-charges']; // Don't bother adding charges beyond this amount
     idealReservedRam = 32; // Reserve this much RAM, if it wouldnt make a big difference anyway. Leaves room for other temp-scripts to spawn.
     let startupScript = options['on-startup-script'];
@@ -146,7 +146,7 @@ async function getFragmentsToCharge(ns) {
         return undefined;
     }
     // If we have SF4, get our updated faction rep, and determine if we should continue past --max-charges to earn rep for the next augmentation
-    const churchRep = sf4Level ? await getNsDataThroughFile(ns, 'ns.singularity.getFactionRep("Church of the Machine God")', '/Temp/stanek-reputation.txt') : 0;
+    const churchRep = sf4Level ? await getNsDataThroughFile(ns, 'ns.singularity.getFactionRep(ns.args[0])', null, ["Church of the Machine God"]) : 0;
     const shouldContinue = shouldContinueForAug(churchRep);
 
     // Collect information about each fragment's charge status, and prepare a status update
@@ -205,5 +205,5 @@ async function tryChargeAllFragments(ns, fragmentsToCharge) {
  * @param {NS} ns
  * @returns {Promise<ActiveFragment[]>} **/
 async function getActiveFragments(ns) {
-    return await getNsDataThroughFile(ns, 'ns.stanek.activeFragments()', '/Temp/stanek-fragments.txt');
+    return await getNsDataThroughFile(ns, 'ns.stanek.activeFragments()');
 }

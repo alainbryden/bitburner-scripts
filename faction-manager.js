@@ -23,7 +23,7 @@ const nfCountMult = 1.14; // Factors that control how neuroflux prices scale
 let augCountMult = 1.9; // The multiplier for the cost increase of augmentations (changes based on SF11 level)
 let favorToDonate; // Based on the current BitNode Multipliers, the favour required to donate to factions for reputation.
 // Various globals because this script does not do modularity well
-let playerData = null, gangFaction = null;
+let playerData = null, bitNode = 0, gangFaction = null;
 let augsAwaitingInstall, startingPlayerMoney, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
 let ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
@@ -72,18 +72,7 @@ const allFactions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCor
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
     "Volhaven", "Speakers for the Dead", "The Dark Army", "The Syndicate", "Silhouette", "Tetrads", "Slum Snakes", "Netburners", "Tian Di Hui", "CyberSec", "Bladeburners", "Church of the Machine God", "Shadows of Anarchy"];
 // TODO: This list is missing augmentations. Regenerate.
-const augmentations = ["ADR-V1 Pheromone Gene", "ADR-V2 Pheromone Gene", "Artificial Bio-neural Network Implant", "Artificial Synaptic Potentiation", "Augmented Targeting I", "Augmented Targeting II", "Augmented Targeting III", 
-"BLADE-51b Tesla Armor", "BLADE-51b Tesla Armor: Energy Shielding Upgrade", "BLADE-51b Tesla Armor: IPU Upgrade", "BLADE-51b Tesla Armor: Omnibeam Upgrade", "BLADE-51b Tesla Armor: Power Cells Upgrade", "BLADE-51b Tesla Armor: Unibeam Upgrade", 
-"Bionic Arms", "Bionic Legs", "Bionic Spine", "BitRunners Neurolink", "BitWire", "Blade's Runners", "BrachiBlades", "CRTX42-AA Gene Modification", "CashRoot Starter Kit", "Combat Rib I", "Combat Rib II", "Combat Rib III", "CordiARC Fusion Reactor", 
-"Cranial Signal Processors - Gen I", "Cranial Signal Processors - Gen II", "Cranial Signal Processors - Gen III", "Cranial Signal Processors - Gen IV", "Cranial Signal Processors - Gen V", "DataJack", "DermaForce Particle Barrier", 
-"ECorp HVMind Implant", "EMS-4 Recombination", "Embedded Netburner Module", "Embedded Netburner Module Analyze Engine", "Embedded Netburner Module Core Implant", "Embedded Netburner Module Core V2 Upgrade", "Embedded Netburner Module Core V3 Upgrade", "Embedded Netburner Module Direct Memory Access Upgrade", 
-"Enhanced Myelin Sheathing", "Enhanced Social Interaction Implant", "EsperTech Bladeburner Eyewear", "FocusWire", "GOLEM Serum", "Graphene Bionic Arms Upgrade", "Graphene Bionic Legs Upgrade", "Graphene Bionic Spine Upgrade", "Graphene Bone Lacings", "Graphene BrachiBlades Upgrade", 
-"Hacknet Node CPU Architecture Neural-Upload", "Hacknet Node Cache Architecture Neural-Upload", "Hacknet Node Core Direct-Neural Interface", "Hacknet Node Kernel Direct-Neural Interface", "Hacknet Node NIC Architecture Neural-Upload", "HemoRecirculator", "Hydroflame Left Arm", 
-"HyperSight Corneal Implant", "Hyperion Plasma Cannon V1", "Hyperion Plasma Cannon V2", "I.N.T.E.R.L.I.N.K.E.D", "INFRARET Enhancement", "LuminCloaking-V1 Skin Implant", "LuminCloaking-V2 Skin Implant", "NEMEAN Subdermal Weave", "Nanofiber Weave", "Neotra", 
-"Neural Accelerator", "Neural-Retention Enhancement", "Neuralstimulator", "Neuregen Gene Modification", "NeuroFlux Governor", "Neuronal Densification", "Neuroreceptor Management Implant", "Neurotrainer I", "Neurotrainer II", "Neurotrainer III", 
-"Nuoptimal Nootropic Injector Implant", "NutriGen Implant", "ORION-MKIV Shoulder", "OmniTek InfoLoad", "PC Direct-Neural Interface", "PC Direct-Neural Interface NeuroNet Injector", "PC Direct-Neural Interface Optimization Submodule", "PCMatrix", 
-"Photosynthetic Cells", "Power Recirculation Core", "SPTN-97 Gene Modification", "SmartJaw", "SmartSonar Implant", "Social Negotiation Assistant (S.N.A)", "Speech Enhancement", "Speech Processor Implant", "Synaptic Enhancement Implant", "Synfibril Muscle", 
-"Synthetic Heart", "TITN-41 Gene-Modification Injection", "The Black Hand", "The Blade's Simulacrum", "The Red Pill", "The Shadow's Simulacrum", "Unstable Circadian Modulator", "Vangelis Virus", "Vangelis Virus 3.0", "Wired Reflexes", "Xanipher", "nextSENS Gene Modification", 
+const augmentations = ["ADR-V1 Pheromone Gene", "ADR-V2 Pheromone Gene", "Artificial Bio-neural Network Implant", "Artificial Synaptic Potentiation", "Augmented Targeting I", "Augmented Targeting II", "Augmented Targeting III", "BLADE-51b Tesla Armor", "BLADE-51b Tesla Armor: Energy Shielding Upgrade", "BLADE-51b Tesla Armor: IPU Upgrade", "BLADE-51b Tesla Armor: Omnibeam Upgrade", "BLADE-51b Tesla Armor: Power Cells Upgrade", "BLADE-51b Tesla Armor: Unibeam Upgrade", "Bionic Arms", "Bionic Legs", "Bionic Spine", "BitRunners Neurolink", "BitWire", "Blade's Runners", "BrachiBlades", "CRTX42-AA Gene Modification", "CashRoot Starter Kit", "Combat Rib I", "Combat Rib II", "Combat Rib III", "CordiARC Fusion Reactor", "Cranial Signal Processors - Gen I", "Cranial Signal Processors - Gen II", "Cranial Signal Processors - Gen III", "Cranial Signal Processors - Gen IV", "Cranial Signal Processors - Gen V", "DataJack", "DermaForce Particle Barrier", "ECorp HVMind Implant", "EMS-4 Recombination", "Embedded Netburner Module", "Embedded Netburner Module Analyze Engine", "Embedded Netburner Module Core Implant", "Embedded Netburner Module Core V2 Upgrade", "Embedded Netburner Module Core V3 Upgrade", "Embedded Netburner Module Direct Memory Access Upgrade", "Enhanced Myelin Sheathing", "Enhanced Social Interaction Implant", "EsperTech Bladeburner Eyewear", "FocusWire", "GOLEM Serum", "Graphene Bionic Arms Upgrade", "Graphene Bionic Legs Upgrade", "Graphene Bionic Spine Upgrade", "Graphene Bone Lacings", "Graphene BrachiBlades Upgrade", "Hacknet Node CPU Architecture Neural-Upload", "Hacknet Node Cache Architecture Neural-Upload", "Hacknet Node Core Direct-Neural Interface", "Hacknet Node Kernel Direct-Neural Interface", "Hacknet Node NIC Architecture Neural-Upload", "HemoRecirculator", "Hydroflame Left Arm", "HyperSight Corneal Implant", "Hyperion Plasma Cannon V1", "Hyperion Plasma Cannon V2", "I.N.T.E.R.L.I.N.K.E.D", "INFRARET Enhancement", "LuminCloaking-V1 Skin Implant", "LuminCloaking-V2 Skin Implant", "NEMEAN Subdermal Weave", "Nanofiber Weave", "Neotra", "Neural Accelerator", "Neural-Retention Enhancement", "Neuralstimulator", "Neuregen Gene Modification", "NeuroFlux Governor", "Neuronal Densification", "Neuroreceptor Management Implant", "Neurotrainer I", "Neurotrainer II", "Neurotrainer III", "Nuoptimal Nootropic Injector Implant", "NutriGen Implant", "ORION-MKIV Shoulder", "OmniTek InfoLoad", "PC Direct-Neural Interface", "PC Direct-Neural Interface NeuroNet Injector", "PC Direct-Neural Interface Optimization Submodule", "PCMatrix", "Photosynthetic Cells", "Power Recirculation Core", "SPTN-97 Gene Modification", "SmartJaw", "SmartSonar Implant", "Social Negotiation Assistant (S.N.A)", "Speech Enhancement", "Speech Processor Implant", "Synaptic Enhancement Implant", "Synfibril Muscle", "Synthetic Heart", "TITN-41 Gene-Modification Injection", "The Black Hand", "The Blade's Simulacrum", "The Red Pill", "The Shadow's Simulacrum", "Unstable Circadian Modulator", "Vangelis Virus", "Vangelis Virus 3.0", "Wired Reflexes", "Xanipher", "nextSENS Gene Modification", 
 "SoA - phyzical WKS harmonizer", "SoA - Might of Ares", "SoA - Wisdom of Athena", "SoA - Chaos of Dionysus", "SoA - Beauty of Aphrodite", "SoA - Trickery of Hermes", "SoA - Flood of Poseidon", "SoA - Hunt of Artemis", "SoA - Knowledge of Apollo"]
 const strNF = "NeuroFlux Governor"
 
@@ -126,10 +115,11 @@ export async function main(ns) {
     desiredAugs = priorityAugs.concat(desiredAugs);
 
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`)).currentNode;
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
-    const sf4Level = playerData.bitNodeN == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
+    const sf4Level = bitNode == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
     if (sf4Level == 0)
         return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'error');
     else if (sf4Level < 3)
@@ -142,7 +132,7 @@ export async function main(ns) {
     // Collect information about the player
     const gangInfo = await getGangInfo(ns);
     gangFaction = gangInfo ? gangInfo.faction : false;
-    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
+    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     startingPlayerMoney = playerData.money;
     stockValue = options['ignore-stocks'] ? 0 : await getStocksValue(ns);
     joinedFactions = ignorePlayerData ? [] : playerData.factions;
@@ -160,8 +150,8 @@ export async function main(ns) {
     desiredStatsFilters = options['stat-desired'];
     if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
         desiredStatsFilters = ownedAugmentations.length > 40 ? ['*'] : // Once we have more than N augs, switch to buying up anything and everything
-        playerData.bitNodeN == 6 || playerData.bitNodeN == 7 || playerData.factions.includes("Bladeburners") ? ['*'] : // If doing bladeburners, combat augs matter too, so just get everything
-            ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
+            bitNode == 6 || bitNode == 7 || playerData.factions.includes("Bladeburners") ? ['*'] : // If doing bladeburners, combat augs matter too, so just get everything
+                ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
     log(ns, 'Desired stats filter: ' + JSON.stringify(desiredStatsFilters));
 
     // Prepare global data sets of faction and augmentation information
@@ -247,10 +237,16 @@ let factionSortValue = faction => {
 // Ram-dodging helper, runs a command for all items in a list and returns a dictionary.
 const dictCommand = (command) => `Object.fromEntries(ns.args.map(o => [o, ${command}]))`;
 
+// Get a dictionary from retrieving the same infromation for every server name
+async function getSingularityDict(ns, command, listItems) {
+    return await getNsDataThroughFile(ns, dictCommand(`ns.singularity.${command}(o)`),
+        `/Temp/singularity-${command}-all.txt`, listItems);
+}
+
 /** @param {NS} ns **/
 async function updateFactionData(ns, factionsToOmit) {
     // Gather a list of all faction names to collect information about. Start with any player joined and invited factions
-    const invitations = await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()', '/Temp/checkFactionInvitations.txt');
+    const invitations = await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()');
     factionNames = joinedFactions.concat(invitations);
     // Add in factions the user hasn't seen. All factions by default, or a small subset of easy-access factions if --hide-locked-factions is set
     factionNames.push(...(options['hide-locked-factions'] ? easyAccessFactions : allFactions).filter(f => !factionNames.includes(f)));
@@ -263,12 +259,12 @@ async function updateFactionData(ns, factionsToOmit) {
     log(ns, `We "know" about ${factionNames.length} factions, and will omit ${factionsToOmit.length} of them.`);
     factionNames = factionNames.filter(f => !factionsToOmit.includes(f));
 
-    let dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', factionNames);
-    let dictFactionReps = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionRep(o)'), '/Temp/getFactionReps.txt', factionNames);
-    let dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', factionNames);
+    let dictFactionAugs = await getSingularityDict(ns, 'getAugmentationsFromFaction', factionNames);
+    let dictFactionReps = await getSingularityDict(ns, 'getFactionRep', factionNames);
+    let dictFactionFavors = await getSingularityDict(ns, 'getFactionFavor', factionNames);
 
     // Need information about our gang to work around a TRP bug - gang faction appears to have it available, but it's not (outside of BN2)  
-    if (gangFaction && playerData.bitNodeN != 2)
+    if (gangFaction && bitNode != 2)
         dictFactionAugs[gangFaction] = dictFactionAugs[gangFaction]?.filter(a => a != "The Red Pill");
 
     factionData = Object.fromEntries(factionNames.map(faction => [faction, {
@@ -293,10 +289,10 @@ async function updateFactionData(ns, factionsToOmit) {
 /** @param {NS} ns **/
 async function updateAugmentationData(ns, desiredAugs) {
     const augmentationNames = [...new Set(Object.values(factionData).flatMap(f => f.augmentations))]; // augmentations.slice();
-    const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationRepReq(o)'), '/Temp/getAugmentationRepReqs.txt', augmentationNames);
-    const dictAugPrices = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationPrice(o)'), '/Temp/getAugmentationPrices.txt', augmentationNames);
-    const dictAugStats = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationStats(o)'), '/Temp/getAugmentationStats.txt', augmentationNames);
-    const dictAugPrereqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationPrereq(o)'), '/Temp/getAugmentationPrereqs.txt', augmentationNames);
+    const dictAugRepReqs = await getSingularityDict(ns, 'getAugmentationRepReq', augmentationNames);
+    const dictAugPrices = await getSingularityDict(ns, 'getAugmentationPrice', augmentationNames);
+    const dictAugStats = await getSingularityDict(ns, 'getAugmentationStats', augmentationNames);
+    const dictAugPrereqs = await getSingularityDict(ns, 'getAugmentationPrereq', augmentationNames);
     augmentationData = Object.fromEntries(augmentationNames.map(aug => [aug, {
         name: aug,
         displayName: aug,
@@ -387,7 +383,7 @@ async function joinFactions(ns, forceJoinFactions) {
         else {
             log(ns, `Joining faction ${faction.name} which has ${desiredAugs.length} desired augmentations: ${desiredAugs}`);
             let response;
-            if (response = await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, '/Temp/join-faction.txt', [faction.name])) {
+            if (response = await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, null, [faction.name])) {
                 faction.joined = true;
                 faction.augmentations.forEach(aug => accessibleAugmentations.add(aug));
                 joinedFactions.push(faction.name);
@@ -561,7 +557,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
  * Note: Stores this info in global properties `purchaseableAugs` and `purchaseFactionDonations` so that a final action in the main method will do the purchase. */
 async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // Refresh player data to get an accurate read of current money
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     const budget = playerData.money + stockValue;
     let totalRepCost, totalAugCost, dropped, restart;
     // We will make every effort to keep "priority" augs in the purchase order, but start dropping them if we find we cannot afford them all
@@ -752,7 +748,7 @@ async function purchaseDesiredAugs(ns) {
     let totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(purchaseableAugs);
     // Refresh player data to get an accurate read of current money
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     if (stockValue > 0)
         return log(ns, `ERROR: For your own protection, --purchase will not run while you are holding stocks (current stock value: ${formatMoney(stockValue)}). ` +
             `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
@@ -782,7 +778,7 @@ async function purchaseDesiredAugs(ns) {
     else
         log(ns, `ERROR: We were only able to purchase ${purchased} of our ${purchaseableAugs.length} augmentations. ` +
             `Expected cost was ${getCostString(totalAugCost, totalRepCost)}. Player money was ${formatMoney(playerData.money)} right before purchase, ` +
-            `is now ${formatMoney((await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).money)}`, printToTerminal, 'error');
+            `is now ${formatMoney(await getNsDataThroughFile(ns, 'ns.getPlayer().money'))}`, printToTerminal, 'error');
 }
 
 /** @param {NS} ns **/
