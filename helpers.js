@@ -169,7 +169,14 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     // TODO: Workaround for v2.3.0 deprecation. Remove when the warning is gone.
     // Avoid serializing ns.getPlayer() properties that generate warnings
     if (command === "ns.getPlayer()")
-        command = "ns.getPlayer(), (key, value) => ['playtimeSinceLastAug', 'playtimeSinceLastBitnode', 'bitNodeN'].includes(key) ? undefined : value"
+        command = `( ()=> { let player = ns.getPlayer();
+            const excludeProperties = ['playtimeSinceLastAug', 'playtimeSinceLastBitnode', 'bitNodeN'];
+            return Object.keys(player).reduce((pCopy, key) => {
+                if (!excludeProperties.includes(key))
+                   pCopy[key] = player[key];
+                return pCopy;
+            }, {});
+        })()`;
 
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)

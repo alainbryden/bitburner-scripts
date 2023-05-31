@@ -85,7 +85,8 @@ export async function main(ns) {
         }
         catch (err) {
             log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+                (typeof err === 'string' ? err : err?.stack ? err.stack : JSON.stringify(err)),
+                false, 'warning');
         }
         await ns.sleep(options['interval']);
     }
