@@ -174,6 +174,7 @@ async function mainLoop(ns) {
     await checkIfBnIsComplete(ns, player);
     await checkOnRunningScripts(ns, player);
     await maybeDoCasino(ns, player);
+    await maybeDoInfiltration(ns, player, stocksValue);
     await maybeInstallAugmentations(ns, player);
 }
 
