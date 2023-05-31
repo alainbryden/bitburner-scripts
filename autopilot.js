@@ -351,9 +351,12 @@ async function checkOnRunningScripts(ns, player) {
                 '/Temp/servers-hack-req.txt', incomeByServer.map(s => s.hostname));
             const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
                 .reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, 0]);
-            log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
-            launchScriptHelper(ns, 'spend-hacknet-hashes.js',
-                ["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
+            if (bestServer) {
+                log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
+                launchScriptHelper(ns, 'spend-hacknet-hashes.js',
+                    ["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
+            } else
+                log(ns, `WARNING: strServerIncomeInfo was not empty, but could not determine best server:\n${strServerIncomeInfo}`)
         }
     }
 
@@ -652,11 +655,14 @@ async function manageReservedMoney(ns, player, stocksValue) {
  * @param {NS} ns */
 function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
     ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
-    const pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
-    if (!pid)
-        log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
-    else
+    let pid, err;
+    try { pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args); }
+    catch (e) { err = e; }
+    if (pid)
         log(ns, `INFO: Launched ${baseScriptName} (pid: ${pid}) with args: [${args.join(", ")}]`, true);
+    else
+        log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]` +
+            err ? `\nCaught: ` + (typeof err === 'string' ? err : err.message || JSON.stringify(err)) : '', true, 'error');
     return pid;
 }
 
