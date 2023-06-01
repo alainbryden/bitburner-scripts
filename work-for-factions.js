@@ -612,11 +612,11 @@ async function doGymTraining(ns, reqStats) {
     }
 
     // Gets the time to fill Exp requirements.
-    async function getSkillEta(skill, reqStats, player) {
+    async function getSkillEta(skill, reqStats, player, bnStatMult) {
         const statExpMult = player.mults[skill + "_exp"],
             expPerMilli = ((Math.ceil(statExpMult * 10000) / 10000) * bestGymSkillMult) / 1000,
             currentExp = player.exp[skill],
-            statMult = player.mults[skill],
+            statMult = player.mults[skill] * bnStatMult,
             totalExpForLevel = Math.exp((reqStats / statMult + 200) / 32) - 534.6,
             requiredExp = totalExpForLevel - currentExp
 
@@ -641,7 +641,8 @@ async function doGymTraining(ns, reqStats) {
         bestGymCostMult = 20,
         baseGymCost = 120,
         stats = ["strength", "defense", "dexterity", "agility"],
-        gymCost = await getGymCost(await getSkillEta(stats[currentStat], reqStats, player)),
+        bnStatMults = [bitnodeMultipliers.StrengthLevelMultiplier, bitnodeMultipliers.DefenseLevelMultiplier, bitnodeMultipliers.DexterityLevelMultiplier, bitnodeMultipliers.AgilityLevelMultiplier],
+        gymCost = await getGymCost(await getSkillEta(stats[currentStat], reqStats, player, bnStatMults[currentStat])),
         travelCost = (player.city != bestGymCity) ? 200000 : 0
 
     if ((player.money - travelCost) < gymCost) return ns.print(`Warn: You're too poor to finish training, get at least ${gymCost + travelCost} money`)
@@ -652,7 +653,7 @@ async function doGymTraining(ns, reqStats) {
         player = await getPlayerInfo(ns);
 
         let statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility],
-            eta = await getSkillEta(stats[currentStat], reqStats, player)
+            eta = await getSkillEta(stats[currentStat], reqStats, player, bnStatMults[currentStat])
 
         if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
         if (!isWorking) {
@@ -663,11 +664,11 @@ async function doGymTraining(ns, reqStats) {
             ns.print(`SUCCESS: ${stats[currentStat]} stat requirement completed.`);
             currentStat += 1;
             if (currentStat >= stats.length) currentStat = 0; 
-            await stop()
+            await stop(ns)
             isWorking = false;
         }
 
-        await ns.sleep(eta < loopSleepInterval ? eta : loopSleepInterval);
+        await ns.sleep(Math.min(Math.max(eta, 200), loopSleepInterval));
     }
 
     const strRequirements = `${reqStats} of each combat stat (Have ` +
