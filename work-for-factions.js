@@ -601,10 +601,13 @@ export async function commitCrime(ns, reqKills, reqKarma, reqStats, doFastCrimes
     return true;
 }
 
-/** @param {NS} ns */
+/**
+ * @param {NS} ns 
+ * @returns {Promise<boolean>} true if work was done
+*/
 async function doGymTraining(ns, reqStats) {
     // ToDo: consider adding option to limit training money
-    // ToDo: fallback to available gym if no travel, stop training if money disappeared->sleeve.js
+    // ToDo: stop training if money disappeared->sleeve.js
     async function getGymCost(etaMilli, server, costMult) {
         const backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, [server]);
         return baseGymCost * costMult * (etaMilli / 1000) * (backdoored ? .9 : 1);
@@ -630,10 +633,11 @@ async function doGymTraining(ns, reqStats) {
     }
 
     async function recalculateGyms() {
-        gymByCity.forEach(async entry => {
+        for (let i = 0; i < gymByCity.length; ++i) {
+            let entry = gymByCity[i]
             entry[5] = await getSkillEta(stats[currentStat], reqStats, player, bnStatMults[currentStat], entry[3])
-            entry[6] = await getGymCost(entry[5], entry[2], entry[4]) + (player.city != entry[0]) ? 200000 : 0
-        })
+            entry[6] = await getGymCost(entry[5], entry[2], entry[4]) + ((player.city != entry[0]) ? 200000 : 0)
+        }
         bestAvailableGym = gymByCity.filter(entry => entry[6] < player.money).sort((entry1, entry2) => entry1[5] - entry2[5])[0]
         cheapestGym = gymByCity.sort((entry1, entry2) => entry1[6] - entry2[6])[0]
     }
@@ -642,7 +646,8 @@ async function doGymTraining(ns, reqStats) {
         isWorking = false,
         currentStat = 0,
         bestAvailableGym,
-        cheapestGym
+        cheapestGym,
+        statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility]
 
     const baseGymCost = 120,
         statForever = reqStats >= Number.MAX_SAFE_INTEGER,
@@ -656,7 +661,15 @@ async function doGymTraining(ns, reqStats) {
         stats = ["strength", "defense", "dexterity", "agility"],
         bnStatMults = [bitnodeMultipliers.StrengthLevelMultiplier, bitnodeMultipliers.DefenseLevelMultiplier, bitnodeMultipliers.DexterityLevelMultiplier, bitnodeMultipliers.AgilityLevelMultiplier]
 
-        recalculateGyms()
+    while (statValues[currentStat] >= reqStats) {
+        currentStat += 1;
+        if (currentStat >= stats.length) {
+            ns.print(`tried to start training stats to ${reqStats} but all stats were already high enough`)
+            return false
+        }
+    }
+
+    await recalculateGyms()
 
     if (!bestAvailableGym) return ns.print(`Warn: You're too poor to finish training, get at least ${cheapestGym[6]} money`)
     // Travels to gyms city since ns.singularity.gymWorkout() requires that the location of the player is the same as the gym
@@ -671,7 +684,7 @@ async function doGymTraining(ns, reqStats) {
         if (!isWorking) {
             isWorking = await gymTrain(bestAvailableGym[1], stats[currentStat], shouldFocus);
         }
-        ns.print(`Currently at ${statValues[currentStat]} ${stats[currentStat]}, out of ${reqStats}` + ` (ETA: ${formatDuration(eta)})`);
+        ns.print(`Currently at ${statValues[currentStat]} ${stats[currentStat]}, out of ${reqStats}` + ` (ETA: ${formatDuration(bestAvailableGym[5])})`);
         if (statValues[currentStat] >= reqStats) {
             ns.print(`SUCCESS: ${stats[currentStat]} stat requirement completed.`);
             currentStat += 1;
@@ -680,8 +693,8 @@ async function doGymTraining(ns, reqStats) {
             isWorking = false;
         }
 
-        await ns.sleep(Math.min(Math.max(eta, 200), loopSleepInterval));
-        recalculateGyms()
+        await ns.sleep(Math.min(Math.max(bestAvailableGym[5], 200), loopSleepInterval));
+        await recalculateGyms()
     }
 
     const strRequirements = `${reqStats} of each combat stat (Have ` +
