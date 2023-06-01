@@ -607,7 +607,7 @@ async function doGymTraining(ns, reqStats) {
     // ToDo: fallback to available gym if no travel, stop training if money disappeared->sleeve.js
     async function getGymCost(etaMilli) {
         const bestGymServer = "powerhouse-fitness";
-        const backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, bestGymServer);
+        const backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, [bestGymServer]);
         return baseGymCost * bestGymCostMult * (etaMilli / 1000) * (backdoored ? .9 : 1);
     }
 
