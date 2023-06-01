@@ -85,7 +85,8 @@ export async function main(ns) {
         }
         catch (err) {
             log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+                (typeof err === 'string' ? err : err?.stack ? err.stack : JSON.stringify(err)),
+                false, 'warning');
         }
         await ns.sleep(options['interval']);
     }
@@ -149,7 +150,7 @@ async function persistConfigChanges(ns) {
     const configPath = `${ns.getScriptName()}.config.txt`
     const currentConfig = ns.read(configPath);
     if ((changedArgs.length > 2 || currentConfig) && changedArgs != currentConfig) {
-        await ns.write(configPath, changedArgs, "w");
+        ns.write(configPath, changedArgs, "w");
         log(ns, `INFO: Updated "${configPath}" to persist the most recent run args through resets: ${changedArgs}`, true, 'info');
     }
 }
@@ -166,7 +167,7 @@ async function mainLoop(ns) {
     const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     let stocksValue = 0;
     try { stocksValue = await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
-    await manageReservedMoney(ns, player, stocksValue);
+    manageReservedMoney(ns, player, stocksValue);
     await checkOnDaedalusStatus(ns, player, stocksValue);
     await checkIfBnIsComplete(ns, player);
     await checkOnRunningScripts(ns, player);
@@ -233,7 +234,7 @@ async function checkIfBnIsComplete(ns, player) {
     const text = `BN ${resetInfo.currentNode}.${(dictOwnedSourceFiles[resetInfo.currentNode] || 0) + 1} completed at ` +
         `${formatDuration(getTimeInBitnode())} ` +
         `(${(player.skills.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
-    await persist_log(ns, text);
+    persist_log(ns, text);
     log(ns, `SUCCESS: ${text}`, true, 'success');
 
     // Run the --on-completion-script if specified
@@ -268,15 +269,14 @@ async function checkIfBnIsComplete(ns, player) {
     if (pid) await waitForProcessToComplete(ns, pid);
 
     // Use the new special singularity function to automate entering a new BN
-    pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
-        '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
+    pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`, null, [nextBn, ns.getScriptName()]);
     if (pid) {
         log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
         await waitForProcessToComplete(ns, pid);
         log(ns, `WARNING: Process is done running, why am I still here? Sleeping 10 seconds...`, true, 'error')
         await ns.sleep(10000);
     }
-    await persist_log(ns, log(ns, `ERROR: Tried destroy the bitnode (pid=${pid}), but we're still here...`, true, 'error'));
+    persist_log(ns, log(ns, `ERROR: Tried destroy the bitnode (pid=${pid}), but we're still here...`, true, 'error'));
     //return bnCompletionSuppressed = true; // Don't suppress bn Completion, try again on our next loop.
 }
 
@@ -351,9 +351,12 @@ async function checkOnRunningScripts(ns, player) {
                 '/Temp/servers-hack-req.txt', incomeByServer.map(s => s.hostname));
             const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
                 .reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, 0]);
-            log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
-            launchScriptHelper(ns, 'spend-hacknet-hashes.js',
-                ["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
+            if (bestServer) {
+                log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
+                launchScriptHelper(ns, 'spend-hacknet-hashes.js',
+                    ["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
+            } else
+                log(ns, `WARNING: strServerIncomeInfo was not empty, but could not determine best server:\n${strServerIncomeInfo}`)
         }
     }
 
@@ -495,7 +498,7 @@ async function maybeInstallAugmentations(ns, player) {
     // If we previously attempted to reserve money for an augmentation purchase order, do a fresh facman run to ensure it's still available
     if (reservedPurchase && installCountdown <= Date.now()) {
         log(ns, "INFO: Manually running faction-manager.js to ensure previously reserved purchase is still obtainable.");
-        await ns.write(factionManagerOutputFile, "", "w"); // Reset the output file to ensure it isn't stale
+        ns.write(factionManagerOutputFile, "", "w"); // Reset the output file to ensure it isn't stale
         const pid = launchScriptHelper(ns, 'faction-manager.js');
         await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down (and output to be generated)
     }
@@ -547,7 +550,7 @@ async function maybeInstallAugmentations(ns, player) {
             log(ns, `INFO: The augmentation purchase we can afford has increased from ${formatMoney(reservedPurchase)} ` +
                 `to ${formatMoney(totalCost)}. Resetting the timer before we install augmentations.`);
         installCountdown = Date.now() + options['install-countdown']; // Each time we can afford more augs, reset the install delay timer
-        await ns.write("reserve.txt", totalCost, "w"); // Should prevent other scripts from spending this money
+        ns.write("reserve.txt", totalCost, "w"); // Should prevent other scripts from spending this money
     }
     // We must wait until the configured cooldown elapses before we install augs.
     if (installCountdown > Date.now()) {
@@ -560,7 +563,7 @@ async function maybeInstallAugmentations(ns, player) {
 
     // Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
     const resetLog = `Invoking ascend.js at ${formatDuration(getTimeInAug()).padEnd(11)} since last aug to install: ${augSummary}`;
-    await persist_log(ns, log(ns, resetLog, true, 'info'));
+    persist_log(ns, log(ns, resetLog, true, 'info'));
 
     // Kick off ascend.js
     let errLog;
@@ -575,7 +578,7 @@ async function maybeInstallAugmentations(ns, player) {
     } else
         errLog = `ERROR: Failed to launch ascend.js (pid == 0). Will try again later`;
     // If we got this far, something went wrong
-    await persist_log(ns, log(ns, errLog, true, 'error'));
+    persist_log(ns, log(ns, errLog, true, 'error'));
 }
 
 /** Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit
@@ -618,11 +621,11 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
 /** Consolidated logic for all the times we want to reserve money
  * @param {NS} ns 
  * @param {Player} player */
-async function manageReservedMoney(ns, player, stocksValue) {
+function manageReservedMoney(ns, player, stocksValue) {
     if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
     const currentReserve = Number(ns.read("reserve.txt") || 0);
     if (reserveForDaedalus) // Reserve 100b to get the daedalus invite
-        return currentReserve == 100E9 ? true : await ns.write("reserve.txt", 100E9, "w");
+        return currentReserve == 100E9 ? true : ns.write("reserve.txt", 100E9, "w");
     // Otherwise, reserve money for stocks for a while, as it's our main source of income early in the BN
     // It also acts as a decent way to save up for augmentations
     const minStockValue = 8E9; // At a minimum 8 of the 10 billion earned from the casino must be reserved for buying stock
@@ -631,7 +634,7 @@ async function manageReservedMoney(ns, player, stocksValue) {
     const reserveCap = 1E12; // As we start start to earn crazy money, we will hit the stock market cap, so cap the maximum reserve
     // Dynamically update reserved cash based on how much money is already converted to stocks.
     const reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));
-    return currentReserve == reserve ? true : await ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
+    return currentReserve == reserve ? true : ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
     // NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
     // - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
     // - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores 
@@ -639,11 +642,11 @@ async function manageReservedMoney(ns, player, stocksValue) {
     // - Once high-hack/gang income is achieved, this 8B will not be missed anyway. 
     /*
     if(!ranCasino) { // In practice, 
-        await ns.write("reserve.txt", 300000, "w"); // Prevent other scripts from spending our casino seed money
+        ns.write("reserve.txt", 300000, "w"); // Prevent other scripts from spending our casino seed money
         return moneyReserved = true;
     }
     // Otherwise, clear any reserve we previously had
-    if(moneyReserved) await ns.write("reserve.txt", 0, "w"); // Remove the casino reserve we would have placed
+    if(moneyReserved) ns.write("reserve.txt", 0, "w"); // Remove the casino reserve we would have placed
     return moneyReserved = false;
     */
 }
@@ -652,11 +655,14 @@ async function manageReservedMoney(ns, player, stocksValue) {
  * @param {NS} ns */
 function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
     ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
-    const pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args);
-    if (!pid)
-        log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]`, true, 'error');
-    else
+    let pid, err;
+    try { pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args); }
+    catch (e) { err = e; }
+    if (pid)
         log(ns, `INFO: Launched ${baseScriptName} (pid: ${pid}) with args: [${args.join(", ")}]`, true);
+    else
+        log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]` +
+            err ? `\nCaught: ` + (typeof err === 'string' ? err : err.message || JSON.stringify(err)) : '', true, 'error');
     return pid;
 }
 
@@ -673,6 +679,6 @@ function setStatus(ns, status, uniquePart = null) {
 
 /** Append the specified text (with timestamp) to a persistent log in the home directory
  * @param {NS} ns */
-async function persist_log(ns, text) {
-    await ns.write(persistentLog, `${(new Date()).toISOString().substring(0, 19)} ${text}\n`, "a")
+function persist_log(ns, text) {
+    ns.write(persistentLog, `${(new Date()).toISOString().substring(0, 19)} ${text}\n`, "a")
 }
