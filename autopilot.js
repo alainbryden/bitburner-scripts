@@ -88,7 +88,8 @@ export async function main(ns) {
         }
         catch (err) {
             log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+                (typeof err === 'string' ? err : err?.stack ? err.stack : JSON.stringify(err)),
+                false, 'warning');
         }
         await ns.sleep(options['interval']);
     }
@@ -272,8 +273,7 @@ async function checkIfBnIsComplete(ns, player) {
     if (pid) await waitForProcessToComplete(ns, pid);
 
     // Use the new special singularity function to automate entering a new BN
-    pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`,
-        '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
+    pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`, null, [nextBn, ns.getScriptName()]);
     if (pid) {
         log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
         await waitForProcessToComplete(ns, pid);
