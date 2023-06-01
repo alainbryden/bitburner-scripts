@@ -9,12 +9,13 @@ const argsSchema = [
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
-    ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
+    ['no-focus', false], // Disable focusing, and forces study/faction/company/crime work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
     ['training-stat-per-multi-threshold', 100], // Heuristic: Estimate that we can train this many levels for every mult / exp_mult we have in a reasonable amount of time.
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
-    ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
+    ['no-crime', false], // Disable doing crimes at all.
+    ['no-gym', false], // Disable training in the gym.
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
     ['fast-crimes-only', false], // Assasination and Heist are so slow, I can see people wanting to disable them just so they can interrupt at will.
     ['invites-only', false], // Just work to get invites, don't work for augmentations / faction rep
@@ -350,7 +351,7 @@ async function mainLoop(ns) {
     }
     if (!foundWork && !options['no-crime']) { // Otherwise, kill some time by doing crimes for a little while
         ns.print(`INFO: Nothing to do. Doing a little crime...`);
-        await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
+        await commitCrime(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
     } else if (!foundWork) { // If our hands our tied, twiddle our thumbs a bit
         ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
         await ns.sleep(30000);
@@ -393,6 +394,7 @@ async function earnFactionInvite(ns, factionName) {
     let workedForInvite = false;
     // If committing crimes can help us join a faction - we know how to do that
     let doCrime = false;
+    let doGym = false;
     if ((requirement = requiredKarmaByFaction[factionName]) && -ns.heart.break() < requirement) {
         ns.print(`${reasonPrefix} you have insufficient Karma. Need: ${-requirement}, Have: ${ns.heart.break()}`);
         doCrime = true;
@@ -432,12 +434,16 @@ async function earnFactionInvite(ns, factionName) {
                     `${formatNumberShort(player.mults[s])}*${formatNumberShort(player.mults[`${s}_exp`])}*` +
                     `${formatNumberShort(bitnodeMultipliers[`${title(s)}LevelMultiplier`])}*` +
                     `${formatNumberShort(bitnodeMultipliers.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
-        doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
+        doGym = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
-    if (doCrime && options['no-crime'])
-        return ns.print(`${reasonPrefix} Doing crime to meet faction requirements is disabled. (--no-crime or --no-focus)`);
+    if (doCrime && options['no-crime'] && !doGym)
+        return ns.print(`${reasonPrefix} Doing crime to meet faction requirements is disabled. (--no-crime)`);
+    if (doGym && options['no-gym'])
+        return ns.print(`${reasonPrefix} Going to the gym to meet faction requirements is disabled. (--no-gym)`);
     if (doCrime)
-        workedForInvite = await crimeForKillsKarmaStats(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
+        workedForInvite = await commitCrime(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
+    if (doGym)
+        workedForInvite = await doGymTraining(ns, requiredCombatByFaction[factionName] || 0);
 
     // Study for hack levels if that's what's keeping us
     // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
@@ -545,7 +551,7 @@ async function goToCity(ns, cityName) {
 }
 
 /** @param {NS} ns */
-export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
+export async function commitCrime(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
@@ -591,13 +597,14 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         player = await getPlayerInfo(ns);
     }
 
-    await doGymTraining(reqStats, ns)
-
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
     return true;
 }
 
-async function doGymTraining(reqStats, ns) {
+/** @param {NS} ns */
+async function doGymTraining(ns, reqStats) {
+    // ToDo: consider adding option to limit training money
+    // ToDo: fallback to available gym if no travel, stop training if money disappeared->sleeve.js
     async function getGymCost(etaMilli) {
         const bestGymServer = "powerhouse-fitness";
         const backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, bestGymServer);
@@ -614,6 +621,13 @@ async function doGymTraining(reqStats, ns) {
             requiredExp = totalExpForLevel - currentExp
 
         return (requiredExp / expPerMilli);
+    }
+
+    /**
+     * @returns {Promise<boolean>}
+     */
+    async function gymTrain(gym, stat, focus) {
+        return (await getNsDataThroughFile(ns, `ns.singularity.gymWorkout(ns.args[0], ns.args[1], ns.args[2])`, null, [gym, stat, focus]));
     }
 
     let player = await getPlayerInfo(ns),
@@ -642,20 +656,24 @@ async function doGymTraining(reqStats, ns) {
 
         if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
         if (!isWorking) {
-            ns.singularity.gymWorkout(bestGym, stats[currentStat], shouldFocus)
-            isWorking = true;
+            isWorking = await gymTrain(bestGym, stats[currentStat], shouldFocus);
         }
         ns.print(`Currently at ${statValues[currentStat]} ${stats[currentStat]}, out of ${reqStats}` + ` (ETA: ${formatDuration(eta)})`);
         if (statValues[currentStat] >= reqStats) {
             ns.print(`SUCCESS: ${stats[currentStat]} stat requirement completed.`);
             currentStat += 1;
             if (currentStat >= stats.length) currentStat = 0; 
-            ns.singularity.stopAction();
+            await stop()
             isWorking = false;
         }
 
         await ns.sleep(eta < loopSleepInterval ? eta : loopSleepInterval);
     }
+
+    const strRequirements = `${reqStats} of each combat stat (Have ` +
+        `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`
+    ns.print(`Done gym training. Reached ${strRequirements}`);
+    return true;
 }
 
 function anyStatsDeficient(player, reqStats) {
