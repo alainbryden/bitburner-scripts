@@ -647,6 +647,7 @@ async function doGymTraining(ns, reqStats) {
         currentStat = 0,
         bestAvailableGym,
         cheapestGym,
+        lastStatusUpdateTime = 0,
         statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility]
 
     const baseGymCost = 120,
@@ -684,7 +685,11 @@ async function doGymTraining(ns, reqStats) {
         if (!isWorking) {
             isWorking = await gymTrain(bestAvailableGym[1], stats[currentStat], shouldFocus);
         }
-        ns.print(`Currently at ${statValues[currentStat]} ${stats[currentStat]}, out of ${reqStats}` + ` (ETA: ${formatDuration(bestAvailableGym[5])})`);
+        if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+            lastStatusUpdateTime = Date.now();
+            log(ns, `Training "${stats[currentStat]}" at ${bestAvailableGym[1]}. Currently at ${reqStats}/${statValues[currentStat]}.`
+                + ` (ETA: ${formatDuration(bestAvailableGym[5])})`, false, 'info');
+        }
         if (statValues[currentStat] >= reqStats) {
             ns.print(`SUCCESS: ${stats[currentStat]} stat requirement completed.`);
             currentStat += 1;
