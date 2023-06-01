@@ -499,7 +499,7 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
     let infiltrator = findScriptHelper('infiltrator.js', await getRunningScripts(ns));
     if (infiltrator) return
 
-    const bitnodeMults = await tryGetBitNodeMultipliers(ns) || {InfiltrationMoney: 1, InfiltrationRep: 1};
+    const bitnodeMults = await tryGetBitNodeMultipliers(ns) || {InfiltrationMoney: (resetInfo.currentNode != 8) ? 1 : 0, InfiltrationRep: 1};
 
     let pid = launchScriptHelper(ns, 'infiltrator.js', ['--info'], '', true);
     if (pid) await waitForProcessToComplete(ns, pid);
@@ -510,12 +510,12 @@ async function maybeDoInfiltration(ns, player, stocksValue) {
         stack = JSON.parse(stack)
     }
 
-    if ((player.money + stocksValue) < 3e10 && resetInfo.currentNode != 8 && bitnodeMults?.InfiltrationMoney > 0.1 && !ranGetMoney){
+    if ((player.money + stocksValue) < 3e10 && bitnodeMults?.InfiltrationMoney > 0.1 && !ranGetMoney){
         launchScriptHelper(ns, 'infiltrator.js', ["--getMoney", "20e12", "--max-loop", 4]); 
         ranGetMoney = true
     } else if (player.money > 200000 && bitnodeMults?.InfiltrationRep > 0.1 && stack?.length > 0){
         launchScriptHelper(ns, 'infiltrator.js');
-    } else if ((player.money + stocksValue) < 20e12 && resetInfo.currentNode != 8 && bitnodeMults?.InfiltrationMoney > 0.1) {
+    } else if ((player.money + stocksValue) < 20e12 * bitnodeMults?.InfiltrationMoney) {
         // Infiltrate for money until we have 20t, after which it is fairly certainly irrelevant (good infiltration is ~20b which means ~0.1% ROI on Stocks)
         launchScriptHelper(ns, 'infiltrator.js', ["--getMoney", "20e12", "--max-loop", 1]);
     }
