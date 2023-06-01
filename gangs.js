@@ -189,7 +189,7 @@ async function mainLoop(ns) {
             territoryNextTick = lastLoopTime + territoryTickTime;
             territoryTickDetected = true;
             log(ns, `INFO: Others gangs power updated (sometime in the past ${formatDuration(thisLoopStart - lastLoopTime)}. ` +
-                `Will start waiting for next tick in: ${formatDuration(territoryNextTick - thisLoopStart - territoryTickWaitPadding)}`, false, 'warning');
+                `Will start waiting for next tick in: ${formatDuration(territoryNextTick - thisLoopStart - territoryTickWaitPadding)}`, false);
         } else if (lastOtherGangInfo == null)
             log(ns, `INFO: Waiting to detect territory to tick. (Waiting for other gangs' power to update.) Will check every ${formatDuration(updateInterval)}...`);
         lastOtherGangInfo = otherGangInfo;
