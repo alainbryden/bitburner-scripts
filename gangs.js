@@ -219,7 +219,8 @@ async function onTerritoryTick(ns, myGangInfo) {
         if (consecutiveTerritoryDetections > 5 && territoryTickWaitPadding > updateInterval)
             territoryTickWaitPadding = Math.max(updateInterval, territoryTickWaitPadding - updateInterval);
     } else if (!warfareFinished) {
-        log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, false, 'warning');
+        log(ns, `WARNING: Power stats weren't updated, assuming we've lost track of territory tick`, false,
+            consecutiveTerritoryDetections == 0 ? 'warning' : null); // Only pop-up a warning if this happens two territory ticks in a row (or more)
         consecutiveTerritoryDetections = 0;
         territoryTickWaitPadding = Math.min(2000, territoryTickWaitPadding + updateInterval); // Start waiting earlier to account for observed lag.
         territoryNextTick -= updateInterval; // Prep for the next tick a little earlier, in case we just lagged behind the tick by a bit.
@@ -463,6 +464,8 @@ async function doUpgradePurchases(ns, purchaseOrder) {
             `\n  Failed: ${getOrderSummary(failed)}\n  Succeeded: ${getOrderSummary(succeeded)}`, false, 'error');
 }
 
+let sequentialMisfires = 0;
+
 /** @param {NS} ns 
  * Helper to wait for the game to update stats (typically 2 seconds per cycle) **/
 async function waitForGameUpdate(ns, oldGangInfo) {
@@ -473,11 +476,15 @@ async function waitForGameUpdate(ns, oldGangInfo) {
     const start = Date.now()
     while (Date.now() < start + maxWaitTime) {
         var latestGangInfo = await getNsDataThroughFile(ns, 'ns.gang.getGangInformation()');
-        if (JSON.stringify(latestGangInfo) != JSON.stringify(oldGangInfo))
+        if (JSON.stringify(latestGangInfo) != JSON.stringify(oldGangInfo)) {
+            sequentialMisfires = 0;
             return latestGangInfo;
+        }
         await ns.sleep(Math.min(waitInterval, start + maxWaitTime - Date.now()));
     }
-    log(ns, `WARNING: Max wait time ${maxWaitTime} exceeded while waiting for old gang info to update.\n${JSON.stringify(oldGangInfo)}\n===\n${JSON.stringify(latestGangInfo)}`, false, 'warning');
+    sequentialMisfires++;
+    log(ns, `WARNING: Max wait time ${maxWaitTime} exceeded while waiting for old gang info to update.\n${JSON.stringify(oldGangInfo)}\n===\n${JSON.stringify(latestGangInfo)}`,
+        false, sequentialMisfires < 2 ? null : 'warning'); // Only pop-up an alert if this happens twice in a row (or more)
     territoryTickDetected = false;
     return latestGangInfo;
 }
