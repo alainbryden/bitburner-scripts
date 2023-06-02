@@ -2,3 +2,4 @@
 *.txt
 .vscode/*.*
 *.ts
+.prettierrc

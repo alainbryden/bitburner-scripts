@@ -25,8 +25,8 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** @param {NS} ns 
- * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
+/** This script is meant to do all the things best done when ascending (in a generally ideal order) 
+ * @param {NS} ns */
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
