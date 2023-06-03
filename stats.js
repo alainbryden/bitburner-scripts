@@ -261,6 +261,10 @@ export async function main(ns) {
     const bitNode = resetInfo.currentNode;
     disableLogs(ns, ['sleep']);
 
+    // Globals need to reset at startup. Otherwise, they can survive e.g. flumes and new BNs and return stale results
+    playerInBladeburner = false;
+    nodeMap = {};
+
     // Hook script exit to clean up after ourselves.
     ns.atExit(() => hook1.innerHTML = hook0.innerHTML = "")
 
