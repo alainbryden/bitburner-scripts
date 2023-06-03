@@ -14,12 +14,50 @@ export function autocomplete(data, args) {
     return [];
 }
 
-const doc = eval('document'),
-    hook0 = doc.getElementById('overview-extra-hook-0'),
-    hook1 = doc.getElementById('overview-extra-hook-1')
+let doc, hook0, hook1;
+let playerInBladeburner = false, nodeMap = {}
 
-let playerInBladeburner = false,
-    nodeMap = {}
+/** @param {NS} ns **/
+export async function main(ns) {
+    const options = getConfiguration(ns, argsSchema);
+    if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+
+    const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
+    let resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
+    const bitNode = resetInfo.currentNode;
+    disableLogs(ns, ['sleep']);
+
+    // Globals need to reset at startup. Otherwise, they can survive e.g. flumes and new BNs and return stale results
+    playerInBladeburner = false;
+    nodeMap = {};
+    doc = eval('document');
+    hook0 = doc.getElementById('overview-extra-hook-0');
+    hook1 = doc.getElementById('overview-extra-hook-1');
+
+    // Hook script exit to clean up after ourselves.
+    ns.atExit(() => hook1.innerHTML = hook0.innerHTML = "")
+
+    addCSS(doc);
+
+    prepareHudElements(await getHudData(ns, bitNode, dictSourceFiles, options))
+
+    // Main stats update loop
+    while (true) {
+        try {
+            const hudData = await getHudData(ns, bitNode, dictSourceFiles, options)
+
+            // update HUD elements with info collected above.
+            for (const [header, show, formattedValue, toolTip] of hudData) {
+                updateHudElement(header, show, formattedValue, toolTip)
+            }
+        } catch (err) {
+            // Might run out of ram from time to time, since we use it dynamically
+            log(ns, `WARNING: stats.js Caught (and suppressed) an unexpected error in the main loop. Update Skipped:\n` +
+                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+        }
+        await ns.sleep(1000);
+    }
+}
 
 function prepareHudElements(hudData) {
     const newline = (id, txt, toolTip = "") => {
@@ -249,45 +287,6 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     }
 
     return hudData
-}
-
-/** @param {NS} ns **/
-export async function main(ns) {
-    const options = getConfiguration(ns, argsSchema);
-    if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
-
-    const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
-    let resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
-    const bitNode = resetInfo.currentNode;
-    disableLogs(ns, ['sleep']);
-
-    // Globals need to reset at startup. Otherwise, they can survive e.g. flumes and new BNs and return stale results
-    playerInBladeburner = false;
-    nodeMap = {};
-
-    // Hook script exit to clean up after ourselves.
-    ns.atExit(() => hook1.innerHTML = hook0.innerHTML = "")
-
-    addCSS(doc);
-
-    prepareHudElements(await getHudData(ns, bitNode, dictSourceFiles, options))
-
-    // Main stats update loop
-    while (true) {
-        try {
-            const hudData = await getHudData(ns, bitNode, dictSourceFiles, options)
-
-            // update HUD elements with info collected above.
-            for (const [header, show, formattedValue, toolTip] of hudData) {
-                updateHudElement(header, show, formattedValue, toolTip)
-            }
-        } catch (err) {
-            // Might run out of ram from time to time, since we use it dynamically
-            log(ns, `WARNING: stats.js Caught (and suppressed) an unexpected error in the main loop. Update Skipped:\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
-        }
-        await ns.sleep(1000);
-    }
 }
 
 function formatSixSigFigs(value, minDecimalPlaces = 0, maxDecimalPlaces = 0) {
