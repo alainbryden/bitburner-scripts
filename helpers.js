@@ -462,11 +462,14 @@ export async function getStockSymbols(ns) {
 export async function getStocksValue(ns) {
     let stockSymbols = await getStockSymbols(ns);
     if (stockSymbols == null) return 0; // No TIX API Access
-    const helper = async (fn) => await getNsDataThroughFile(ns,
-        `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${fn}(sym)]))`, `/Temp/stock-${fn}.txt`, stockSymbols);
-    const askPrices = await helper('getAskPrice');
-    const bidPrices = await helper('getBidPrice');
-    const positions = await helper('getPosition');
+    const stockGetAll = async (fn) => await getNsDataThroughFile(ns,
+        `(() => { try { return Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${fn}(sym)])); } catch { return null; } })()`,
+        `/Temp/stock-${fn}-all.txt`, stockSymbols);
+    const askPrices = await stockGetAll('getAskPrice');
+    // Workaround for Bug #304: If we lost TIX access, our cache of stock symbols will still be valid, but we won't be able to get prices.
+    if (askPrices == null) return 0; // No TIX API Access
+    const bidPrices = await stockGetAll('getBidPrice');
+    const positions = await stockGetAll('getPosition');
     return stockSymbols.map(sym => ({ sym, pos: positions[sym], ask: askPrices[sym], bid: bidPrices[sym] }))
         .reduce((total, stk) => total + (stk.pos[0] * stk.bid) /* Long Value */ + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) /* Short Value */
             // Subtract commission only if we have one or more shares (this is money we won't get when we sell our position)
