@@ -159,7 +159,7 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 async function loadStartupData(ns) {
-    repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()', '/Temp/favor-to-donate.txt');
+    repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     const playerInfo = await getPlayerInfo(ns);
     const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
     bitnodeMultipliers = await tryGetBitNodeMultipliers(ns) ||
@@ -268,7 +268,7 @@ async function mainLoop(ns) {
     if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
         if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working in favour of bladeburner progress
             // Check if the player has joined bladeburner (can stop checking once we see they are)
-            playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt');
+            playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()');
             if (playerInBladeburner) {
                 ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
                 await stop(ns); // stop working so bladeburner can run
@@ -532,7 +532,7 @@ async function goToCity(ns, cityName) {
         ns.print(`Already in city ${cityName}`);
         return true;
     }
-    if (await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, '/Temp/travel.txt', [cityName])) {
+    if (await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, null, [cityName])) {
         lastTravel = Date.now()
         log(ns, `Travelled from ${player.city} to ${cityName}`, false, 'info');
         return true;
@@ -575,7 +575,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
-            crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', '/Temp/commitCrime.txt', [crime, focusArg])
+            crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', null, [crime, focusArg])
             if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
         }
         // Periodic status update with progress
@@ -618,7 +618,7 @@ async function study(ns, focus, course, university = null) {
             return;
         }
     }
-    if (await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, focus])) {
+    if (await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, null, [university, course, focus])) {
         log(ns, `Started studying '${course}' at '${university}'`, false, 'success');
         return true;
     }
@@ -629,7 +629,7 @@ async function study(ns, focus, course, university = null) {
 /** @param {NS} ns
  * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
 async function getCurrentWorkInfo(ns) {
-    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()', '/Temp/getCurrentWork.txt')) ?? {};
+    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {};
 }
 
 /** @param {NS} ns
@@ -696,7 +696,7 @@ export async function tryJoinFaction(ns, factionName) {
     var joinedFactions = (await getPlayerInfo(ns)).factions;
     if (joinedFactions.includes(factionName))
         return true;
-    if (!(await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, '/Temp/join-faction.txt', [factionName])))
+    if (!(await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, null, [factionName])))
         return false;
     log(ns, `Joined faction "${factionName}"`, false, 'success');
     return true;
@@ -706,13 +706,13 @@ export async function tryJoinFaction(ns, factionName) {
  * @returns {Promise<Player>} the result of ns.getPlayer() */
 async function getPlayerInfo(ns) {
     //return ns.getPlayer(); // Note: We may decide that we call this frequently enough it is not worth ram-dodging
-    return await getNsDataThroughFile(ns, `ns.getPlayer()`, '/Temp/player-info.txt');
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`);
 }
 
 /** @param {NS} ns
  *  @returns {Promise<string[]>} List of new faction invites */
 async function checkFactionInvites(ns) {
-    return await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()', '/Temp/checkFactionInvitations.txt');
+    return await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()');
 }
 
 /** @param {NS} ns
@@ -724,25 +724,25 @@ async function getGangInfo(ns) {
 /** @param {NS} ns 
  *  @returns {Promise<Number>} Current reputation with the specified faction */
 async function getFactionReputation(ns, factionName) {
-    return await getNsDataThroughFile(ns, `ns.singularity.getFactionRep(ns.args[0])`, '/Temp/getFactionRep.txt', [factionName]);
+    return await getNsDataThroughFile(ns, `ns.singularity.getFactionRep(ns.args[0])`, null, [factionName]);
 }
 
 /** @param {NS} ns
  *  @returns {Promise<Number>} Current reputation with the specified company */
 async function getCompanyReputation(ns, companyName) {
-    return await getNsDataThroughFile(ns, `ns.singularity.getCompanyRep(ns.args[0])`, '/Temp/getCompanyRep.txt', [companyName]);
+    return await getNsDataThroughFile(ns, `ns.singularity.getCompanyRep(ns.args[0])`, null, [companyName]);
 }
 
 /** @param {NS} ns
  *  @returns {Promise<Number>} Current favour with the specified faction */
 async function getCurrentFactionFavour(ns, factionName) {
-    return await getNsDataThroughFile(ns, `ns.singularity.getFactionFavor(ns.args[0])`, '/Temp/getFactionFavor.txt', [factionName]);
+    return await getNsDataThroughFile(ns, `ns.singularity.getFactionFavor(ns.args[0])`, null, [factionName]);
 }
 
 /** @param {NS} ns
  *  @returns {Promise<Number>} The hacking level required for the specified server */
 async function getServerRequiredHackLevel(ns, serverName) {
-    return await getNsDataThroughFile(ns, `ns.getServerRequiredHackingLevel(ns.args[0])`, '/Temp/getServerRequiredHackingLevel.txt', [serverName]);
+    return await getNsDataThroughFile(ns, `ns.getServerRequiredHackingLevel(ns.args[0])`, null, [serverName]);
 }
 
 /** A special check for when we unlock donations with Daedalus, this is usually a good time to reset. 
@@ -868,14 +868,13 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
 
 /** Stop whatever focus work we're currently doing
  * @param {NS} ns */
-async function stop(ns) { return await getNsDataThroughFile(ns, `ns.singularity.stopAction()`, '/Temp/stopAction.txt'); }
+async function stop(ns) { return await getNsDataThroughFile(ns, `ns.singularity.stopAction()`); }
 
 /** Start the specified faction work
  * @param {NS} ns */
 async function startWorkForFaction(ns, factionName, work, focus) {
     //log(ns, `INFO: startWorkForFaction(${factionName}, ${work}, ${focus})`);
-    return await getNsDataThroughFile(ns, `ns.singularity.workForFaction(ns.args[0], ns.args[1], ns.args[2])`,
-        '/Temp/workForFaction.txt', [factionName, work, focus])
+    return await getNsDataThroughFile(ns, `ns.singularity.workForFaction(ns.args[0], ns.args[1], ns.args[2])`, null, [factionName, work, focus])
 }
 
 /** Measure our rep gain rate (per second)
@@ -983,14 +982,13 @@ const serverByCompany = { "Bachman & Associates": "b-and-a", "ECorp": "ecorp", "
 /** Apply to the specified role at the specified company
  * @param {NS} ns */
 async function tryApplyToCompany(ns, company, role) {
-    return await getNsDataThroughFile(ns, `ns.singularity.applyToCompany(ns.args[0], ns.args[1])`, '/Temp/applyToCompany.txt', [company, role])
+    return await getNsDataThroughFile(ns, `ns.singularity.applyToCompany(ns.args[0], ns.args[1])`, null, [company, role])
 }
 
 /** Check if the server associated with the specified company has been backdoored.
  * @param {NS} ns */
 async function checkForBackdoor(ns, companyName) {
-    return await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`,
-        '/Temp/getServer-backdoorInstalled.txt', [serverByCompany[companyName]]);
+    return await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, [serverByCompany[companyName]]);
 }
 
 /** @param {NS} ns */
@@ -1083,9 +1081,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 isWorking = false;
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
-            // TODO: BITBURNER BUG: Game currently inverting this argument. Fix as soon as the game is updated. 
-            let focusArg = shouldFocus ? false : true; // TODO: REMOVE ON BUG FIX
-            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, '/Temp/workForCompany.txt', [companyName, focusArg])) {
+            if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, null, [companyName, shouldFocus])) {
                 isWorking = true;
                 if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
             } else {

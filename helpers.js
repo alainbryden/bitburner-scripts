@@ -127,14 +127,27 @@ export function getFnIsAliveViaNsPs(ns) {
  * Has the capacity to retry if there is a failure (e.g. due to lack of RAM available). Not recommended for performance-critical code.
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {string=} fName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
  **/
-export async function getNsDataThroughFile(ns, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile(ns, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
     return await getNsDataThroughFile_Custom(ns, ns.run, command, fName, args, verbose, maxRetries, retryDelayMs);
+}
+
+/** Convert a command name like "ns.namespace.someFunction(args, args)" into
+ * a default file path for running that command "/Temp/namespace-someFunction.txt" */
+function getDefaultCommandFileName(command, ext = '.txt') {
+    // If prefixed with "ns.", strip that out
+    let fname = command;
+    if (fname.startsWith("ns.")) fname = fname.slice(3);
+    // Remove anything between parentheses
+    fname = fname.replace(/ *\([^)]*\) */g, "");
+    // Replace any dereferencing (dots) with dashes
+    fname = fname.replace(".", "-");
+    return `/Temp/${fname}${ext}`
 }
 
 /**
@@ -145,15 +158,26 @@ export async function getNsDataThroughFile(ns, command, fName, args = [], verbos
  * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  **/
-export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     if (!verbose) disableLogs(ns, ['read']);
-    const commandHash = hashCode(command);
-    fName = fName || `/Temp/${commandHash}-data.txt`;
-    const fNameCommand = (fName || `/Temp/${commandHash}-command`) + '.js'
+    fName = fName || getDefaultCommandFileName(command);
+    const fNameCommand = fName + '.js'
     // Pre-write contents to the file that will allow us to detect if our temp script never got run
     const initialContents = "<Insufficient RAM>";
     ns.write(fName, initialContents, 'w');
+    // TODO: Workaround for v2.3.0 deprecation. Remove when the warning is gone.
+    // Avoid serializing ns.getPlayer() properties that generate warnings
+    if (command === "ns.getPlayer()")
+        command = `( ()=> { let player = ns.getPlayer();
+            const excludeProperties = ['playtimeSinceLastAug', 'playtimeSinceLastBitnode', 'bitNodeN'];
+            return Object.keys(player).reduce((pCopy, key) => {
+                if (!excludeProperties.includes(key))
+                   pCopy[key] = player[key];
+                return pCopy;
+            }, {});
+        })()`;
+
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
     // If an error occurs, it will write an empty file to avoid old results being misread.
@@ -185,7 +209,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
  * @param {NS} ns - The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fileName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {string=} fileName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, the evaluation result of the command is printed to the terminal
  */
@@ -227,7 +251,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
     const required = getExports(ns).filter(e => command.includes(`${e}(`));
     let script = (required.length > 0 ? `import { ${required.join(", ")} } from 'helpers.js'\n` : '') +
         `export async function main(ns) { ${command} }`;
-    fileName = fileName || `/Temp/${hashCode(command)}-command.js`;
+    fileName = fileName || getDefaultCommandFileName(command, '.js');
     if (verbose)
         log(ns, `INFO: Using a temporary script (${fileName}) to execute the command:` +
             `\n  ${command}\nWith the following arguments:    ${JSON.stringify(args)}`);
@@ -380,8 +404,8 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
     // If the user is currently in a given bitnode, they will have its features unlocked
     if (includeLevelsFromCurrentBitnode) {
         try {
-            const bitNodeN = (await fnGetNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).bitNodeN;
-            dictSourceFiles[bitNodeN] = Math.max(3, dictSourceFiles[bitNodeN] || 0);
+            const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt')).currentNode;
+            dictSourceFiles[currentNode] = Math.max(3, dictSourceFiles[currentNode] || 0);
         } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
     return dictSourceFiles;
@@ -438,11 +462,14 @@ export async function getStockSymbols(ns) {
 export async function getStocksValue(ns) {
     let stockSymbols = await getStockSymbols(ns);
     if (stockSymbols == null) return 0; // No TIX API Access
-    const helper = async (fn) => await getNsDataThroughFile(ns,
-        `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${fn}(sym)]))`, `/Temp/stock-${fn}.txt`, stockSymbols);
-    const askPrices = await helper('getAskPrice');
-    const bidPrices = await helper('getBidPrice');
-    const positions = await helper('getPosition');
+    const stockGetAll = async (fn) => await getNsDataThroughFile(ns,
+        `(() => { try { return Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${fn}(sym)])); } catch { return null; } })()`,
+        `/Temp/stock-${fn}-all.txt`, stockSymbols);
+    const askPrices = await stockGetAll('getAskPrice');
+    // Workaround for Bug #304: If we lost TIX access, our cache of stock symbols will still be valid, but we won't be able to get prices.
+    if (askPrices == null) return 0; // No TIX API Access
+    const bidPrices = await stockGetAll('getBidPrice');
+    const positions = await stockGetAll('getPosition');
     return stockSymbols.map(sym => ({ sym, pos: positions[sym], ask: askPrices[sym], bid: bidPrices[sym] }))
         .reduce((total, stk) => total + (stk.pos[0] * stk.bid) /* Long Value */ + stk.pos[2] * (stk.pos[3] * 2 - stk.ask) /* Short Value */
             // Subtract commission only if we have one or more shares (this is money we won't get when we sell our position)

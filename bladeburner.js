@@ -21,8 +21,11 @@ const costAdjustments = {
 // Some bladeburner info gathered at startup and cached
 let skillNames, generalActionNames, contractNames, operationNames, remainingBlackOpsNames, blackOpsRanks;
 let inFaction, haveSimulacrum, lastBlackOpComplete, lowStaminaTriggered, timesTrained, currentTaskEndTime, maxRankNeeded, lastAssignedTask;
-let player, ownedSourceFiles;
+let ownedSourceFiles;
+let player = (/**@returns{Player}*/() => undefined)();
+let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
 let options;
+
 const argsSchema = [
     ['success-threshold', 0.99], // Attempt the best action whose minimum chance of success exceeds this threshold
     ['chaos-recovery-threshold', 50], // Prefer to do "Stealth Retirement" operations to reduce chaos when it reaches this number
@@ -50,14 +53,15 @@ export async function main(ns) {
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['sleep'])
-    player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+    player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     // Ensure we have access to bladeburner
     ownedSourceFiles = await getActiveSourceFiles(ns);
-    //if (!(6 in ownedSourceFiles) && player.bitNodeN != 7) // NOTE: Despite the SF6 description, it seems you don't need SF6
+    //if (!(6 in ownedSourceFiles) && resetInfo.currentNode != 7) // NOTE: Despite the SF6 description, it seems you don't need SF6
     //    return log(ns, "ERROR: You have not yet unlocked bladeburner outside of BNs 6 & 7 (need SF6)", true, 'error');
     if (!(7 in ownedSourceFiles))
         return log(ns, "ERROR: You have not yet unlocked the bladeburner API (need SF7 or to be in BN7)", true, 'error');
-    if (player.bitNodeN == 8)
+    if (resetInfo.currentNode == 8)
         return log(ns, "ERROR: Bladeburner is completely disabled in Bitnode 8 :`(\nHappy stonking", true, 'error');
     // Ensure we've joined bladeburners before proceeding further
     await beingInBladeburner(ns);
@@ -75,10 +79,12 @@ export async function main(ns) {
     }
 }
 
+// Calculate how long we've been in the current bitnode
+function getTimeInBitnode() { return Date.now() - resetInfo.lastNodeReset; }
+
 // Ram dodging helper to execute a parameterless bladeburner function
 const getBBInfo = async (ns, strFunction, ...args) =>
-    await getNsDataThroughFile(ns, `ns.bladeburner.${strFunction}`,
-        `/Temp/bladeburner-${strFunction.split('(')[0]}.txt`, args);
+    await getNsDataThroughFile(ns, `ns.bladeburner.${strFunction}`, null, args);
 // Ram-dodging helper to get information for each item in a list (bit hacky). Temp script will be created such that
 // the first argument recieved is an array of values to map, and any additional arguments are appended afterwards.
 // The strFunction should contain a '%' sign indicating where the elements from the list should be mapped to a single call.
@@ -142,8 +148,7 @@ async function mainLoop(ns) {
     const nextBlackOp = remainingBlackOpsNames.length === 0 ? null : remainingBlackOpsNames[0];
     // If we have completed the last bladeburner operation notify the user that they can leave the BN
     if (nextBlackOp == null && !lastBlackOpComplete) {
-        const time = (await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt')).playtimeSinceLastBitnode;
-        const msg = `Bladeburner has completed the last BlackOp! (At ${formatDuration(time)}). ` +
+        const msg = `Bladeburner has completed the last BlackOp! (At ${formatDuration(getTimeInBitnode())}). ` +
             `You can destroy the Bitnode on the Bladeburner > BlackOps tab.`;
         log(ns, `SUCCESS: ${msg}`, true, 'success');
         ns.alert(msg);
@@ -404,7 +409,7 @@ let lastCanWorkCheckIdle = true;
 async function canDoBladeburnerWork(ns) {
     if (options['ignore-busy-status'] || haveSimulacrum) return true;
     // Check if the player is busy doing something else
-    const busy = await getNsDataThroughFile(ns, 'ns.singularity.isBusy()', '/Temp/isBusy.txt');
+    const busy = await getNsDataThroughFile(ns, 'ns.singularity.isBusy()');
     if (!busy) return lastCanWorkCheckIdle = true;
     if (lastCanWorkCheckIdle)
         log(ns, `WARNING: Cannot perform Bladeburner actions because the player is busy ` +
@@ -416,13 +421,13 @@ async function canDoBladeburnerWork(ns) {
  * Ensure we're in the Bladeburner division */
 async function beingInBladeburner(ns) {
     // Ensure we're in the Bladeburner division. If not, wait until we've joined it.
-    while (!(await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()', '/Temp/bladeburner-inBladeburner.txt'))) {
+    while (!(await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()'))) {
         try {
             if (player.skills.strength < 100 || player.skills.defense < 100 || player.skills.dexterity < 100 || player.skills.agility < 100)
                 log(ns, `Waiting for physical stats >100 to join bladeburner ` +
                     `(Currently Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
             else if (await getBBInfo(ns, 'joinBladeburnerDivision()')) {
-                let message = `SUCCESS: Joined Bladeburner (At ${formatDuration(player.playtimeSinceLastBitnode)} into BitNode)`;
+                let message = `SUCCESS: Joined Bladeburner (At ${formatDuration(getTimeInBitnode())} into BitNode)`;
                 if (9 in ownedSourceFiles && options['disable-spending-hashes'])
                     message += ' --disable-spending-hashes is set, but consider running the following command to give it a boost:\n' +
                         'run spend-hacknet-hashes.js --spend-on Exchange_for_Bladeburner_Rank --spend-on Exchange_for_Bladeburner_SP --liquidate';
@@ -430,7 +435,7 @@ async function beingInBladeburner(ns) {
                 break;
             } else
                 log(ns, 'WARNING: Failed to joined Bladeburner despite physical stats. Will try again...', false, 'warning');
-            player = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/player-info.txt');
+            player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
         }
         catch (err) {
             log(ns, `WARNING: bladeburner.js Caught (and suppressed) an unexpected error while waiting to join bladeburner, but will keep going:\n` +
