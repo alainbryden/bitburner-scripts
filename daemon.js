@@ -33,7 +33,7 @@ const argsSchema = [
     ['n', false], // Can toggle on using hacknet nodes for extra hacking ram (at the expense of hash production)
     ['use-hacknet-nodes', false], // Same as above (kept for backwards compatibility, but these are now called hacknet-servers)
     ['use-hacknet-servers', false], // Same as above, but the game recently renamed these
-    ['hacknet-use-ram-percentage', 0.75]
+    ['hacknet-use-ram-percentage', 0.75],
     ['spend-hashes-for-money-when-under', 10E6], // (Default 10m) Convert 4 hashes to money whenever we're below this amount
     ['disable-spend-hashes', false], // An easy way to set the above to a very large negative number, thus never spending hashes for Money
     ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
