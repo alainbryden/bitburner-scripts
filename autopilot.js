@@ -194,8 +194,9 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
     const bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || { DaedalusAugsRequirement: 1 };
     // Note: A change coming soon will convert DaedalusAugsRequirement from a fractional multiplier, to an integer number of augs. This should support both for now.
     const reqDaedalusAugs = bitNodeMults.DaedalusAugsRequirement < 2 ? Math.round(30 * bitNodeMults.DaedalusAugsRequirement) : bitNodeMults.DaedalusAugsRequirement;
-    if (playerInstalledAugCount !== null && playerInstalledAugCount < reqDaedalusAugs)
-        return daedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
+    if (playerInstalledAugCount !== null && playerInstalledAugCount < reqDaedalusAugs){
+        return daedalusUnavailable = true;
+    }// Won't be able to unlock daedalus this ascend
     // If we have sufficient augs and hacking, all we need is the money (100b)
     const totalWorth = player.money + stocksValue;
     if (totalWorth > 100E9 && player.money < 100E9) {
