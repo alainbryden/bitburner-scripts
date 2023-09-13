@@ -1,6 +1,6 @@
 import {
     instanceCount, getConfiguration, getNsDataThroughFile, getFilePath, getActiveSourceFiles, tryGetBitNodeMultipliers,
-    formatDuration, formatMoney, formatNumberShort, disableLogs, log
+    formatDuration, formatMoney, formatNumberShort, disableLogs, log, portRead, portWrite
 } from './helpers.js'
 
 let options;
@@ -9,6 +9,7 @@ const argsSchema = [
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
+    ['no-xpmode', false], // Disable using the "Xp Mode" of the daemon to speed up getting hacking xp
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
@@ -23,6 +24,9 @@ const argsSchema = [
     ['karma-threshold-for-gang-invites', -40000], // Prioritize working for gang invites once we have this much negative Karma
     ['disable-treating-gang-as-sole-provider-of-its-augs', false], // Set to true if you still want to grind for rep with factions that only have augs your gang provides
     ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
+    ['xp-mode-ram', 8192], // The minimum amount of RAM on the home server in order for xp mode to be used
+    ['xp-min-diff', 500], //the minimum difference between the current hacking level and the target hacking level for xp mode to be used
+    ['xp-max-diff', 10000], //the maximum difference between the current hacking level and the target hacking level for xp mode to be used
 ];
 
 const companySpecificConfigs = [
@@ -454,14 +458,41 @@ async function earnFactionInvite(ns, factionName) {
         !(reqHackingOrCombat.includes(factionName) && workedForInvite)) {
         ns.print(`${reasonPrefix} you have insufficient hack level. Need: ${requirement}, Have: ${player.skills.hacking}`);
         const em = requirement / options['training-stat-per-multi-threshold'];
-        if (options['no-studying'])
-            return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
+        if (options['no-studying'] && options['no-xpmode'])
+            return ns.print(`--no-studying and --no-xpmode is set, nothing we can do to improve hack level.`);
         else if (classHeuristic('hacking') < em)
             return ns.print(`Your combination of Hacking mult (${formatNumberShort(player.mults.hacking)}), exp_mult ` +
                 `(${formatNumberShort(player.mults.hacking_exp)}), and bitnode hacking / study exp mults ` +
                 `(${formatNumberShort(bitnodeMultipliers.HackingLevelMultiplier)}) / (${formatNumberShort(bitnodeMultipliers.ClassGymExpGain)}) ` +
                 `are probably too low to increase hack from ${player.skills.hacking} to ${requirement} in a reasonable amount of time ` +
                 `(${formatNumberShort(classHeuristic('hacking'))} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
+
+
+        // Start the additional logic for xp mode. Even though at this point we know out combined hacking mult is sufficient to train hack in a reasonable amount of time,
+        // we need to make sure we have the ram for it and the it will be actually viable, otherwise xp mode will just be a waste of our time.
+        const home = await getServerinfo(ns, "home");
+        if (!options['no-xpmode'] && home.maxRam >= options['xp-mode-ram']) {
+            ns.print('Conditions met to potentally use XP mode. Beginning the additional viability checks...');
+            // Great we met the conditions now lets check to see if switching the daemon to xp mode will actually be a good idea.
+            // Lets start by getting how many hacking levels we need for our faction invite.
+            if(player.skills.hacking-requirement <= options['xp-min-diff'] || // No use in xp mode if we are going for less than 500 levels would be a waste of resources because at this point our xp mult should be fairly high
+                 player.skills.hacking-requirement >= options['xp-max-diff']) { // This condition should never occcur for a faction invite but if it does something is extremely wrong and we shouldnt restart the daemon
+                ns.print('XP mode is not viable. We are either going for too few or too many levels.');
+            }
+            else{
+                    // Great everything checks out lets calculate the time it will take to get the levels we need and switch the daemon hopefully nondestructively......
+                    // Lets start by switching the daemon to xp mode through ports
+                    let port = ns.getPortHandle(65000)
+                    ns.print('Switching daemon to xp mode...');
+                    // need to make the data for setting the daemon to xp mode
+                    let data =  '{"Daemon":{"XP Mode":{"dataType": "boolean","data": "true"}},}'
+                    await portWrite(ns, port, data);
+                    
+                }
+            
+            
+        }
+
         let studying = false;
         if (player.money > options['pay-for-studies-threshold']) { // If we have sufficient money, pay for the best studies
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
@@ -700,6 +731,20 @@ export async function tryJoinFaction(ns, factionName) {
         return false;
     log(ns, `Joined faction "${factionName}"`, false, 'success');
     return true;
+}
+
+
+/**@param {NS} ns
+ * @returns {Promise<Server>} The result of ns.getServer() */
+async function getServerinfo(ns, serverName) {
+    return await getNsDataThroughFile(ns, `ns.getServer(ns.args[0])`, null, [serverName]);
+}
+
+/**@param {NS} ns
+ * @returns {Promise<String>} The result of ns.getPurchasedServer() */
+async function getPurchasedServers(ns) {
+    // This function might be useful in the future development of the xp mode logic. Still need to see how that whole thing works.
+    return await getNsDataThroughFile(ns, `ns.getPurchasedServer()`);
 }
 
 /** @param {NS} ns
