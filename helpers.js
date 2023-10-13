@@ -451,6 +451,10 @@ let cachedStockSymbols = null; // Cache of stock symbols since these never chang
  * Caches symbols the first time they are successfully requested, since symbols never change.
  * @param {NS} ns */
 export async function getStockSymbols(ns) {
+    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()');
+    if (!hasTixApiAccess) {
+        return null;
+    }
     cachedStockSymbols ??= await getNsDataThroughFile(ns,
         `(() => { try { return ns.stock.getSymbols(); } catch { return null; } })()`,
         '/Temp/stock-symbols.txt');
