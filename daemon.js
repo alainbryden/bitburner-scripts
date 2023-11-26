@@ -23,7 +23,7 @@ const argsSchema = [
     ['s', true], // Enable Stock Manipulation. This is now true for default, but left as a valid argument for backwards-compatibility.
     ['stock-manipulation', true], // Same as above
     ['disable-stock-manipulation', false], // You must now opt *out* of stock-manipulation mode by enabling this flag.
-    ['stock-manipulation-focus', false], // Stocks are main source of income - kill any scripts that would do them harm
+    ['stock-manipulation-focus', false], // Stocks are main source of income - kill any scripts that would do them harm (Enabled automatically in BN8)
     ['v', false], // Detailed logs about batch scheduling / tuning
     ['verbose', false], // Same as above
     ['o', false], // Good for debugging, run the main targettomg loop once then stop, with some extra logs
