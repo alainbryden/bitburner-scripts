@@ -603,14 +603,34 @@ export function unEscapeArrayArgs(args) {
  * 
 */
 
+
+
+/**Safer version of the portWrite function. It allows for data to be passed in, formatted, and then sent to the port write function.
+ * It is highly advised that you use this function instead of the portWrite function as it will prevent JSON formatting errors
+ * however this function only writes a SINGLE data chunk so if you need to write multiple chunks of data then you should use the portWrite function.
+ * @param {NS} ns
+ * @param {NetscriptPort} port - the script needs to define the port object as its probably not a good idea to have the port defined everytime this function is called.
+ * @param {string} category - the category of data you want to write
+ * @param {string} dataName - the name of the data you want to write
+ * @param {string} dataType - the type of data you want to write
+ * @param {string} data - the data you want to write
+ * @param {boolean} retry - This is a boolean that will tell the function to retry the write if it fails. This is set to true by default.
+ */
+export async function portSafeWrite(ns, port, category, dataName, dataType, data, retry = true) {
+    // to save time and space all we are going to do is format the data and then pass it to the portWrite function.
+    let dataToWrite = `{"${category}":{"${dataName}":{"dataType":"${dataType}","data":"${data}"}}}`;
+    portWrite(ns, port, dataToWrite, retry);
+}
+
 /** Standardized write method for ports. This will add or modify data within the port without lossing the data within it.
  * TODO: Fix this code its complete shit and there has to be a better way of doing this. I should probably make a safe version of this to prevent format disruption
  * @param {NS} ns
  * @param {NetscriptPort} port - the script needs to define the port object as its probably not a good idea to have the port defined everytime this function is called.
- * @param {string} data - This needs to be a sting that follows the standard format for the port. make sure that the data you intend on writting has been stringified to prevent errors.
+ * @param {string} newData - This needs to be a sting that follows the standard format for the port. make sure that the data you intend on writting has been stringified to prevent errors.
  * @param {boolean} retry - This is a boolean that will tell the function to retry the write if it fails. This is set to true by default.
  * @returns {boolean} - returns true if the write was successful, false if it failed. */
-export async function portWrite(ns, port, data, retry = true) {
+export async function portWrite(ns, port, newData, retry = true) {
+    let newData2 = newData;
     // Lets start off by checking if the port is empty. If it is, then that means something is currently writing to it and we need to wait.
     if( port.empty()){
         await port.nextWrite();
@@ -620,20 +640,31 @@ export async function portWrite(ns, port, data, retry = true) {
      let oldData = port.read();
 
     //we are going to try and set the data
+    
+    /**  TODO: This whole sections from the try statement to the catch statement is horrible and needs to be rewritten.
+     here are a list of the current problems with this code.
+        1. for starters the only time that catch statement assumes that the problem is that theres no comma at the end of the data
+            so it adds one, it doesnt not take into account any other actual problems that may occur or even raise an error saying there was a problem in the first place
+        2. The catch statement just appends the new data to the end of the old one. It does not even run a cheak to see if the category is even there it just appends and moves on which could cause MORE issues then it solves.A
+        3. after all the work that gets done on the old data to integrate the new data the try statement is the ONLY place where the validation of the data is done. We could be writing bad data from the catch and make the problem so much worse without even knowing
+        */
+
     try{
         oldData = JSON.parse(oldData);
-        data = JSON.parse(data);
+        newData = JSON.parse(newData);
         // lets start by looping through the data we are going to write and add it to the old data.
-        for (const category in data){
+        for (const category in newData){
             if(category in oldData){
                 // lets loop through the data in the category and add it to the old data.
-                for (const dataName in data[category]){
-                        oldData[category][dataName]["data"] = data[category][dataName]["data"];
-                        oldData[category][dataName]["dataType"] = data[category][dataName]["dataType"];
+                for (const dataName in newData[category]){
+
+                    // why cant I make good code :(
+                        oldData[category][dataName]["data"] = newData[category][dataName]["data"];
+                        oldData[category][dataName]["dataType"] = newData[category][dataName]["dataType"];
                 }
             }else{
-                // lets add the data to the old data.
-                oldData[category] = data[category];
+                // if the category doesnt exist then we just create it and then set the whole category to the data since it will write everything it has
+                oldData[category] = newData[category];
             }
             oldData = JSON.stringify(oldData);
         }
@@ -649,23 +680,38 @@ export async function portWrite(ns, port, data, retry = true) {
                 oldData = oldData + ",";
             }
         }
-        // now lets take the first charecter off the data we are going so we remove the {
-        data = data.slice(1);
+        // now lets take the first charecter off the data we are writing so we remove the {
+        newData = newData.slice(1);
         // now lets add the data to the old data
-        oldData = oldData + data;
+        oldData = oldData + newData;
     }
+    // The following code is for logging the transaction on the port.
+    let uuid = uuidv4();
+    let scriptName =  ns.getScriptName();
+    let datetiem = Date(Date.now()).toString();
+    
+    let log = `[${uuid}][${datetiem}][${scriptName}]: attempting to write ${newData2} to the port:  hold for confirmation.\n`;
+    ns.write("Temp/portLog.txt", log, "a");
+
     // Now lets write the data back to the port
     let results = port.tryWrite(oldData);
     if(results == false){
+        // logging a failure to write to the port.
         ns.print("The port is full and that shouldnt happen. Why did this happen? I dont know. I dont know why you are even reading this. This should never happen.");
         ns.print("Dumping data in the port to a file.");
-        ns.write("Temp/portDump"+Date.now+".txt", port.peek());
+        ns.write("Temp/portDump"+datetiem+".txt", port.peek());
         // so the port is full and the data we have is now out of date and bad lets retry the write from the start.
         if(retry){
+            let datetiem = Date(Date.now()).toString();
+            let log = `[${uuid}][${datetiem}][${scriptName}]: failed to write ${newData2} to the port: retrying.\n`;
+            ns.write("Temp/portLog.txt", log, "a");
             ns.print("Retrying the write.");
             // lets try to write again we will repeat this process until the write is successful. theroetically we should write it eventually.
-            portWrite(ns, port, data, retry);
+            portWrite(ns, port, newData, retry);
         }else{
+            let datetiem = Date(Date.now()).toString();
+            let log = `[${uuid}][${datetiem}][${scriptName}]: failed to write ${newData2} to the port: not retrying.\n`;
+            ms.write("Temp/portLog.txt", log, "a");
             ns.print("Not retrying the write.");
             return false;
         }
@@ -674,6 +720,16 @@ export async function portWrite(ns, port, data, retry = true) {
 
 }
 
+// generates uuids for logging purposes
+function uuidv4() {
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
+      (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+    );
+  }
+  
+
+  
+
 /**Lets make the reading process easy and just return the data we want no need for the scripts to do it themselves
  * @param {NS} ns
  * @param {NetscriptPort} port - the script needs to define the port object as its probably not a good idea to have the port defined everytime this function is called.
@@ -681,11 +737,24 @@ export async function portWrite(ns, port, data, retry = true) {
  * @param {string} dataName - the name of the data you want to read
  * @returns {string} - returns the data you requested. */
 export async function portRead(ns, port, category, dataName) {
+    let uuid = uuidv4();
+    let scriptName =  ns.getScriptName();
+    let datetiem = Date(Date.now()).toString();
+    let log = `[${uuid}][${datetiem}][${scriptName}]: attempting to read ${dataName} from the port:  hold for confirmation.\n`;
+    ns.write("Temp/portLog.txt", log, "a");
     ns.write("Temp/portDump.txt", port.peek(),"w");
     // lets check to see if the port is empty. if it is then there is no data to read. then lets wait for the port to have data.
     if(port.empty()){
+        datetiem = Date(Date.now()).toString();
+        log = `[${uuid}][${datetiem}][${scriptName}]: failed to read ${dataName} from the port: port empty waiting for data.\n`;
+        ns.write("Temp/portLog.txt", log, "a");
         await port.nextWrite();
+         datetiem = Date(Date.now()).toString();
+        log = `[${uuid}][${datetiem}][${scriptName}]: Data found in port.\n`;
     }
+     datetiem = Date(Date.now()).toString();
+    log = `[${uuid}][${datetiem}][${scriptName}]: reading data\n`;
+    ns.write("Temp/portLog.txt", log, "a");
     // lets start by getting the data from the port no need to read it if its empty.
     let data = port.peek();
     //ns.print(data)
@@ -694,6 +763,7 @@ export async function portRead(ns, port, category, dataName) {
 
     // lets try and read the data you requested. if it fails then we will return null.
     try{
+
         let testshit = data[category][dataName]["data"];
     } catch(error){
         ns.print("Failed to read data from port. Returning null.");

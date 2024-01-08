@@ -3,8 +3,8 @@ import {
     hashCode, disableLogs, log, getFilePath, getConfiguration,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
-    getFnRunViaNsExec, autoRetry
-} from './helpers.js'
+    getFnRunViaNsExec, autoRetry, portRead, portWrite
+} from '/helpers.js'
 
 // daemon.js has histocially been the central orchestrator of almost every script in the game.
 // Only recently has it been "enslaved" to an even higher-level orchestrator: autopilot.js
@@ -35,7 +35,7 @@ const argsSchema = [
     ['use-hacknet-servers', false], // Same as above, but the game recently renamed these
     ['spend-hashes-for-money-when-under', 10E6], // (Default 10m) Convert 4 hashes to money whenever we're below this amount
     ['disable-spend-hashes', false], // An easy way to set the above to a very large negative number, thus never spending hashes for Money
-    ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
+    ['silent-misfires', true], // Instruct remote scripts not to alert when they misfire
     ['initial-max-targets', 2], // Initial number of servers to target / prep (TODO: Scale this as BN progression increases)
     ['max-steal-percentage', 0.75], // Don't steal more than this in case something goes wrong with timing or scheduling, it's hard to recover from
     ['cycle-timing-delay', 16000], // Time
@@ -205,6 +205,19 @@ function reservedMoney(ns) {
 // script entry point
 /** @param {NS} ns **/
 export async function main(ns) {
+    //so first thing we need to do is reset the port data to have nothing in it, why? 
+    //well because the daemon is just now starting up and all scripts will be restarting as well making the current data there useless
+    let port = ns.getPortHandle(65000);
+    port.clear();
+
+    // Right now lets just make the data blank as the intended use of this port is to allow scripts to communicate with each other during runtime 
+    // In the future data might be stored here that scripts use during start up but for now we dont have any of that
+    port.write("{}")
+
+    let tempdata ='{"Daemon":{"XP Mode":{"dataType": "boolean","data": "false"}}}';
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
+
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions) return;
@@ -368,7 +381,7 @@ export async function main(ns) {
     if (shouldKickstartHackXp) await kickstartHackXp(ns);
 
     // Start the main targetting loop
-    await doTargetingLoop(ns);
+    await doTargetingLoop(ns, port);
 }
 
 /** @param {NS} ns
@@ -556,12 +569,21 @@ async function doRoot(ns, server) {
 
 // Main targeting loop
 /** @param {NS} ns **/
-async function doTargetingLoop(ns) {
+async function doTargetingLoop(ns, port) {
     log(ns, "doTargetingLoop");
     let loops = -1;
     //var isHelperListLaunched = false; // Uncomment this and related code to keep trying to start helpers
     do {
         loops++;
+        // time to read data from the port to see if we need to change any of our settings
+        if (options.x || options['xp-only']){
+            ns.print("The daemon was started in XP-only mode. Skipping port read.")
+        } else{
+            let tempboolforxp = await portRead(ns, port, "Daemon", "XP Mode");
+            //ns.print("tempboolforxp: " + tempboolforxp);
+            xpOnly = Boolean(tempboolforxp);
+        }
+
         if (loops > 0) await ns.sleep(loopInterval);
         try {
             let start = Date.now();
