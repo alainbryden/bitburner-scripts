@@ -78,6 +78,8 @@ export function formatDuration(duration) {
     return portions.join(' ');
 }
 
+
+
 /** Generate a hashCode for a string that is pretty unique most of the time */
 export function hashCode(s) { return s.split("").reduce(function (a, b) { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0); }
 
@@ -576,4 +578,133 @@ export function unEscapeArrayArgs(args) {
     // Otherwise, args wrapped in quotes should have those quotes removed.
     const escapeChars = ['"', "'", "`"];
     return args.map(arg => escapeChars.some(c => arg.startsWith(c) && arg.endsWith(c)) ? arg.slice(1, -1) : arg);
+}
+
+// PORT HANDLER FUNCTIONS
+
+/** The following functions will be used by scripts to handle port access. This is to standardize the way ports are handled across scripts.
+ * The port that we will be using for our scripts will be 65000.
+ * The data within the port will be a json string making it easy to parse and use.
+ * and helper functions will be created to make getting data from the port easier.
+ * 
+ * The data will be in the following when in the portformat:
+ * {
+ *  "category": {
+ *      "dataName": {
+ *          "dataType": "",
+ *          "data": ""
+ *      }
+ *  },
+ * }
+ * 
+ * This will be expanded upon as needed.  
+ * 
+ * 
+ * 
+*/
+
+/** Standardized write method for ports. This will add or modify data within the port without lossing the data within it.
+ * @param {NS} ns
+ * @param {NetscriptPort} port - the script needs to define the port object as its probably not a good idea to have the port defined everytime this function is called.
+ * @param {string} data - This needs to be a sting that follows the standard format for the port. make sure that the data you intend on writting has been stringified to prevent errors.
+ * @param {boolean} retry - This is a boolean that will tell the function to retry the write if it fails. This is set to true by default.
+ * @returns {boolean} - returns true if the write was successful, false if it failed. */
+export async function portWrite(ns, port, data, retry = true) {
+    // Lets start off by checking if the port is empty. If it is, then that means something is currently writing to it and we need to wait.
+    if( port.empty()){
+        await port.nextWrite();
+    }
+    // Now that we know the port is not empty, we can start the writting process.
+    // lets start by getting the data from the port and clearing out the port so nothing else writes to it
+     let oldData = port.read();
+
+    //we are going to try and set the data
+    try{
+        oldData = JSON.parse(oldData);
+        data = JSON.parse(data);
+        // lets start by looping through the data we are going to write and add it to the old data.
+        for (const category in data){
+            if(category in oldData){
+                // lets loop through the data in the category and add it to the old data.
+                for (const dataName in data[category]){
+                    if(dataName in oldData[category]){
+                        // lets add the data to the old data.
+                        oldData[category][dataName]["data"] = data[category][dataName]["data"];
+                    }else{
+                        // lets add the data to the old data.
+                        oldData[category][dataName]["dataType"] = data[category][dataName]["dataType"];
+                    }
+                }
+            }else{
+                // lets add the data to the old data.
+                oldData[category] = data[category];
+            }
+            oldData = JSON.stringify(oldData);
+        }
+    } catch(error){
+
+        //takes the last charecter in the old data and removes it.
+        oldData = oldData.slice(0, -1);
+        
+        // now lets check and see if there is a comma
+        if (oldData != "{}"){
+            if(oldData.slice(-1) != ","){
+                //add a comma to the end of the data
+                oldData = oldData + ",";
+            }
+        }
+        // now lets take the first charecter off the data we are going so we remove the {
+        data = data.slice(1);
+        // now lets add the data to the old data
+        oldData = oldData + data;
+    }
+    // Now lets write the data back to the port
+    let results = port.tryWrite(oldData);
+    if(results == false){
+        ns.print("The port is full and that shouldnt happen. Why did this happen? I dont know. I dont know why you are even reading this. This should never happen.");
+        ns.print("Dumping data in the port to a file.");
+        ns.write("Temp/portDump"+Date.now+".txt", port.peek());
+        // so the port is full and the data we have is now out of date and bad lets retry the write from the start.
+        if(retry){
+            ns.print("Retrying the write.");
+            // lets try to write again we will repeat this process until the write is successful. theroetically we should write it eventually.
+            portWrite(ns, port, data, retry);
+        }else{
+            ns.print("Not retrying the write.");
+            return false;
+        }
+    }
+    return true;
+
+}
+
+/**Lets make the reading process easy and just return the data we want no need for the scripts to do it themselves
+ * @param {NS} ns
+ * @param {NetscriptPort} port - the script needs to define the port object as its probably not a good idea to have the port defined everytime this function is called.
+ * @param {string} category - the category of data you want to read
+ * @param {string} dataName - the name of the data you want to read
+ * @returns {string} - returns the data you requested. */
+export async function portRead(ns, port, category, dataName) {
+    ns.write("Temp/portDump.txt", port.peek(),"w");
+    // lets check to see if the port is empty. if it is then there is no data to read. then lets wait for the port to have data.
+    if(port.empty()){
+        await port.nextWrite();
+    }
+    // lets start by getting the data from the port no need to read it if its empty.
+    let data = port.peek();
+    //ns.print(data)
+    // Now lets parse the data so we can grab information from it.
+    data = JSON.parse(data);
+
+    // lets try and read the data you requested. if it fails then we will return null.
+    try{
+        let testshit = data[category][dataName]["data"];
+    } catch(error){
+        ns.print("Failed to read data from port. Returning null.");
+        return null;
+    }
+
+    // lets return the data you requested. All the data is going to be a string so have fun turning it into whatever its supposed to be.
+    // TODO: return the data in the correct format. or tell the script what format it is supposed to be in.
+    return data[category][dataName]["data"];
 }
