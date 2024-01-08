@@ -604,6 +604,7 @@ export function unEscapeArrayArgs(args) {
 */
 
 /** Standardized write method for ports. This will add or modify data within the port without lossing the data within it.
+ * TODO: Fix this code its complete shit and there has to be a better way of doing this. I should probably make a safe version of this to prevent format disruption
  * @param {NS} ns
  * @param {NetscriptPort} port - the script needs to define the port object as its probably not a good idea to have the port defined everytime this function is called.
  * @param {string} data - This needs to be a sting that follows the standard format for the port. make sure that the data you intend on writting has been stringified to prevent errors.
@@ -627,13 +628,8 @@ export async function portWrite(ns, port, data, retry = true) {
             if(category in oldData){
                 // lets loop through the data in the category and add it to the old data.
                 for (const dataName in data[category]){
-                    if(dataName in oldData[category]){
-                        // lets add the data to the old data.
                         oldData[category][dataName]["data"] = data[category][dataName]["data"];
-                    }else{
-                        // lets add the data to the old data.
                         oldData[category][dataName]["dataType"] = data[category][dataName]["dataType"];
-                    }
                 }
             }else{
                 // lets add the data to the old data.
