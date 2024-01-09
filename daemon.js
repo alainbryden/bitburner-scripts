@@ -214,9 +214,9 @@ export async function main(ns) {
     // In the future data might be stored here that scripts use during start up but for now we dont have any of that
     port.write("{}")
 
-    let tempdata ='{"Daemon":{"XP Mode":{"dataType": "boolean","data": "false"}}}';
-    await portWrite(ns,port,tempdata)
-    ns.print(port.peek());
+    //let tempdata ='{"Daemon":{"XP Mode":{"dataType": "boolean","data": "false"}}}';
+    // Create thre data string of all the deamons options
+    
 
     daemonHost = "home"; // ns.getHostname(); // get the name of this node (realistically, will always be home)
     const runOptions = getConfiguration(ns, argsSchema);
@@ -287,6 +287,158 @@ export async function main(ns) {
     queueDelay = options['queue-delay'];
     maxBatches = options['max-batches'];
     homeReservedRam = options['reserved-ram']
+
+    let tempdata = `
+    {
+      "Daemon": {
+        "h": {
+          "data": "${options.h}",
+          "dataType": "boolean"
+        },
+        "hack-only": {
+          "data": "${options['hack-only']}",
+          "dataType": "boolean"
+        },
+        "s": {
+          "data": "${options.s}",
+          "dataType": "boolean"
+        },
+        "stock-manipulation": {
+          "data": "${options['stock-manipulation']}",
+          "dataType": "boolean"
+        },
+        "disable-stock-manipulation": {
+          "data": "${options['disable-stock-manipulation']}",
+          "dataType": "boolean"
+        },
+        "stock-manipulation-focus": {
+          "data": "${options['stock-manipulation-focus']}",
+          "dataType": "boolean"
+        },
+        "v": {
+          "data": "${options.v}",
+          "dataType": "boolean"
+        },
+        "verbose": {
+          "data": "${options['verbose']}",
+          "dataType": "boolean"
+        },
+        "o": {
+          "data": "${options.o}",
+          "dataType": "boolean"
+        },
+        "run-once": {
+          "data": "${options['run-once']}",
+          "dataType": "boolean"
+        },
+        "x": {
+          "data": "${options.x}",
+          "dataType": "boolean"
+        },
+        "xp-only": {
+          "data": "${options['xp-only']}",
+          "dataType": "boolean"
+        },
+        "n": {
+          "data": "${options.n}",
+          "dataType": "boolean"
+        },
+        "use-hacknet-nodes": {
+          "data": "${options['use-hacknet-nodes']}",
+          "dataType": "boolean"
+        },
+        "use-hacknet-servers": {
+          "data": "${options['use-hacknet-servers']}",
+          "dataType": "boolean"
+        },
+        "spend-hashes-for-money-when-under": {
+          "data": "${options['spend-hashes-for-money-when-under']}",
+          "dataType": "float"
+        },
+        "disable-spend-hashes": {
+          "data": "${options['disable-spend-hashes']}",
+          "dataType": "boolean"
+        },
+        "silent-misfires": {
+          "data": "${options['silent-misfires']}",
+          "dataType": "boolean"
+        },
+        "initial-max-targets": {
+          "data": "${options['initial-max-targets']}",
+          "dataType": "int"
+        },
+        "max-steal-percentage": {
+          "data": "${options['max-steal-percentage']}",
+          "dataType": "float"
+        },
+        "cycle-timing-delay": {
+          "data": "${options['cycle-timing-delay']}",
+          "dataType": "int"
+        },
+        "queue-delay": {
+          "data": "${options['queue-delay']}",
+          "dataType": "int"
+        },
+        "max-batches": {
+          "data": "${options['max-batches']}",
+          "dataType": "int"
+        },
+        "i": {
+          "data": "${options['i']}",
+          "dataType": "boolean"
+        },
+        "reserved-ram": {
+          "data": "${options['reserved-ram']}",
+          "dataType": "int"
+        },
+        "looping-mode": {
+          "data": "${options['looping-mode']}",
+          "dataType": "boolean"
+        },
+        "recovery-thread-padding": {
+          "data": "${options['recovery-thread-padding']}",
+          "dataType": "int"
+        },
+        "share": {
+          "data": "${options['share']}",
+          "dataType": "boolean"
+        },
+        "no-share": {
+          "data": "${options['no-share']}",
+          "dataType": "boolean"
+        },
+        "share-cooldown": {
+          "data": "${options['share-cooldown']}",
+          "dataType": "int"
+        },
+        "share-max-utilization": {
+          "data": "${options['share-max-utilization']}",
+          "dataType": "float"
+        },
+        "no-tail-windows": {
+          "data": "${options['no-tail-windows']}",
+          "dataType": "boolean"
+        },
+        "initial-study-time": {
+          "data": "${options['initial-study-time']}",
+          "dataType": "int"
+        },
+        "initial-hack-xp-time": {
+          "data": "${options['initial-hack-xp-time']}",
+          "dataType": "int"
+        },
+        "disable-script": {
+          "data": "${options['disable-script']}",
+          "dataType": "array"
+        },
+        "run-script": {
+          "data": "${options['run-script']}",
+          "dataType": "array"
+        }
+      }
+    }`    
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
 
     // These scripts are started once and expected to run forever (or terminate themselves when no longer needed)
     const openTailWindows = !options['no-tail-windows'];
@@ -579,7 +731,7 @@ async function doTargetingLoop(ns, port) {
         if (options.x || options['xp-only']){
             ns.print("The daemon was started in XP-only mode. Skipping port read.")
         } else{
-            let tempboolforxp = await portRead(ns, port, "Daemon", "XP Mode");
+            let tempboolforxp = await portRead(ns, port, "Daemon", "xp-only");
             //ns.print("tempboolforxp: " + tempboolforxp);
             xpOnly = Boolean(tempboolforxp);
         }

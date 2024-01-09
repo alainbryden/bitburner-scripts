@@ -716,6 +716,10 @@ export async function portWrite(ns, port, newData, retry = true) {
             return false;
         }
     }
+    // logging a successful write to the port.
+    datetiem = Date(Date.now()).toString();
+    log = `[${uuid}][${datetiem}][${scriptName}]: successfully wrote to the port.\n`;
+    ns.write("Temp/portLog.txt", log, "a");
     return true;
 
 }
@@ -757,7 +761,7 @@ export async function portRead(ns, port, category, dataName) {
     ns.write("Temp/portLog.txt", log, "a");
     // lets start by getting the data from the port no need to read it if its empty.
     let data = port.peek();
-    //ns.print(data)
+    ns.print(data)
     // Now lets parse the data so we can grab information from it.
     data = JSON.parse(data);
 
@@ -767,6 +771,10 @@ export async function portRead(ns, port, category, dataName) {
         let testshit = data[category][dataName]["data"];
     } catch(error){
         ns.print("Failed to read data from port. Returning null.");
+        // lets log the error
+        datetiem = Date(Date.now()).toString();
+        log = `[${uuid}][${datetiem}][${scriptName}]: failed to read ${dataName} from the port: ${error}\n`;
+        ns.write("Temp/portLog.txt", log, "a");
         return null;
     }
 
