@@ -485,7 +485,7 @@ async function earnFactionInvite(ns, factionName) {
                     let port = ns.getPortHandle(65000)
                     ns.print('Switching daemon to xp mode...');
                     // need to make the data for setting the daemon to xp mode
-                    let data =  '{"Daemon":{"XP Mode":{"dataType": "boolean","data": "true"}},}'
+                    let data =  '{"Daemon":{"xp-only":{"dataType": "boolean","data": "true"}},}'
                     await portWrite(ns, port, data);
 
                 }
