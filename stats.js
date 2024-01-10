@@ -1,6 +1,6 @@
 import {
     log, disableLogs, instanceCount, getConfiguration, getNsDataThroughFile, getActiveSourceFiles,
-    getStocksValue, formatNumberShort, formatMoney, formatRam
+    getStocksValue, formatNumberShort, formatMoney, formatRam, portRead, portWrite
 } from './helpers.js'
 
 const argsSchema = [
@@ -21,7 +21,26 @@ let playerInBladeburner = false, nodeMap = {}
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);
     if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
-
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Stats": {
+            "show-peoplekilled": {
+            "data": "${options['show-peoplekilled']}",
+            "dataType": "Boolean"
+            },
+            "hide-stocks": {
+            "data": "${options['hide-stocks']}",
+            "dataType": "Boolean"
+            },
+            "hide-RAM-utilization": {
+            "data": "${options['hide-RAM-utilization']}",
+            "dataType": "Boolean"
+            }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
     let resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     const bitNode = resetInfo.currentNode;

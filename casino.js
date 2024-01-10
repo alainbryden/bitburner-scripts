@@ -1,4 +1,4 @@
-import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile, autoRetry } from './helpers.js'
+import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile, autoRetry, portRead, portWrite } from './helpers.js'
 
 const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
@@ -34,6 +34,48 @@ function tailAndLog(ns, message) {
 export async function main(ns) {
     options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
+   
+   // Below is the code to write the settings to the port, however, I have disabled the code since this script is meant to run fast and it would only slow it down
+    /* let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Casino": {
+          "save-sleep-time": {
+            "data": "${options['save-sleep-time']}",
+            "dataType": "Number"
+          },
+          "click-sleep-time": {
+            "data": "${options['click-sleep-time']}",
+            "dataType": "Number"
+          },
+          "use-basic-strategy": {
+            "data": "${options['use-basic-strategy']}",
+            "dataType": "Boolean"
+          },
+          "enable-logging": {
+            "data": "${options['enable-logging']}",
+            "dataType": "Boolean"
+          },
+          "kill-all-scripts": {
+            "data": "${options['kill-all-scripts']}",
+            "dataType": "Boolean"
+          },
+          "no-deleting-remote-files": {
+            "data": "${options['no-deleting-remote-files']}",
+            "dataType": "Boolean"
+          },
+          "on-completion-script": {
+            "data": "${options['on-completion-script']}",
+            "dataType": "String"
+          },
+          "on-completion-script-args": {
+            "data": "${options['on-completion-script-args']}",
+            "dataType": "Array"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek()); */
     _ns = ns;
     const saveSleepTime = options['save-sleep-time'];
     if (options['enable-logging'])

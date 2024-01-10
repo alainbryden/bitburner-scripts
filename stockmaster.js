@@ -1,6 +1,6 @@
 import {
     instanceCount, getConfiguration, getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers,
-    formatMoney, formatNumberShort, formatDuration, getStockSymbols
+    formatMoney, formatNumberShort, formatDuration, getStockSymbols, portRead, portWrite
 } from './helpers.js'
 
 let disableShorts = false;
@@ -89,6 +89,102 @@ export async function main(ns) {
     ns.disableLog("ALL");
     // Extract various options from the args (globals, purchasing decision factors, pre-4s factors)
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `
+            {
+                "Stockmaster": {
+                  "liquidate": {
+                    "data": "${options['liquidate'] || options.l}",
+                    "dataType": "Boolean"
+                  },
+                  "mock": {
+                    "data": "${options['mock']}",
+                    "dataType": "Boolean"
+                  },
+                  "noisy": {
+                    "data": "${options['noisy']}",
+                    "dataType": "Boolean"
+                  },
+                  "disable-shorts": {
+                    "data": "${options['disable-shorts']}",
+                    "dataType": "Boolean"
+                  },
+                  "reserve": {
+                    "data": "${options['reserve']}",
+                    "dataType": "Number"
+                  },
+                  "fracB": {
+                    "data": "${options['fracB']}",
+                    "dataType": "Number"
+                  },
+                  "fracH": {
+                    "data": "${options['fracH']}",
+                    "dataType": "Number"
+                  },
+                  "buy-threshold": {
+                    "data": "${options['buy-threshold']}",
+                    "dataType": "Number"
+                  },
+                  "sell-threshold": {
+                    "data": "${options['sell-threshold']}",
+                    "dataType": "Number"
+                  },
+                  "diversification": {
+                    "data": "${options['diversification']}",
+                    "dataType": "Number"
+                  },
+                  "disableHud": {
+                    "data": "${options['disableHud']}",
+                    "dataType": "Boolean"
+                  },
+                  "disable-purchase-tix-api": {
+                    "data": "${options['disable-purchase-tix-api']}",
+                    "dataType": "Boolean"
+                  },
+                  "show-pre-4s-forecast": {
+                    "data": "${options['show-pre-4s-forecast']}",
+                    "dataType": "Boolean"
+                  },
+                  "show-market-summary": {
+                    "data": "${options['show-market-summary']}",
+                    "dataType": "Boolean"
+                  },
+                  "pre-4s-buy-threshold-probability": {
+                    "data": "${options['pre-4s-buy-threshold-probability']}",
+                    "dataType": "Number"
+                  },
+                  "pre-4s-buy-threshold-return": {
+                    "data": "${options['pre-4s-buy-threshold-return']}",
+                    "dataType": "Number"
+                  },
+                  "pre-4s-sell-threshold-return": {
+                    "data": "${options['pre-4s-sell-threshold-return']}",
+                    "dataType": "Number"
+                  },
+                  "pre-4s-min-tick-history": {
+                    "data": "${options['pre-4s-min-tick-history']}",
+                    "dataType": "Number"
+                  },
+                  "pre-4s-forecast-window": {
+                    "data": "${options['pre-4s-forecast-window']}",
+                    "dataType": "Number"
+                  },
+                  "pre-4s-inversion-detection-window": {
+                    "data": "${options['pre-4s-inversion-detection-window']}",
+                    "dataType": "Number"
+                  },
+                  "pre-4s-minimum-hold-time": {
+                    "data": "${options['pre-4s-minimum-hold-time']}",
+                    "dataType": "Number"
+                  },
+                  "buy-4s-budget": {
+                    "data": "${options['buy-4s-budget']}",
+                    "dataType": "Number"
+                  }
+                }
+              }`
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     mock = options.mock;
     noisy = options.noisy;
     const fracB = options.fracB;

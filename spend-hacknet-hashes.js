@@ -1,4 +1,4 @@
-import { log, getConfiguration, disableLogs, formatMoney, formatDuration, formatNumberShort } from './helpers.js'
+import { log, getConfiguration, disableLogs, formatMoney, formatDuration, formatNumberShort, portRead, portWrite } from './helpers.js'
 
 const sellForMoney = 'Sell for Money';
 
@@ -32,6 +32,38 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Spend-hacknet-hash": {
+          "liquidate": {
+            "data": "${options['liquidate'] || options.l}",
+            "dataType": "Boolean"
+          },
+          "interval": {
+            "data": "${options['interval']}",
+            "dataType": "Number"
+          },
+          "spend-on": {
+            "data": "${options['spend-on']}",
+            "dataType": "Array"
+          },
+          "spend-on-server": {
+            "data": "${options['spend-on-server']}",
+            "dataType": "String"
+          },
+          "no-capacity-upgrades": {
+            "data": "${options['no-capacity-upgrades']}",
+            "dataType": "Boolean"
+          },
+          "reserve-buffer": {
+            "data": "${options['reserve-buffer']}",
+            "dataType": "Number"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     const liquidate = options.l || options.liquidate;
     const interval = options.interval;
     const toBuy = options['spend-on'].map(s => s.replaceAll("_", " "));

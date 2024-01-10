@@ -1,4 +1,4 @@
-import { log, disableLogs, getConfiguration, instanceCount, getNsDataThroughFile, getFilePath, getActiveSourceFiles, formatNumberShort, formatDuration } from './helpers.js'
+import { log, disableLogs, getConfiguration, instanceCount, getNsDataThroughFile, getFilePath, getActiveSourceFiles, formatNumberShort, formatDuration, portRead, portWrite } from './helpers.js'
 
 const cityNames = ["Sector-12", "Aevum", "Volhaven", "Chongqing", "New Tokyo", "Ishima"];
 const antiChaosOperation = "Stealth Retirement Operation"; // Note: Faster and more effective than Diplomacy at reducing city chaos
@@ -52,6 +52,70 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Bladeburner": {
+          "success-threshold": {
+            "data": "${options['success-threshold']}",
+            "dataType": "Number"
+          },
+          "chaos-recovery-threshold": {
+            "data": "${options['chaos-recovery-threshold']}",
+            "dataType": "Number"
+          },
+          "max-chaos": {
+            "data": "${options['max-chaos']}",
+            "dataType": "Number"
+          },
+          "toast-upgrades": {
+            "data": "${options['toast-upgrades']}",
+            "dataType": "Boolean"
+          },
+          "toast-operations": {
+            "data": "${options['toast-operations']}",
+            "dataType": "Boolean"
+          },
+          "toast-relocations": {
+            "data": "${options['toast-relocations']}",
+            "dataType": "Boolean"
+          },
+          "low-stamina-pct": {
+            "data": "${options['low-stamina-pct']}",
+            "dataType": "Number"
+          },
+          "high-stamina-pct": {
+            "data": "${options['high-stamina-pct']}",
+            "dataType": "Number"
+          },
+          "training-limit": {
+            "data": "${options['training-limit']}",
+            "dataType": "Number"
+          },
+          "update-interval": {
+            "data": "${options['update-interval']}",
+            "dataType": "Number"
+          },
+          "ignore-busy-status": {
+            "data": "${options['ignore-busy-status']}",
+            "dataType": "Boolean"
+          },
+          "allow-raiding-highest-pop-city": {
+            "data": "${options['allow-raiding-highest-pop-city']}",
+            "dataType": "Boolean"
+          },
+          "reserved-action-count": {
+            "data": "${options['reserved-action-count']}",
+            "dataType": "Number"
+          },
+          "disable-spending-hashes": {
+            "data": "${options['disable-spending-hashes']}",
+            "dataType": "Boolean"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     disableLogs(ns, ['sleep'])
     player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');

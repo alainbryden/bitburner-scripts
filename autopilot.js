@@ -1,7 +1,7 @@
 import {
     log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-    formatMoney, formatDuration
+    formatMoney, formatDuration, portRead, portWrite
 } from './helpers.js'
 
 const persistentLog = "log.autopilot.txt";
@@ -63,7 +63,91 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
-
+    let port = ns.getPortHandle(65000);
+    port.write("{}")
+    let tempdata = `{
+        "Autopilot": {
+          "next-bn": {
+            "data": "${options['next-bn']}",
+            "dataType": "Number"
+          },
+          "disable-auto-destroy-bn": {
+            "data": "${options['disable-auto-destroy-bn']}",
+            "dataType": "Boolean"
+          },
+          "install-at-aug-count": {
+            "data": "${options['install-at-aug-count']}",
+            "dataType": "Number"
+          },
+          "install-at-aug-plus-nf-count": {
+            "data": "${options['install-at-aug-plus-nf-count']}",
+            "dataType": "Number"
+          },
+          "install-for-augs": {
+            "data": "${options['install-for-augs']}",
+            "dataType": "Array"
+          },
+          "install-countdown": {
+            "data": "${options['install-countdown']}",
+            "dataType": "Number"
+          },
+          "time-before-boosting-best-hack-server": {
+            "data": "${options['time-before-boosting-best-hack-server']}",
+            "dataType": "Number"
+          },
+          "reduced-aug-requirement-per-hour": {
+            "data": "${options['reduced-aug-requirement-per-hour']}",
+            "dataType": "Number"
+          },
+          "interval": {
+            "data": "${options['interval']}",
+            "dataType": "Number"
+          },
+          "interval-check-scripts": {
+            "data": "${options['interval-check-scripts']}",
+            "dataType": "Number"
+          },
+          "high-hack-threshold": {
+            "data": "${options['high-hack-threshold']}",
+            "dataType": "Number"
+          },
+          "enable-bladeburner": {
+            "data": "${options['enable-bladeburner']}",
+            "dataType": "Object"
+          },
+          "disable-bladeburner": {
+            "data": "${options['disable-bladeburner']}",
+            "dataType": "Boolean"
+          },
+          "wait-for-4s-threshold": {
+            "data": "${options['wait-for-4s-threshold']}",
+            "dataType": "Number"
+          },
+          "disable-wait-for-4s": {
+            "data": "${options['disable-wait-for-4s']}",
+            "dataType": "Boolean"
+          },
+          "disable-rush-gangs": {
+            "data": "${options['disable-rush-gangs']}",
+            "dataType": "Boolean"
+          },
+          "disable-casino": {
+            "data": "${options['disable-casino']}",
+            "dataType": "Boolean"
+          },
+          "on-completion-script": {
+            "data": "${options['on-completion-script']}",
+            "dataType": "Object"
+          },
+          "on-completion-script-args": {
+            "data": "${options['on-completion-script-args']}",
+            "dataType": "Array"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     log(ns, "INFO: Auto-pilot engaged...", true, 'info');
     // The game does not allow boolean flags to be turned "off" via command line, only on. Since this gets saved, notify the user about how they can turn it off.
     const flagsSet = ['disable-auto-destroy-bn', 'disable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs'].filter(f => options[f]);
@@ -360,7 +444,7 @@ async function checkOnRunningScripts(ns, player) {
     const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
     const daemonArgs = (player.skills.hacking < hackThreshold) ? [] :
         // Launch daemon in "looping" mode if we have sufficient hack level
-        ["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share",
+        ["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share", "--called-from-autopilot",
             // Use recovery thread padding sparingly until our hack level is significantly higher
             "--recovery-thread-padding", 1.0 + (player.skills.hacking - hackThreshold) / 1000.0];
     daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing

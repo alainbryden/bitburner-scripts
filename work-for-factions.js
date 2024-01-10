@@ -108,6 +108,104 @@ export async function main(ns) {
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
     disableLogs(ns, ['sleep']);
 
+    // Adding start up args to the port
+    let port = ns.getPortHandle(65000);
+    let tempdata = `
+    {
+      "Work-for-factions": {
+        "first": {
+          "data": "${options['first']}",
+          "dataType": "array"
+        },
+        "skip": {
+          "data": "${options['skip']}",
+          "dataType": "array"
+        },
+        "o": {
+          "data": "${options.o}",
+          "dataType": "boolean"
+        },
+        "desired-stats": {
+          "data": "${options['desired-stats']}",
+          "dataType": "array"
+        },
+        "no-xpmode": {
+          "data": "${options['no-xpmode']}",
+          "dataType": "boolean"
+        },
+        "no-focus": {
+          "data": "${options['no-focus']}",
+          "dataType": "boolean"
+        },
+        "no-studying": {
+          "data": "${options['no-studying']}",
+          "dataType": "boolean"
+        },
+        "pay-for-studies-threshold": {
+          "data": "${options['pay-for-studies-threshold']}",
+          "dataType": "number"
+        },
+        "training-stat-per-multi-threshold": {
+          "data": "${options['training-stat-per-multi-threshold']}",
+          "dataType": "number"
+        },
+        "no-coding-contracts": {
+          "data": "${options['no-coding-contracts']}",
+          "dataType": "boolean"
+        },
+        "no-crime": {
+          "data": "${options['no-crime']}",
+          "dataType": "boolean"
+        },
+        "crime-focus": {
+          "data": "${options['crime-focus']}",
+          "dataType": "boolean"
+        },
+        "fast-crimes-only": {
+          "data": "${options['fast-crimes-only']}",
+          "dataType": "boolean"
+        },
+        "invites-only": {
+          "data": "${options['invites-only']}",
+          "dataType": "boolean"
+        },
+        "prioritize-invites": {
+          "data": "${options['prioritize-invites']}",
+          "dataType": "boolean"
+        },
+        "get-invited-to-every-faction": {
+          "data": "${options['get-invited-to-every-faction']}",
+          "dataType": "boolean"
+        },
+        "karma-threshold-for-gang-invites": {
+          "data": "${options['karma-threshold-for-gang-invites']}",
+          "dataType": "number"
+        },
+        "disable-treating-gang-as-sole-provider-of-its-augs": {
+          "data": "${options['disable-treating-gang-as-sole-provider-of-its-augs']}",
+          "dataType": "boolean"
+        },
+        "no-bladeburner-check": {
+          "data": "${options['no-bladeburner-check']}",
+          "dataType": "boolean"
+        },
+        "xp-mode-ram": {
+          "data": "${options['xp-mode-ram']}",
+          "dataType": "number"
+        },
+        "xp-min-diff": {
+          "data": "${options['xp-min-diff']}",
+          "dataType": "number"
+        },
+        "xp-max-diff": {
+          "data": "${options['xp-max-diff']}",
+          "dataType": "number"
+        }
+      }
+    }`
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
+
     // Reset globals whose value can persist between script restarts in weird situations
     lastTravel = crimeCount = 0;
     notifiedAboutDaedalus = playerInBladeburner = false;

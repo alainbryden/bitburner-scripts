@@ -1,4 +1,4 @@
-import { getConfiguration, disableLogs, formatMoney, scanAllServers } from './helpers.js'
+import { getConfiguration, disableLogs, formatMoney, scanAllServers, portRead, portWrite } from './helpers.js'
 
 const argsSchema = [
     ['all', false], // Set to true to report on all servers, not just the ones within our hack level
@@ -17,6 +17,34 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Analyze-hack": {
+          "all": {
+            "data": "${options['all']}",
+            "dataType": "Boolean"
+          },
+          "silent": {
+            "data": "${options['silent']}",
+            "dataType": "Boolean"
+          },
+          "at-hack-level": {
+            "data": "${options['at-hack-level']}",
+            "dataType": "Number"
+          },
+          "hack-percent": {
+            "data": "${options['hack-percent']}",
+            "dataType": "Number"
+          },
+          "include-hacknet-ram": {
+            "data": "${options['include-hacknet-ram']}",
+            "dataType": "Boolean"
+          }
+        }
+      }`
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
+    
     disableLogs(ns, ["scan", "sleep"]);
 
     let serverNames = scanAllServers(ns);

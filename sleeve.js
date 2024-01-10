@@ -1,4 +1,4 @@
-import { log, getConfiguration, instanceCount, disableLogs, getActiveSourceFiles, getNsDataThroughFile, runCommand, formatMoney, formatDuration } from './helpers.js'
+import { log, getConfiguration, instanceCount, disableLogs, getActiveSourceFiles, getNsDataThroughFile, runCommand, formatMoney, formatDuration, portRead, portWrite } from './helpers.js'
 
 const argsSchema = [
     ['min-shock-recovery', 97], // Minimum shock recovery before attempting to train or do crime (Set to 100 to disable, 0 to recover fully)
@@ -51,6 +51,98 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Sleeve": {
+            "min-shock-recovery": {
+            "data": "${options['min-shock-recovery']}",
+            "dataType": "Number"
+            },
+            "shock-recovery": {
+            "data": "${options['shock-recovery']}",
+            "dataType": "Number"
+            },
+            "crime": {
+            "data": "${options['crime']}",
+            "dataType": "String"
+            },
+            "homicide-chance-threshold": {
+            "data": "${options['homicide-chance-threshold']}",
+            "dataType": "Number"
+            },
+            "disable-gang-homicide-priority": {
+            "data": "${options['disable-gang-homicide-priority']}",
+            "dataType": "Boolean"
+            },
+            "aug-budget": {
+            "data": "${options['aug-budget']}",
+            "dataType": "Number"
+            },
+            "buy-cooldown": {
+            "data": "${options['buy-cooldown']}",
+            "dataType": "Number"
+            },
+            "min-aug-batch": {
+            "data": "${options['min-aug-batch']}",
+            "dataType": "Number"
+            },
+            "reserve": {
+            "data": "${options['reserve']}",
+            "dataType": "Number"
+            },
+            "disable-follow-player": {
+            "data": "${options['disable-follow-player']}",
+            "dataType": "Boolean"
+            },
+            "disable-training": {
+            "data": "${options['disable-training']}",
+            "dataType": "Boolean"
+            },
+            "train-to-strength": {
+            "data": "${options['train-to-strength']}",
+            "dataType": "Number"
+            },
+            "train-to-defense": {
+            "data": "${options['train-to-defense']}",
+            "dataType": "Number"
+            },
+            "train-to-dexterity": {
+            "data": "${options['train-to-dexterity']}",
+            "dataType": "Number"
+            },
+            "train-to-agility": {
+            "data": "${options['train-to-agility']}",
+            "dataType": "Number"
+            },
+            "training-reserve": {
+            "data": "${options['training-reserve']}",
+            "dataType": "Number"
+            },
+            "training-cap-seconds": {
+            "data": "${options['training-cap-seconds']}",
+            "dataType": "Number"
+            },
+            "disable-spending-hashes-for-gym-upgrades": {
+            "data": "${options['disable-spending-hashes-for-gym-upgrades']}",
+            "dataType": "Boolean"
+            },
+            "enable-bladeburner-team-building": {
+            "data": "${options['enable-bladeburner-team-building']}",
+            "dataType": "Boolean"
+            },
+            "disable-bladeburner": {
+            "data": "${options['disable-bladeburner']}",
+            "dataType": "Boolean"
+            },
+            "failed-bladeburner-contract-cooldown": {
+            "data": "${options['failed-bladeburner-contract-cooldown']}",
+            "dataType": "Number"
+            }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     disableLogs(ns, ['getServerMoneyAvailable']);
     // Ensure the global state is reset (e.g. after entering a new bitnode)
     task = [], lastStatusUpdateTime = [], lastPurchaseTime = [], lastPurchaseStatusUpdate = [], availableAugs = [],

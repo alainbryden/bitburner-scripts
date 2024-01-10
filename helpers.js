@@ -777,7 +777,30 @@ export async function portRead(ns, port, category, dataName) {
         ns.write("Temp/portLog.txt", log, "a");
         return null;
     }
+    // lets log the success
+    datetiem = Date(Date.now()).toString();
+    log = `[${uuid}][${datetiem}][${scriptName}]: successfully read ${dataName} from the port.\n`;
+    ns.write("Temp/portLog.txt", log, "a");
 
+
+    ns.print("deserializing data");
+    // assuming that the data we got was serialized properly we now need to deserialize it and return it to the calling script.
+    switch(data[category][dataName]["dataType"]){
+        case "string":
+            return data[category][dataName]["data"];
+        case "number":
+            return Number(data[category][dataName]["data"]);
+        case "boolean":
+            return Boolean(data[category][dataName]["data"]);
+        case "array":
+            return JSON.parse(data[category][dataName]["data"]);
+        case "object":
+            return JSON.parse(data[category][dataName]["data"]);
+        default:
+            return data[category][dataName]["data"];
+    }
+
+    
     // lets return the data you requested. All the data is going to be a string so have fun turning it into whatever its supposed to be.
     // TODO: return the data in the correct format. or tell the script what format it is supposed to be in.
     return data[category][dataName]["data"];

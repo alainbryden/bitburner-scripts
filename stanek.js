@@ -1,6 +1,6 @@
 import {
     log, disableLogs, getFilePath, getConfiguration, formatNumberShort, formatRam,
-    getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, instanceCount, unEscapeArrayArgs
+    getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, instanceCount, unEscapeArrayArgs, portRead, portWrite
 } from './helpers.js'
 
 // Default sripts called at startup and shutdown of stanek
@@ -42,6 +42,50 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Stanek": {
+          "reserved-ram": {
+            "data": "${options['reserved-ram']}",
+            "dataType": "Number"
+          },
+          "reserved-ram-ideal": {
+            "data": "${options['reserved-ram-ideal']}",
+            "dataType": "Number"
+          },
+          "max-charges": {
+            "data": "${options['max-charges']}",
+            "dataType": "Number"
+          },
+          "on-startup-script": {
+            "data": "${options['on-startup-script']}",
+            "dataType": "String"
+          },
+          "on-startup-script-args": {
+            "data": "${options['on-startup-script-args']}",
+            "dataType": "Array"
+          },
+          "on-completion-script": {
+            "data": "${options['on-completion-script']}",
+            "dataType": "String"
+          },
+          "on-completion-script-args": {
+            "data": "${options['on-completion-script-args']}",
+            "dataType": "Array"
+          },
+          "no-tail": {
+            "data": "${options['no-tail']}",
+            "dataType": "Boolean"
+          },
+          "reputation-threshold": {
+            "data": "${options['reputation-threshold']}",
+            "dataType": "Number"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     disableLogs(ns, ['sleep', 'run', 'getServerMaxRam', 'getServerUsedRam'])
 
     // Validate whether we can run

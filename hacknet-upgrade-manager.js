@@ -1,4 +1,4 @@
-import { getConfiguration, disableLogs, formatDuration, formatMoney, } from './helpers.js'
+import { getConfiguration, disableLogs, formatDuration, formatMoney, portRead, portWrite } from './helpers.js'
 
 let haveHacknetServers = true; // Cached flag after detecting whether we do (or don't) have hacknet servers
 const argsSchema = [
@@ -22,6 +22,42 @@ export function autocomplete(data, _) {
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Hacknet-upgrade-manager": {
+          "max-payoff-time": {
+            "data": "${options['max-payoff-time']}",
+            "dataType": "String"
+          },
+          "time": {
+            "data": "${options['time']}",
+            "dataType": "String"
+          },
+          "continuous": {
+            "data": "${options['continuous'] || options.c}",
+            "dataType": "Boolean"
+          },
+          "interval": {
+            "data": "${options['interval']}",
+            "dataType": "Number"
+          },
+          "max-spend": {
+            "data": "${options['max-spend']}",
+            "dataType": "Number"
+          },
+          "toast": {
+            "data": "${options['toast']}",
+            "dataType": "Boolean"
+          },
+          "reserve": {
+            "data": "${options['reserve']}",
+            "dataType": "Number"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     const continuous = options.c || options.continuous;
     const interval = options.interval;
     let maxSpend = options["max-spend"];

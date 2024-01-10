@@ -1,4 +1,4 @@
-import { log, getConfiguration, instanceCount, getNsDataThroughFile, scanAllServers, formatMoney, formatRam } from './helpers.js'
+import { log, getConfiguration, instanceCount, getNsDataThroughFile, scanAllServers, formatMoney, formatRam, portRead, portWrite } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -39,6 +39,54 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Host-manager": {
+            "continuous": {
+            "data": "${options.c || options['run-continuously']}",
+            "dataType": "Boolean"
+            },
+            "interval": {
+            "data": "${options['interval']}",
+            "dataType": "Number"
+            },
+            "min-ram-exponent": {
+            "data": "${options['min-ram-exponent']}",
+            "dataType": "Number"
+            },
+            "utilization-trigger": {
+            "data": "${options['utilization-trigger']}",
+            "dataType": "Number"
+            },
+            "absolute-reserve": {
+            "data": "${options['absolute-reserve']}",
+            "dataType": "Number"
+            },
+            "reserve-percent": {
+            "data": "${options['reserve-percent']}",
+            "dataType": "Number"
+            },
+            "reserve-by-time": {
+            "data": "${options['reserve-by-time']}",
+            "dataType": "Boolean"
+            },
+            "allow-worse-purchases": {
+            "data": "${options['allow-worse-purchases']}",
+            "dataType": "Boolean"
+            },
+            "compare-to-home-threshold": {
+            "data": "${options['compare-to-home-threshold']}",
+            "dataType": "Number"
+            },
+            "compare-to-network-ram-threshold": {
+            "data": "${options['compare-to-network-ram-threshold']}",
+            "dataType": "Number"
+            }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     ns.disableLog('ALL')
 
     // Get the maximum number of purchased servers in this bitnode

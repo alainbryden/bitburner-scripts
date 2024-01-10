@@ -1,6 +1,6 @@
 import {
     log, getConfiguration, getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile,
-    getActiveSourceFiles, getStockSymbols
+    getActiveSourceFiles, getStockSymbols, portRead, portWrite
 } from './helpers.js'
 
 const argsSchema = [
@@ -30,6 +30,53 @@ export function autocomplete(data, args) {
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);
     if (!options) return; // Invalid options, or ran in --help mode.
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Ascend": {
+          "install-augmentations": {
+            "data": "${options['install-augmentations']}",
+            "dataType": "Boolean"
+          },
+          "reset": {
+            "data": "${options['reset']}",
+            "dataType": "Boolean"
+          },
+          "allow-soft-reset": {
+            "data": "${options['allow-soft-reset']}",
+            "dataType": "Boolean"
+          },
+          "skip-staneks-gift": {
+            "data": "${options['skip-staneks-gift']}",
+            "dataType": "Boolean"
+          },
+          "bypass-stanek-warning": {
+            "data": "${options['bypass-stanek-warning']}",
+            "dataType": "Boolean"
+          },
+          "on-reset-script": {
+            "data": "${options['on-reset-script']}",
+            "dataType": "Object"
+          },
+          "ticks-to-wait-for-additional-purchases": {
+            "data": "${options['ticks-to-wait-for-additional-purchases']}",
+            "dataType": "Number"
+          },
+          "max-wait-time": {
+            "data": "${options['max-wait-time']}",
+            "dataType": "Number"
+          },
+          "prioritize-home-ram": {
+            "data": "${options['prioritize-home-ram']}",
+            "dataType": "Boolean"
+          },
+          "prioritize-augmentations": {
+            "data": "${options['prioritize-augmentations']}",
+            "dataType": "Boolean"
+          }
+        }
+      }`
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     let dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
     if (!(4 in dictSourceFiles))
         return log(ns, "ERROR: You cannot automate installing augmentations until you have unlocked singularity access (SF4).", true, 'error');

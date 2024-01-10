@@ -1,6 +1,6 @@
 import {
     log, getConfiguration, instanceCount, formatNumberShort, formatMoney,
-    getNsDataThroughFile, getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue
+    getNsDataThroughFile, getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, portRead, portWrite
 } from './helpers.js'
 
 // PLAYER CONFIGURATION CONSTANTS
@@ -94,6 +94,98 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Faction-manager": {
+          "all": {
+            "data": "${options['all'] || options.a}",
+            "dataType": "Boolean"
+          },
+          "hide-locked-factions": {
+            "data": "${options['hide-locked-factions']}",
+            "dataType": "Boolean"
+          },
+          "verbose": {
+            "data": "${options['verbose'] || options.v}",
+            "dataType": "Boolean"
+          },
+          "ignore-player-data": {
+            "data": "${options['ignore-player-data'] || options.i}",
+            "dataType": "Boolean"
+          },
+          "ignore-faction": {
+            "data": "${options['ignore-faction']}",
+            "dataType": "Array"
+          },
+          "after-faction": {
+            "data": "${options['after-faction']}",
+            "dataType": "Array"
+          },
+          "force-join": {
+            "data": "${options['force-join']}",
+            "dataType": "Array"
+          },
+          "priority-aug": {
+            "data": "${options['priority-aug']}",
+            "dataType": "Array"
+          },
+          "omit-aug": {
+            "data": "${options['omit-aug']}",
+            "dataType": "Array"
+          },
+          "aug-desired": {
+            "data": "${options['aug-desired']}",
+            "dataType": "Array"
+          },
+          "stat-desired": {
+            "data": "${options['stat-desired']}",
+            "dataType": "Array"
+          },
+          "neuroflux-disabled": {
+            "data": "${options['neuroflux-disabled']}",
+            "dataType": "Boolean"
+          },
+          "disable-donations": {
+            "data": "${options['disable-donations']}",
+            "dataType": "Boolean"
+          },
+          "purchase": {
+            "data": "${options['purchase']}",
+            "dataType": "Boolean"
+          },
+          "ignore-stocks": {
+            "data": "${options['ignore-stocks']}",
+            "dataType": "Boolean"
+          },
+          "ignore-stanek": {
+            "data": "${options['ignore-stanek']}",
+            "dataType": "Boolean"
+          },
+          "show-unavailable-aug-purchase-order": {
+            "data": "${options['show-unavailable-aug-purchase-order']}",
+            "dataType": "Boolean"
+          },
+          "show-all-purchase-lists": {
+            "data": "${options['show-all-purchase-lists']}",
+            "dataType": "Boolean"
+          },
+          "sort": {
+            "data": "${options['sort']}",
+            "dataType": "String"
+          },
+          "hide-stat": {
+            "data": "${options['hide-stat']}",
+            "dataType": "Array"
+          },
+          "unique": {
+            "data": "${options['unique'] || options.u}",
+            "dataType": "Boolean"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     _ns = ns;
 
     // Ensure all globals are reset before we proceed with the script, in case we've done things out of order

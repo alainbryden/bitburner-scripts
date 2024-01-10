@@ -1,6 +1,6 @@
 import {
     log, getConfiguration, instanceCount, getNsDataThroughFile, getActiveSourceFiles, runCommand, tryGetBitNodeMultipliers,
-    formatMoney, formatNumberShort, formatDuration
+    formatMoney, formatNumberShort, formatDuration, portRead, portWrite
 } from './helpers.js'
 
 // Global config
@@ -71,6 +71,58 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
+    let port = ns.getPortHandle(65000);
+    let tempdata = `{
+        "Gangs": {
+          "training-percentage": {
+            "data": "${options['training-percentage']}",
+            "dataType": "Number"
+          },
+          "no-training": {
+            "data": "${options['no-training']}",
+            "dataType": "Boolean"
+          },
+          "no-auto-ascending": {
+            "data": "${options['no-auto-ascending']}",
+            "dataType": "Boolean"
+          },
+          "ascend-multi-threshold": {
+            "data": "${options['ascend-multi-threshold']}",
+            "dataType": "Number"
+          },
+          "ascend-multi-threshold-spacing": {
+            "data": "${options['ascend-multi-threshold-spacing']}",
+            "dataType": "Number"
+          },
+          "min-training-ticks": {
+            "data": "${options['min-training-ticks']}",
+            "dataType": "Number"
+          },
+          "reserve": {
+            "data": "${options['reserve']}",
+            "dataType": "Number"
+          },
+          "augmentations-budget": {
+            "data": "${options['augmentations-budget']}",
+            "dataType": "Number"
+          },
+          "equipment-budget": {
+            "data": "${options['equipment-budget']}",
+            "dataType": "Number"
+          },
+          "money-focus": {
+            "data": "${options['money-focus']}",
+            "dataType": "Boolean"
+          },
+          "reputation-focus": {
+            "data": "${options['reputation-focus']}",
+            "dataType": "Boolean"
+          }
+        }
+      }
+      `
+    await portWrite(ns,port,tempdata)
+    ns.print(port.peek());
     ownedSourceFiles = await getActiveSourceFiles(ns);
     const sf2Level = ownedSourceFiles[2] || 0;
     if (sf2Level == 0)

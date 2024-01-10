@@ -4,7 +4,7 @@ import {
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
     getFnRunViaNsExec, autoRetry, portRead, portWrite
-} from '/helpers.js'
+} from './helpers.js'
 
 // daemon.js has histocially been the central orchestrator of almost every script in the game.
 // Only recently has it been "enslaved" to an even higher-level orchestrator: autopilot.js
@@ -54,6 +54,7 @@ const argsSchema = [
     ['initial-hack-xp-time', 10], // Seconds. Set to 0 to not do any hack-xp grinding at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
     ['disable-script', []], // The names of scripts that you do not want run by our scheduler
     ['run-script', []], // The names of additional scripts that you want daemon to run on home
+    ['called-from-autopilot', false], // Used internally to indicate that this script was launched by autostart.js']
 ];
 
 export function autocomplete(data, args) {
@@ -208,11 +209,8 @@ export async function main(ns) {
     //so first thing we need to do is reset the port data to have nothing in it, why? 
     //well because the daemon is just now starting up and all scripts will be restarting as well making the current data there useless
     let port = ns.getPortHandle(65000);
-    port.clear();
 
-    // Right now lets just make the data blank as the intended use of this port is to allow scripts to communicate with each other during runtime 
-    // In the future data might be stored here that scripts use during start up but for now we dont have any of that
-    port.write("{}")
+
 
     //let tempdata ='{"Daemon":{"XP Mode":{"dataType": "boolean","data": "false"}}}';
     // Create thre data string of all the deamons options
@@ -287,64 +285,43 @@ export async function main(ns) {
     queueDelay = options['queue-delay'];
     maxBatches = options['max-batches'];
     homeReservedRam = options['reserved-ram']
-
+    
+    // we want to make sure that the port gets cleared if its not called from autopilot
+    if (!options['called-from-autopilot']) {
+        port.clear();
+        // Right now lets just make the data blank as the intended use of this port is to allow scripts to communicate with each other during runtime 
+        // In the future data might be stored here that scripts use during start up but for now we dont have any of that
+        port.write("{}")
+    }
     let tempdata = `
     {
       "Daemon": {
-        "h": {
-          "data": "${options.h}",
-          "dataType": "boolean"
-        },
         "hack-only": {
-          "data": "${options['hack-only']}",
-          "dataType": "boolean"
-        },
-        "s": {
-          "data": "${options.s}",
+          "data": "${options['hack-only'] || options.h}",
           "dataType": "boolean"
         },
         "stock-manipulation": {
-          "data": "${options['stock-manipulation']}",
-          "dataType": "boolean"
-        },
-        "disable-stock-manipulation": {
-          "data": "${options['disable-stock-manipulation']}",
+          "data": "${options['stock-manipulation'] || options.s}",
           "dataType": "boolean"
         },
         "stock-manipulation-focus": {
           "data": "${options['stock-manipulation-focus']}",
           "dataType": "boolean"
         },
-        "v": {
-          "data": "${options.v}",
-          "dataType": "boolean"
-        },
         "verbose": {
-          "data": "${options['verbose']}",
-          "dataType": "boolean"
-        },
-        "o": {
-          "data": "${options.o}",
+          "data": "${options['verbose'] || options.v}",
           "dataType": "boolean"
         },
         "run-once": {
-          "data": "${options['run-once']}",
-          "dataType": "boolean"
-        },
-        "x": {
-          "data": "${options.x}",
+          "data": "${options['run-once'] || options.o}",
           "dataType": "boolean"
         },
         "xp-only": {
-          "data": "${options['xp-only']}",
-          "dataType": "boolean"
-        },
-        "n": {
-          "data": "${options.n}",
+          "data": "${options['xp-only'] || options.x}",
           "dataType": "boolean"
         },
         "use-hacknet-nodes": {
-          "data": "${options['use-hacknet-nodes']}",
+          "data": "${options['use-hacknet-nodes'] || options.n}",
           "dataType": "boolean"
         },
         "use-hacknet-servers": {
@@ -353,7 +330,7 @@ export async function main(ns) {
         },
         "spend-hashes-for-money-when-under": {
           "data": "${options['spend-hashes-for-money-when-under']}",
-          "dataType": "float"
+          "dataType": "number"
         },
         "disable-spend-hashes": {
           "data": "${options['disable-spend-hashes']}",
@@ -365,23 +342,23 @@ export async function main(ns) {
         },
         "initial-max-targets": {
           "data": "${options['initial-max-targets']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "max-steal-percentage": {
           "data": "${options['max-steal-percentage']}",
-          "dataType": "float"
+          "dataType": "number"
         },
         "cycle-timing-delay": {
           "data": "${options['cycle-timing-delay']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "queue-delay": {
           "data": "${options['queue-delay']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "max-batches": {
           "data": "${options['max-batches']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "i": {
           "data": "${options['i']}",
@@ -389,7 +366,7 @@ export async function main(ns) {
         },
         "reserved-ram": {
           "data": "${options['reserved-ram']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "looping-mode": {
           "data": "${options['looping-mode']}",
@@ -397,7 +374,7 @@ export async function main(ns) {
         },
         "recovery-thread-padding": {
           "data": "${options['recovery-thread-padding']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "share": {
           "data": "${options['share']}",
@@ -409,7 +386,7 @@ export async function main(ns) {
         },
         "share-cooldown": {
           "data": "${options['share-cooldown']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "share-max-utilization": {
           "data": "${options['share-max-utilization']}",
@@ -421,11 +398,11 @@ export async function main(ns) {
         },
         "initial-study-time": {
           "data": "${options['initial-study-time']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "initial-hack-xp-time": {
           "data": "${options['initial-hack-xp-time']}",
-          "dataType": "int"
+          "dataType": "number"
         },
         "disable-script": {
           "data": "${options['disable-script']}",
