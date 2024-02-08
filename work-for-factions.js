@@ -485,7 +485,8 @@ async function earnFactionInvite(ns, factionName) {
     }
     if (breakToMainLoop()) return false;
 
-    // Skip factions whose remaining requirement is money. There's not much we can do to earn money
+    // Skip factions whose remaining requirement is money. Earning money is primarily the responsibility of other scripts.
+    // TODO: It might be reasonable to request a temporary stock liquidation if this would get us over the edge.
     if ((requirement = requiredMoneyByFaction[factionName]) && player.money < requirement)
         return ns.print(`${reasonPrefix} you have insufficient money. Need: ${formatMoney(requirement)}, Have: ${formatMoney(player.money)}`);
 
@@ -505,7 +506,7 @@ async function earnFactionInvite(ns, factionName) {
         player = await getPlayerInfo(ns); // Update player.city
     }
 
-    // Special case, earn a CEO position to gain an invite to Silhouette
+    // Special case: earn a CEO position to gain an invite to Silhouette
     if ("Silhouette" == factionName) {
         ns.print(`You must be a CO (e.g. CEO/CTO) of a company to earn an invite to ${factionName}. This may take a while!`);
         let factionConfig = companySpecificConfigs.find(f => f.name == factionName); // We set up Silhouette with a "company-specific-config" so that we can work for an invite like any megacorporation faction.
@@ -516,6 +517,17 @@ async function earnFactionInvite(ns, factionName) {
         factionConfig.companyName = companyNames.sort((a, b) => (3.2e6 - repByCompany[a]) / (100 + favorByCompany[a]) - (3.2e6 - repByCompany[b]) / (100 + favorByCompany[b]))[0];
         // Hack: We will be working indefinitely, so we rely on an external script (daemon + faction-manager) to join this faction for us, or for checkForNewPrioritiesInterval to elapse.
         workedForInvite = await workForMegacorpFactionInvite(ns, factionName, false); // Work until CTO and the external script joins this faction, triggering an exit condition.
+    }
+
+    // Special case: check hacknet stats before we try to join Netburners
+    if ("Netburners" == factionName) {
+        const [totalLevels, totalRam, totalCores] = await getNsDataThroughFile(ns,
+            '[...Array(ns.hacknet.numNodes()).keys()].map(i => ns.hacknet.getNodeStats(i))' +
+            '.reduce(([l, r, c], s) => [l + s.level, r + s.ram, c + s.cores], [0, 0, 0])',
+            '/Temp/hacknet-Netburners-stats.txt');
+        if (totalLevels < 100 || totalRam < 8 || totalCores < 4)
+            return ns.print(`${reasonPrefix} hacknet total stats do not yet meet requirements: ` +
+                `${totalLevels}/100 levels, ${totalRam}/8 ram, ${totalCores}/4 cores`);
     }
 
     if (breakToMainLoop()) return false;
