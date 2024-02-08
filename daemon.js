@@ -756,7 +756,8 @@ async function doTargetingLoop(ns) {
                 !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
             {
                 // Figure out if the player is currently working (no point in RAM share if we aren't currently working for a faction)
-                let workInfo = await getCurrentWorkInfo(ns);
+                // Getting work info requires sinularity (SF4) - if we don't have it yet, we can still share, but we can only assume we're currently doing faction work.
+                let workInfo = 4 in dictSourceFiles ? await getCurrentWorkInfo(ns) : { "type": "FACTION" };
                 if (workInfo.type == "FACTION") {
                     let shareTool = getTool("share");
                     let maxThreads = shareTool.getMaxThreads(); // This many threads would use up 100% of the (1-utilizationPercent)% RAM remaining
