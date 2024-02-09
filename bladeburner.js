@@ -373,8 +373,9 @@ async function spendSkillPoints(ns) {
         // Find the next lowest skill cost
         let skillToUpgrade, minPercievedCost = Number.MAX_SAFE_INTEGER;
         for (const skillName of skillNames) {
-            let percievedCost = skillCosts[skillName] * (costAdjustments[skillName] || 1);
-            // Bitburner bug workaround: Overclock is capped at lvl 90, but the cost does not return e.g. Infinity
+            // Workaround: Next v2.6.0 API is supposed to return 'Infinity' for skills that can't be upgraded but this comes back as null
+            let percievedCost = (skillCosts[skillName] ?? Number.POSITIVE_INFINITY) * (costAdjustments[skillName] || 1);
+            // Bitburner pre-2.6.0 workaround: Overclock is capped at lvl 90, but the cost makes it seem upgradable
             if (skillName === "Overclock" && skillLevels[skillName] == 90) percievedCost = Number.POSITIVE_INFINITY;
             if (percievedCost < minPercievedCost)
                 [skillToUpgrade, minPercievedCost] = [skillName, percievedCost];
