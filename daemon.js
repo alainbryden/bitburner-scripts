@@ -988,16 +988,16 @@ class Server {
         return Math.floor((this.percentageToSteal / this.percentageStolenPerHackThread()).toPrecision(14));
     }
     getGrowThreadsNeeded() {
-        return Math.min(this.getMaxMoney(),
+        return Math.ceil(Math.min(this.getMaxMoney(),
             // TODO: Not true! Worst case is 1$ per thread and *then* it multiplies. We can return a much lower number here.
-            Math.ceil((this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14)));
+            this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14));
     }
     getWeakenThreadsNeeded() {
         return Math.ceil(((this.getSecurity() - this.getMinSecurity()) / actualWeakenPotency()).toPrecision(14));
     }
     getGrowThreadsNeededAfterTheft() {
-        return Math.min(this.getMaxMoney(),
-            Math.ceil((this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage() * recoveryThreadPadding).toPrecision(14)));
+        return Math.ceil(Math.min(this.getMaxMoney(),
+            this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage() * recoveryThreadPadding).toPrecision(14));
     }
     getWeakenThreadsNeededAfterTheft() {
         return Math.ceil((this.getHackThreadsNeeded() * hackThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14));
@@ -1181,7 +1181,7 @@ async function performScheduling(ns, currentTarget, snapshot) {
         const newBatchStart = new Date((cyclesScheduled === 0) ? Date.now() + queueDelay : lastBatch.getTime() + cycleTimingDelay);
         lastBatch = new Date(newBatchStart.getTime());
         const batchTiming = getScheduleTiming(newBatchStart, currentTarget);
-        if (verbose && runOnce) logSchedule(batchTiming, currentTarget); // Special log for troubleshooting batches
+        if (verbose && runOnce) logSchedule(ns, batchTiming, currentTarget); // Special log for troubleshooting batches
         const newBatch = getScheduleObject(batchTiming, currentTarget, scheduledTasks.length);
         if (firstEnding === null) { // Can't start anything after this first hack completes (until back at min security), or we risk throwing off timing
             firstEnding = new Date(newBatch.hackEnd.valueOf());
@@ -1220,7 +1220,7 @@ async function performScheduling(ns, currentTarget, snapshot) {
 }
 
 /** Produces a special log for troubleshooting cycle schedules */
-let logSchedule = (schedule, currentTarget) =>
+let logSchedule = (ns, schedule, currentTarget) =>
     log(ns, `Current Time: ${formatDateTime(new Date())} Established a schedule for ${getTargetSummary(currentTarget)} from requested startTime ${formatDateTime(schedule.batchStart)}:` +
         `\n  Hack - End: ${formatDateTime(schedule.hackEnd)}  Start: ${formatDateTime(schedule.hackStart)}  Time: ${formatDuration(currentTarget.timeToHack())}` +
         `\n  Weak1- End: ${formatDateTime(schedule.firstWeakenEnd)}  Start: ${formatDateTime(schedule.firstWeakenStart)}  Time: ${formatDuration(currentTarget.timeToWeaken())}` +
