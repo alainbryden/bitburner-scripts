@@ -264,6 +264,10 @@ async function checkIfBnIsComplete(ns, player) {
     let pid = launchScriptHelper(ns, 'cleanup.js');
     if (pid) await waitForProcessToComplete(ns, pid);
 
+    // In all likelihood, daemon.js has already nuked this like it does all servers, but in case it hasn't:
+    pid = launchScriptHelper(ns, '/Tasks/crack-host.js', ['w0r1d_d43m0n']);
+    if (pid) await waitForProcessToComplete(ns, pid);
+
     // Use the new special singularity function to automate entering a new BN
     pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`, null, [nextBn, ns.getScriptName()]);
     if (pid) {
@@ -439,8 +443,8 @@ async function maybeDoCasino(ns, player) {
     // If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
     // it's likely a sign that the flag is wrong and we should run cleanup and let casino get run again to be safe.
     if (getTimeInAug() < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns)) < 8E9) {
-        launchScriptHelper(ns, 'cleanup.js');
-        await ns.sleep(200); // Wait a short while for the dust to settle.
+        const pid = launchScriptHelper(ns, 'cleanup.js');
+        if (pid) await waitForProcessToComplete(ns, pid);
     } else if (casinoRanFileSet)
         return ranCasino = true;
     // If it's been less than 1 minute, wait a while to establish income
