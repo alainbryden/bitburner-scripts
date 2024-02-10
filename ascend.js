@@ -51,8 +51,11 @@ export async function main(ns) {
     // STEP 1: Liquidate Stocks and (SF9) Hacknet Hashes
     log(ns, 'Sell stocks and hashes...', true, 'info');
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
-    const stkSymbols = await getStockSymbols(ns);
-    if (stkSymbols != null) {
+
+    // If we do not have tix api access, we cannot automate checking on or selling stocks, so skip this
+    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()');
+    if (hasTixApiAccess) {
+        const stkSymbols = await getStockSymbols(ns);
         const countOwnedStocks = async () => await getNsDataThroughFile(ns, `ns.args.map(sym => ns.stock.getPosition(sym))` +
             `.reduce((t, stk) => t + (stk[0] + stk[2] > 0 ? 1 : 0), 0)`, '/Temp/owned-stocks.txt', stkSymbols);
         let ownedStocks;
