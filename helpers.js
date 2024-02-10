@@ -445,16 +445,12 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
     return others.length;
 }
 
-let cachedStockSymbols = null; // Cache of stock symbols since these never change
-
 /** Helper function to get all stock symbols, or null if you do not have TIX api access.
- * Caches symbols the first time they are successfully requested, since symbols never change.
  * @param {NS} ns */
 export async function getStockSymbols(ns) {
-    cachedStockSymbols ??= await getNsDataThroughFile(ns,
+    return await getNsDataThroughFile(ns,
         `(() => { try { return ns.stock.getSymbols(); } catch { return null; } })()`,
         '/Temp/stock-symbols.txt');
-    return cachedStockSymbols;
 }
 
 /** Helper function to get the total value of stocks using as little RAM as possible.
