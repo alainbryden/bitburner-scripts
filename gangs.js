@@ -229,6 +229,7 @@ async function onTerritoryTick(ns, myGangInfo) {
     }
 
     // Update gang members in case someone died in a clash
+    myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()');
     const canRecruit =  await getNsDataThroughFile(ns, 'ns.gang.canRecruitMember()');
     if (canRecruit)
         await doRecruitMember(ns) // Recruit new members if available
