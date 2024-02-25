@@ -988,22 +988,22 @@ class Server {
         return Math.floor((this.percentageToSteal / this.percentageStolenPerHackThread()).toPrecision(14));
     }
     getGrowThreadsNeeded() {
-        return Math.ceil(Math.min(this.getMaxMoney(),
+        return Math.max(0, Math.ceil(Math.min(this.getMaxMoney(),
             // TODO: Not true! Worst case is 1$ per thread and *then* it multiplies. We can return a much lower number here.
-            this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14));
+            this.cyclesNeededForGrowthCoefficient() / this.serverGrowthPercentage()).toPrecision(14)));
     }
     getWeakenThreadsNeeded() {
-        return Math.ceil(((this.getSecurity() - this.getMinSecurity()) / actualWeakenPotency()).toPrecision(14));
+        return Math.max(0, Math.ceil(((this.getSecurity() - this.getMinSecurity()) / actualWeakenPotency()).toPrecision(14)));
     }
     getGrowThreadsNeededAfterTheft() {
-        return Math.ceil(Math.min(this.getMaxMoney(),
-            this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage() * recoveryThreadPadding).toPrecision(14));
+        return Math.max(0, Math.ceil(Math.min(this.getMaxMoney(),
+            this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage() * recoveryThreadPadding).toPrecision(14)));
     }
     getWeakenThreadsNeededAfterTheft() {
-        return Math.ceil((this.getHackThreadsNeeded() * hackThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14));
+        return Math.max(0, Math.ceil((this.getHackThreadsNeeded() * hackThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14)));
     }
     getWeakenThreadsNeededAfterGrowth() {
-        return Math.ceil((this.getGrowThreadsNeededAfterTheft() * growthThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14));
+        return Math.max(0, Math.ceil((this.getGrowThreadsNeededAfterTheft() * growthThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14)));
     }
     hasRoot() { return this._hasRootCached ??= this.ns.hasRootAccess(this.name); }
     isHost() { return this.name == daemonHost; }
@@ -1456,7 +1456,7 @@ async function prepServer(ns, currentTarget) {
     let weakenThreadsAllowable = weakenTool.getMaxThreads(); // Note: Max is based on total ram across all servers (since thread spreading is allowed)
     let weakenThreadsNeeded = currentTarget.getWeakenThreadsNeeded();
     // Plan grow if needed, but don't bother if we didn't have enough ram to schedule all weaken threads to reach min security
-    let growThreadsNeeded, growThreadsScheduled;
+    let growThreadsNeeded, growThreadsScheduled = 0;
     if (weakenThreadsNeeded < weakenThreadsAllowable && (growThreadsNeeded = currentTarget.getGrowThreadsNeeded())) {
         let growThreadsAllowable = growTool.getMaxThreads(true) - weakenThreadsNeeded; // Take into account RAM that will be consumed by weaken threads scheduled
         growThreadsScheduled = Math.min(growThreadsAllowable, growThreadsNeeded);
