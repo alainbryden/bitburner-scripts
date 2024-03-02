@@ -1,5 +1,5 @@
 import { instanceCount, getNsDataThroughFile, formatDuration, formatNumberShort } from './helpers.js'
-import { crimeForKillsKarmaStats } from './work-for-factions.js'
+import { commitCrime } from './work-for-factions.js'
 
 const crimes = ["shoplift", "rob store", "mug", "larceny", "deal drugs", "bond forgery", "traffick arms", "homicide", "grand theft auto", "kidnap", "assassinate", "heist"]
 const argFastCrimesOnly = "--fast-crimes-only";
@@ -12,7 +12,7 @@ export async function main(ns) {
     let crime = ns.args.length == 0 ? undefined : ns.args.join(" "); // Need to join in case the crime has a space in it - it will be treated as two args
     ns.tail();
     if (!crime || ns.args.includes(argFastCrimesOnly)) // More sophisticated auto-scaling crime logic
-        await crimeForKillsKarmaStats(ns, 0, 0, Number.MAX_SAFE_INTEGER, ns.args.includes(argFastCrimesOnly));
+        await commitCrime(ns, 0, 0, Number.MAX_SAFE_INTEGER, ns.args.includes(argFastCrimesOnly));
     else // Simple crime loop for the specified crime
         await legacyAutoCrime(ns, crime);
 }

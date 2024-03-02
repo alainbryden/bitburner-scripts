@@ -9,12 +9,13 @@ const argsSchema = [
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
-    ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
+    ['no-focus', false], // Disable focusing, and forces study/faction/company/crime work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
     ['pay-for-studies-threshold', 200000], // Only be willing to pay for our studies if we have this much money
     ['training-stat-per-multi-threshold', 100], // Heuristic: Estimate that we can train this many levels for every mult / exp_mult we have in a reasonable amount of time.
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
-    ['no-crime', false], // Disable doing crimes at all. (Also disabled with --no-focus)
+    ['no-crime', false], // Disable doing crimes at all.
+    ['no-gym', false], // Disable training in the gym.
     ['crime-focus', false], // Useful in crime-focused BNs when you want to focus on crime related factions
     ['fast-crimes-only', false], // Assasination and Heist are so slow, I can see people wanting to disable them just so they can interrupt at will.
     ['invites-only', false], // Just work to get invites, don't work for augmentations / faction rep
@@ -350,7 +351,7 @@ async function mainLoop(ns) {
     }
     if (!foundWork && !options['no-crime']) { // Otherwise, kill some time by doing crimes for a little while
         ns.print(`INFO: Nothing to do. Doing a little crime...`);
-        await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
+        await commitCrime(ns, 0, -ns.heart.break() + 1000 /* Hack: Decrease Karma by 1000 */, 0);
     } else if (!foundWork) { // If our hands our tied, twiddle our thumbs a bit
         ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
         await ns.sleep(30000);
@@ -393,6 +394,7 @@ async function earnFactionInvite(ns, factionName) {
     let workedForInvite = false;
     // If committing crimes can help us join a faction - we know how to do that
     let doCrime = false;
+    let doGym = false;
     if ((requirement = requiredKarmaByFaction[factionName]) && -ns.heart.break() < requirement) {
         ns.print(`${reasonPrefix} you have insufficient Karma. Need: ${-requirement}, Have: ${ns.heart.break()}`);
         doCrime = true;
@@ -432,12 +434,16 @@ async function earnFactionInvite(ns, factionName) {
                     `${formatNumberShort(player.mults[s])}*${formatNumberShort(player.mults[`${s}_exp`])}*` +
                     `${formatNumberShort(bitnodeMultipliers[`${title(s)}LevelMultiplier`])}*` +
                     `${formatNumberShort(bitnodeMultipliers.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
-        doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
+        doGym = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
-    if (doCrime && options['no-crime'])
-        return ns.print(`${reasonPrefix} Doing crime to meet faction requirements is disabled. (--no-crime or --no-focus)`);
+    if (doCrime && options['no-crime'] && !doGym)
+        return ns.print(`${reasonPrefix} Doing crime to meet faction requirements is disabled. (--no-crime)`);
+    if (doGym && options['no-gym'])
+        return ns.print(`${reasonPrefix} Going to the gym to meet faction requirements is disabled. (--no-gym)`);
     if (doCrime)
-        workedForInvite = await crimeForKillsKarmaStats(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
+        workedForInvite = await commitCrime(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
+    if (doGym)
+        workedForInvite = await doGymTraining(ns, requiredCombatByFaction[factionName] || 0);
 
     // Study for hack levels if that's what's keeping us
     // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
@@ -557,26 +563,24 @@ async function goToCity(ns, cityName) {
 }
 
 /** @param {NS} ns */
-export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
+export async function commitCrime(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
     const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
     let player = await getPlayerInfo(ns);
     let strRequirements = [];
-    let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER || reqStats >= Number.MAX_SAFE_INTEGER;
+    let forever = reqKills >= Number.MAX_SAFE_INTEGER || reqKarma >= Number.MAX_SAFE_INTEGER;
     if (reqKills) strRequirements.push(() => `${reqKills} kills (Have ${player.numPeopleKilled})`);
     if (reqKarma) strRequirements.push(() => `-${reqKarma} Karma (Have ${Math.round(ns.heart.break()).toLocaleString('en')})`);
     if (reqStats) strRequirements.push(() => `${reqStats} of each combat stat (Have ` +
         `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
-    let anyStatsDeficient = (p) => p.skills.strength < reqStats || p.skills.defense < reqStats ||
-        /*                      */ p.skills.dexterity < reqStats || p.skills.agility < reqStats;
-    let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
-    while (forever || (needStats = anyStatsDeficient(player)) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
+    let crime, lastCrime, crimeTime, lastStatusUpdateTime;
+    while (forever || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
         let karma = -ns.heart.break();
         crime = crimeCount < 2 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
-            (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
+            (!anyStatsDeficient(player, reqStats) && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly && index <= 1 ? 0 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         // Warn if current crime is disrupted
         let currentWork = await getCurrentWorkInfo(ns);
@@ -604,8 +608,123 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         crimeCount++;
         player = await getPlayerInfo(ns);
     }
+
     ns.print(`Done committing crimes. Reached ${strRequirements.map(r => r()).join(', ')}`);
     return true;
+}
+
+/**
+ * @param {NS} ns 
+ * @returns {Promise<boolean>} true if work was done
+*/
+async function doGymTraining(ns, reqStats) {
+    // ToDo: consider adding option to limit training money
+    // ToDo: stop training if money disappeared->sleeve.js
+    async function getGymCost(etaMilli, server, costMult) {
+        const backdoored = await getNsDataThroughFile(ns, `ns.getServer(ns.args[0]).backdoorInstalled`, null, [server]);
+        return baseGymCost * costMult * (etaMilli / 1000) * (backdoored ? .9 : 1);
+    }
+
+    // Gets the time to fill Exp requirements.
+    async function getSkillEta(skill, reqStats, player, bnStatMult, gymSkillMult) {
+        const statExpMult = player.mults[skill + "_exp"],
+            expPerMilli = ((Math.ceil(statExpMult * 10000) / 10000) * gymSkillMult) / 1000,
+            currentExp = player.exp[skill],
+            statMult = player.mults[skill] * bnStatMult,
+            totalExpForLevel = Math.exp((reqStats / statMult + 200) / 32) - 534.6,
+            requiredExp = totalExpForLevel - currentExp
+
+        return (requiredExp / expPerMilli);
+    }
+
+    /**
+     * @returns {Promise<boolean>}
+     */
+    async function gymTrain(gym, stat, focus) {
+        return (await getNsDataThroughFile(ns, `ns.singularity.gymWorkout(ns.args[0], ns.args[1], ns.args[2])`, null, [gym, stat, focus]));
+    }
+
+    async function recalculateGyms() {
+        for (let i = 0; i < gymByCity.length; ++i) {
+            let entry = gymByCity[i]
+            entry[5] = await getSkillEta(stats[currentStat], reqStats, player, bnStatMults[currentStat], entry[3])
+            entry[6] = await getGymCost(entry[5], entry[2], entry[4]) + ((player.city != entry[0]) ? 200000 : 0)
+        }
+        bestAvailableGym = gymByCity.filter(entry => entry[6] < player.money).sort((entry1, entry2) => entry1[5] - entry2[5])[0]
+        cheapestGym = gymByCity.sort((entry1, entry2) => entry1[6] - entry2[6])[0]
+    }
+
+    let player = await getPlayerInfo(ns),
+        isWorking = false,
+        currentStat = 0,
+        bestAvailableGym,
+        cheapestGym,
+        lastStatusUpdateTime = 0,
+        statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility]
+
+    const baseGymCost = 120,
+        statForever = reqStats >= Number.MAX_SAFE_INTEGER,
+        /** [[city, name, server, xp, cost, eta, cost], ...] */
+        gymByCity = [
+            ["Aevum", "Crush Fitness Gym", "crush-fitness", 2, 3, 0, 0],
+            ["Aevum", "Snap Fitness Gym", "snap-fitness", 5, 10, 0, 0],
+            ["Sector-12", "Iron Gym", "iron-gym", 1, 1, 0, 0],
+            ["Sector-12", "Powerhouse Gym", "powerhouse-fitness", 10, 20, 0, 0],
+            ["Volhaven", "Millenium Fitness Gym", "millenium-fitness", 4, 7, 0, 0]],
+        stats = ["strength", "defense", "dexterity", "agility"],
+        bnStatMults = [bitnodeMultipliers.StrengthLevelMultiplier, bitnodeMultipliers.DefenseLevelMultiplier, bitnodeMultipliers.DexterityLevelMultiplier, bitnodeMultipliers.AgilityLevelMultiplier]
+
+    while (statValues[currentStat] >= reqStats) {
+        currentStat += 1;
+        if (currentStat >= stats.length) {
+            ns.print(`tried to start training stats to ${reqStats} but all stats were already high enough`)
+            return false
+        }
+    }
+
+    await recalculateGyms()
+
+    if (!bestAvailableGym) return ns.print(`Warn: You're too poor to finish training, get at least ${cheapestGym[6]} money`)
+    // Travels to gyms city since ns.singularity.gymWorkout() requires that the location of the player is the same as the gym
+    if (player.city != bestAvailableGym[0]) await goToCity(ns, bestAvailableGym[0]);
+
+    while (statForever || anyStatsDeficient(player, reqStats)) {
+        player = await getPlayerInfo(ns);
+
+        let statValues = [player.skills.strength, player.skills.defense, player.skills.dexterity, player.skills.agility]
+
+        if (!statForever && breakToMainLoop()) return ns.print('INFO: Interrupting training to check on high-level priorities.');
+        if (!isWorking) {
+            isWorking = await gymTrain(bestAvailableGym[1], stats[currentStat], shouldFocus);
+        }
+        if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+            lastStatusUpdateTime = Date.now();
+            log(ns, `Training "${stats[currentStat]}" at ${bestAvailableGym[1]}. Currently at ${reqStats}/${statValues[currentStat]}.`
+                + ` (ETA: ${formatDuration(bestAvailableGym[5])})`, false, 'info');
+        }
+        if (statValues[currentStat] >= reqStats) {
+            ns.print(`SUCCESS: ${stats[currentStat]} stat requirement completed.`);
+            currentStat += 1;
+            if (currentStat >= stats.length) currentStat = 0; 
+            await stop(ns)
+            isWorking = false;
+        }
+
+        await ns.sleep(Math.min(Math.max(bestAvailableGym[5], 200), loopSleepInterval));
+        await recalculateGyms()
+    }
+
+    const strRequirements = `${reqStats} of each combat stat (Have ` +
+        `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`
+    ns.print(`Done gym training. Reached ${strRequirements}`);
+    return true;
+}
+
+function anyStatsDeficient(player, reqStats) {
+    return player.skills.strength < reqStats
+        || player.skills.defense < reqStats
+        || player.skills.dexterity < reqStats
+        || player.skills.agility < reqStats;
 }
 
 /** @param {NS} ns */
