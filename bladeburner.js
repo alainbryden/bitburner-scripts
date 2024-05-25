@@ -278,12 +278,12 @@ async function mainLoop(ns) {
 
         // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
         if (!populationUncertain)
-            bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
+            bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'] && getCount(a) >= 1)[0];
         else // Special case for when population uncertainty is high - proceed so long as max chance is high enough
-            bestActionName = candidateActions.filter(a => maxChance(a) > options['success-threshold'])[0];
+            bestActionName = candidateActions.filter(a => maxChance(a) > options['success-threshold'] && getCount(a) >= 1)[0];
 
         if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
-            bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'])[0];
+            bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'] && getCount(a) >= 1)[0];
         if (bestActionName) // If we found something to do, log details about its success chance range
             reason = actionSummaryString(bestActionName);
 
