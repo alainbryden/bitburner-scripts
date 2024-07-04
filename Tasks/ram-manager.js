@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, getConfiguration, getNsDataThroughFile, log } from './helpers.js'
+import { formatMoney, formatRam, getConfiguration, getNsDataThroughFile, log } from '../helpers.js'
 
 const max_ram = 2 ** 30;
 const argsSchema = [

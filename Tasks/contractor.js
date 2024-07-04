@@ -1,4 +1,4 @@
-import { getFilePath, getNsDataThroughFile, disableLogs, scanAllServers } from './helpers.js'
+import { getFilePath, getNsDataThroughFile, disableLogs, scanAllServers } from '../helpers.js'
 const scriptSolver = getFilePath("/Tasks/contractor.js.solver.js");
 
 /** @param {NS} ns **/
