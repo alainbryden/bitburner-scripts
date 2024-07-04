@@ -1,6 +1,6 @@
 const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
 
-//Silly human, you can't import a typescript module into a javascript 
+//Silly human, you can't import a typescript module into a javascript (wouldn't that be slick though?)
 //import { codingContractTypesMetadata } from 'https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts'
 
 // This contract solver has the bare-minimum footprint of 1.6 GB (base) + 10 GB (ns.codingcontract.attempt)
@@ -13,6 +13,16 @@ export async function main(ns) {
     let contractsDb = JSON.parse(ns.args[0]);
     const fContents = ns.read(fUnsolvedContracts);
     const notified = fContents ? JSON.parse(fContents) : [];
+
+    // Don't spam toast notifications and console messages if there are more than 20 contracts to solve:
+    const quietSolve = contractsDb.length > 20;
+    let failureCount = 0;
+    if (quietSolve) {
+        const message = `Welcome back. There are ${contractsDb.length} to solve, so we won't generate a notification for each.`
+        ns.toast(message, 'success');
+        ns.tprint(message);
+    }
+
     for (const contractInfo of contractsDb) {
         const answer = findAnswer(contractInfo)
         let notice = null;
@@ -21,28 +31,33 @@ export async function main(ns) {
             try {
                 solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
                 if (solvingResult) {
-                    const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
-                    ns.toast(message, 'success');
-                    ns.tprint(message);
+                    if (!quietSolve) {
+                        const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
+                        ns.toast(message, 'success');
+                        ns.tprint(message);
+                    }
                 } else {
                     notice = `ERROR: Wrong answer for contract type "${contractInfo.type}" (${contractInfo.contract} on ${contractInfo.hostname}):` +
                         `\nIncorrect Answer Given: ${JSON.stringify(answer)}`;
                 }
             } catch (err) {
+                failureCount++;
                 let errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
                 if (err?.stack) errorMessage += '\n' + err.stack;
-                notice = `ERROR: Attemt to solve contract raised an error. (Answer Given: ${JSON.stringify(answer)})` +
-                    `\nWhile unlikely, this could happen if the contract vanished before we had a chance to solve it:\n"${errorMessage}"`;
+                // Ignore errors about missing contracts. This can happen if this script gets while another instance is already running.
+                if (errorMessage.indexOf("Cannot find contract") == -1)
+                    notice = `ERROR: Attemt to solve contract raised an error. (Answer Given: ${JSON.stringify(answer)})\n"${errorMessage}"`;
             }
         } else {
             notice = `WARNING: No solver available for contract type "${contractInfo.type}"`;
         }
         if (notice) {
-            if (!notified.includes(contractInfo.contract)) {
+            if (!notified.includes(contractInfo.contract) && !quietSolve) {
                 ns.tprint(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`)
                 ns.toast(notice, 'warning');
                 notified.push(contractInfo.contract)
             }
+            // Always print errors to scripts own tail window
             ns.print(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`);
         }
         await ns.sleep(10)
@@ -50,6 +65,14 @@ export async function main(ns) {
     // Keep tabs of failed contracts
     if (notified.length > 0)
         await ns.write(fUnsolvedContracts, JSON.stringify(notified), "w");
+    // Let the user know when we're done solving a large number of contracts.
+    if (quietSolve) {
+        const message = `Done solving ${contractsDb.length}. ${contractsDb.length - failureCount} succeeded, and ${failureCount} failed. See tail logs for errors.`
+        if (failureCount > 0)
+            ns.tail();
+        ns.toast(message, 'success');
+        ns.tprint(message);
+    }
 }
 
 function findAnswer(contract) {
