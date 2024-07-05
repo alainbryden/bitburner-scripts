@@ -70,8 +70,8 @@ export function rewriteFileForSubfolder(ns, path) {
     let contents = ns.read(path);
     // Replace subfolder reference in helpers.js getFilePath:
     contents = contents.replace(`const subfolder = ''`, `const subfolder = '${options.subfolder}/'`);
-    // Replace any imports, which can't use getFilePath:
-    contents = contents.replace(/from '(\.\/)?(.*)'/g, `from '${pathJoin(options.subfolder, '$2')}'`);
+    // Replace any imports, which can't use getFilePath, but only if they don't specify a relative path (../)
+    contents = contents.replace(/from '(\.\/)?((?!\.\.\/).*)'/g, `from '${pathJoin(options.subfolder, '$2')}'`);
     ns.write(path, contents, 'w');
     return true;
 }
