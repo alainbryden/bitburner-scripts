@@ -16,9 +16,12 @@ const argsSchema = [
     ['train-to-defense', 105], // Sleeves will go to the gym until they reach this much Def
     ['train-to-dexterity', 70], // Sleeves will go to the gym until they reach this much Dex
     ['train-to-agility', 70], // Sleeves will go to the gym until they reach this much Agi
+    ['study-to-hacking', 25], // Sleeves will go to university until they reach this much Hak
+    ['study-to-charisma', 25], // Sleeves will go to university until they reach this much Cha
     ['training-reserve', null], // Defaults to global reserve.txt. Can be set to a negative number to allow debt. Sleeves will not train if money is below this amount.
     ['training-cap-seconds', 2 * 60 * 60 /* 2 hours */], // Time since the start of the bitnode after which we will no longer attempt to train sleeves to their target "train-to" settings
     ['disable-spending-hashes-for-gym-upgrades', false], // Set to true to disable spending hashes on gym upgrades when training up sleeves.
+    ['disable-spending-hashes-for-study-upgrades', false], // Set to true to disable spending hashes on study upgrades when smarting up sleeves.
     ['enable-bladeburner-team-building', false], // Set to true to have one sleeve support the main sleeve, and another do recruitment. Otherwise, they will just do more "Infiltrate Synthoids"
     ['disable-bladeburner', false], // Set to true to disable having sleeves workout at the gym (costs money)
     ['failed-bladeburner-contract-cooldown', 30 * 60 * 1000], // Default 30 minutes: time to wait after failing a bladeburner contract before we try again
@@ -30,6 +33,7 @@ const statusUpdateInterval = 10 * 60 * 1000; // Log sleeve status this often, ev
 const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
 const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
+const trainSmarts = ['hacking', 'charisma'];
 const sleeveBbContractNames = ["Tracking", "Bounty Hunter", "Retirement"];
 const minBbContracts = 2; // There should be this many contracts remaining before sleeves attempt them
 const minBbProbability = 0.99; // Player chance should be this high before sleeves attempt contracts
@@ -151,6 +155,9 @@ async function mainLoop(ns) {
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
+    if (canTrain && task.some(t => t?.startsWith("study")) && !options['disable-spending-hashes-for-study-upgrades'])
+        if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Studying")', '/Temp/spend-hashes-on-study.txt'))
+            log(ns, `SUCCESS: Bought "Improve Studying" to speed up Sleeve studying.`, false, 'success');
     if (playerInBladeburner && (7 in ownedSourceFiles)) {
         const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`);
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, null, [bladeburnerCity]);
@@ -229,7 +236,14 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
     }
     // Train if our sleeve's physical stats aren't where we want them
     if (canTrain) {
+        const univClasses = {
+            "hacking":  ns.enums.UniversityClassType.algorithms,
+            "charisma": ns.enums.UniversityClassType.leadership
+        };
         let untrainedStats = trainStats.filter(stat => sleeve.skills[stat] < options[`train-to-${stat}`]);
+        let untrainedSmarts = trainSmarts.filter(smart => sleeve.skills[smart] < options[`study-to-${smart}`]);
+
+        // prioritize physical training
         if (untrainedStats.length > 0) {
             if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
@@ -241,6 +255,19 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
             var gym = ns.enums.LocationName.Sector12PowerhouseGym;
             return [`train ${trainStat} (${gym})`, `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`, [i, gym, trainStat],
             /*   */ `training ${trainStat}... ${sleeve.skills[trainStat]}/${(options[`train-to-${trainStat}`])}`];
+        // if we're tough enough, flip over to studying to improve the mental stats
+        } else if (untrainedSmarts.length > 0) {
+          if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
+              await promptForTrainingBudget(ns); // check we can go into training debt
+            if (sleeve.city != ns.enums.CityName.Volhaven) {
+              log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Volhaven so that they can study at ZB Institute.`);
+              await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', null , [i, ns.enums.CityName.Volhaven]);
+            }
+            var trainSmart = untrainedSmarts.reduce((min, s) => sleeve.skills[s] < sleeve.skills[min] ? s : min, untrainedSmarts[0]);
+            var univ = ns.enums.LocationName.VolhavenZBInstituteOfTechnology;
+            var course = univClasses[trainSmart];
+            return [`study ${trainSmart} (${univ})`, `ns.sleeve.setToUniversityCourse(ns.args[0], ns.args[1], ns.args[2])`, [i, univ, course],
+            /*   */ `studying ${trainSmart}... ${sleeve.skills[trainSmart]}/${(options[`study-to-${trainSmart}`])}`];
         }
     }
     // If player is currently working for faction or company rep, a sleeve can help him out (Note: Only one sleeve can work for a faction)
