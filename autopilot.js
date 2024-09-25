@@ -7,7 +7,7 @@ import {
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
 const casinoFlagFile = "/Temp/ran-casino.txt";
-const defaultBnOrder = [4.3, 1.3, 5.1, 9.2, 10.1, 2.1, 8.2, 10.3, 9.3, 11.3, 13.3, 5.3, 7.1, 6.3, 7.3, 2.3, 8.3, 3.3, 12.999];
+const defaultBnOrder = [4.3, 1.3, 14.3, 5.1, 9.2, 10.1, 2.1, 8.2, 10.3, 9.3, 11.3, 13.3, 5.3, 7.1, 6.3, 7.3, 2.3, 8.3, 3.3, 12.999];
 
 let options; // The options used at construction time
 const argsSchema = [ // The set of all command line arguments
@@ -393,6 +393,11 @@ async function checkOnRunningScripts(ns, player) {
             log(ns, `INFO: Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
         launchScriptHelper(ns, 'daemon.js', daemonArgs);
         daemonStartTime = Date.now();
+    }
+
+    const goplayer = findScript('go.js');
+    if (!goplayer && homeRam >= 75 && 14 in unlockedSFs) {
+        launchScriptHelper(ns, 'go.js')
     }
 
     // Default work for faction args we think are ideal for speed-running BNs
