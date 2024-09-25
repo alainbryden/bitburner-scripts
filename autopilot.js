@@ -396,11 +396,6 @@ async function checkOnRunningScripts(ns, player) {
         daemonStartTime = Date.now();
     }
 
-    const goplayer = findScript('go.js');
-    if (!options["disable-go"] && !goplayer && homeRam >= 75 && 14 in unlockedSFs) {
-        launchScriptHelper(ns, 'go.js')
-    }
-
     // Default work for faction args we think are ideal for speed-running BNs
     const workForFactionsArgs = [
         "--fast-crimes-only", // Essentially means we do mug until we can do homicide, then stick to homicide
@@ -436,6 +431,11 @@ async function checkOnRunningScripts(ns, player) {
         // If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also okay early income)
         // NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
         launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
+    }
+
+    const goplayer = findScript('go.js');
+    if (!options["disable-go"] && !goplayer && homeRam >= 75) {
+        launchScriptHelper(ns, 'go.js', 14 in unlockedSFs ? ["--cheats"] : []);
     }
 }
 

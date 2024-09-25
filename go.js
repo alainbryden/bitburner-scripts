@@ -6,26 +6,51 @@
  * Discord:
  * - Stoneware
  * - gmcew
+ * - eithel
  */
 
-const CHEATS = false
-const LOGTIME = false
-let STYLE = 0
-const REPEAT = true
-let currentValidMovesTurn = 0 //The turn count that the currentValidMoves is valid for
-let currentValidMoves //All valid moves for this turn
-let currentValidContestedMoves //All valid moves that occupy a contested space
-let turn = 0
-let START = performance.now()
+import { getConfiguration } from "./helpers";
+
+let cheats = false;
+let logtime = false;
+let runOnce = true;
+let silent = false;
+let STYLE = 0;
+let currentValidMovesTurn = 0; //The turn count that the currentValidMoves is valid for
+let currentValidMoves; //All valid moves for this turn
+let currentValidContestedMoves; //All valid moves that occupy a contested space
+let turn = 0;
+let START = performance.now();
 let board;
 let contested;
 let validMove;
 let validLibMoves;
 let chains;
-let testBoard = []
+let testBoard = [];
+
+const argsSchema = [
+  ['cheats', false], // This is only true if you have BN14
+  ['logtime', false], // Logs time time it takes for each player to take their move
+  ['runOnce', false], // Will only play one game if enabled
+  ['silent', false], // Enabling this stops the window from spawning.
+];
+
+
+export function autocomplete(data, args) {
+  data.flags(argsSchema);
+  return [];
+}
+
 /** @param {NS} ns */
 export async function main(ns) {
-  ns.tail()
+  const runOptions = getConfiguration(ns, argsSchema);
+  cheats = runOptions.cheats;
+  logtime = runOptions.logtime;
+  runOnce = runOptions.runOnce;
+  silent = runOptions.silent;
+
+  if (!silent) { ns.tail() }
+
   ns.disableLog("go.makeMove")
   const startBoard = ns.go.getBoardState()
   let inProgress = false
@@ -239,7 +264,7 @@ function getStyle(ns) {
 }
 function checkNewGame(ns, gameInfo) {
   if (gameInfo.type === "gameOver") {
-    if (!REPEAT) ns.exit()
+    if (runOnce) ns.exit()
     try { ns.go.resetBoardState(opponent2[Math.floor(Math.random() * opponent2.length)], 13) }
     catch { ns.go.resetBoardState(opponent[Math.floor(Math.random() * opponent.length)], 13) }
     turn = 0
@@ -378,7 +403,7 @@ function verticalMirror(pattern) {
 
 /** @param {NS} ns */
 function getSnakeEyes(minKilled = 5) {
-  if (!CHEATS) return []
+  if (!cheats) return []
   const moveOptions = []
   const size = board[0].length
   let highValue = 1
@@ -1150,13 +1175,13 @@ async function movePiece(ns, attack) {
   ns.printf("%s", attack.msg)
   const results = await ns.go.makeMove(x, y)
   let END = performance.now()
-  if (LOGTIME) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
+  if (logtime) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
   START = performance.now()
   return results
 }
 /** @param {NS} ns */
 async function moveSnakeEyes(ns, attack) {
-  if (attack.coords === undefined || !CHEATS) return false
+  if (attack.coords === undefined || !cheats) return false
   const [s1x, s1y, s2x, s2y] = attack.coords
   if (s1x === undefined) return false
   const chance = ns.go.cheat.getCheatSuccessChance()
@@ -1166,7 +1191,7 @@ async function moveSnakeEyes(ns, attack) {
     const results = await ns.go.cheat.playTwoMoves(s1x, s1y, s2x, s2y)
     ns.printf("%s", attack.msg)
     let END = performance.now()
-    if (LOGTIME) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
+    if (logtime) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
     START = performance.now()
     return results
   }
