@@ -435,7 +435,7 @@ async function checkOnRunningScripts(ns, player) {
 
     const goplayer = findScript('go.js');
     if (!options["disable-go"] && !goplayer && homeRam >= 75) {
-        launchScriptHelper(ns, 'go.js', 14 in unlockedSFs ? ["--cheats"] : []);
+        launchScriptHelper(ns, 'go.js', 14 in unlockedSFs && unlockedSFs[14] >= 2 ? ["--cheats"] : []);
     }
 }
 
