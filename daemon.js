@@ -23,7 +23,7 @@ const argsSchema = [
     ['s', true], // Enable Stock Manipulation. This is now true for default, but left as a valid argument for backwards-compatibility.
     ['stock-manipulation', true], // Same as above
     ['disable-stock-manipulation', false], // You must now opt *out* of stock-manipulation mode by enabling this flag.
-    ['stock-manipulation-focus', false], // Stocks are main source of income - kill any scripts that would do them harm (TODO: Enable automatically in BN8)
+    ['stock-manipulation-focus', false], // Stocks are main source of income - kill any scripts that would do them harm (Enabled automatically in BN8)
     ['v', false], // Detailed logs about batch scheduling / tuning
     ['verbose', false], // Same as above
     ['o', false], // Good for debugging, run the main targettomg loop once then stop, with some extra logs
@@ -248,7 +248,7 @@ export async function main(ns) {
     hackOnly = options.h || options['hack-only'];
     xpOnly = options.x || options['xp-only'];
     stockMode = (options.s || options['stock-manipulation'] || options['stock-manipulation-focus']) && !options['disable-stock-manipulation'];
-    stockFocus = options['stock-manipulation-focus'] && !options['disable-stock-manipulation'];
+    stockFocus = (isInBn8 || options['stock-manipulation-focus']) && !options['disable-stock-manipulation'];
     useHacknetNodes = options.n || options['use-hacknet-nodes'] || options['use-hacknet-servers'];
     verbose = options.v || options['verbose'];
     runOnce = options.o || options['run-once'];
