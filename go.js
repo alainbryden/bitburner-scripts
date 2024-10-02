@@ -1,7 +1,7 @@
 /**Author:
  * Discord:
  * - Sphyxis
- * 
+ *
  * Additional Contributers:
  * Discord:
  * - Stoneware
@@ -136,7 +136,7 @@ export async function main(ns) {
           ns.print("Turn Passed")
           results = await ns.go.passTurn()
           break
-        case 2: //Mr. Mustacio - Slum Snakes					
+        case 2: //Mr. Mustacio - Slum Snakes
           if (results = await movePiece(ns, getRandomCounterLib())) break
           if (results = await movePiece(ns, getRandomLibAttack(88))) break
           if (results = await movePiece(ns, getRandomLibDefend())) break
@@ -288,7 +288,7 @@ function isPattern(x, y, pattern) {
       if (cx + x + 1 < 0 || cx + x + 1 > size - 1) continue
       for (let cy = ((patternSize - 1) * -1); cy <= 0 - 1; cy++) {
         //We now have a cycle that will check each section of the grid against the pattern
-        //Safety checks: We know 0,0 is safe, we were sent it, but each other section could be bad       
+        //Safety checks: We know 0,0 is safe, we were sent it, but each other section could be bad
         if (cy + y + 1 < 0 || cy + y + 1 > size - 1) continue
         let count = 0
         let abort = false
