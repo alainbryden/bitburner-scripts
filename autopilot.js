@@ -7,7 +7,7 @@ import {
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
 const casinoFlagFile = "/Temp/ran-casino.txt";
-const defaultBnOrder = [4.3, 1.3, 5.1, 9.2, 10.1, 2.1, 8.2, 10.3, 9.3, 11.3, 13.3, 5.3, 7.1, 6.3, 7.3, 2.3, 8.3, 3.3, 12.999];
+const defaultBnOrder = [4.3, 1.3, 14.3, 5.1, 9.2, 10.1, 2.1, 8.2, 10.3, 9.3, 11.3, 13.3, 5.3, 7.1, 6.3, 7.3, 2.3, 8.3, 3.3, 12.999];
 
 let options; // The options used at construction time
 const argsSchema = [ // The set of all command line arguments
@@ -28,6 +28,7 @@ const argsSchema = [ // The set of all command line arguments
     ['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
     ['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
     ['disable-casino', false], // Set to true to disable running the casino.js script automatically
+    ['disable-go', false], // Set to true to disable the Go script
     ['on-completion-script', null], // Spawn this script when we defeat the bitnode
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
 ];
@@ -66,7 +67,7 @@ export async function main(ns) {
 
     log(ns, "INFO: Auto-pilot engaged...", true, 'info');
     // The game does not allow boolean flags to be turned "off" via command line, only on. Since this gets saved, notify the user about how they can turn it off.
-    const flagsSet = ['disable-auto-destroy-bn', 'disable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs'].filter(f => options[f]);
+    const flagsSet = ['disable-auto-destroy-bn', 'disable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs', 'disable-go'].filter(f => options[f]);
     for (const flag of flagsSet)
         log(ns, `WARNING: You have previously enabled the flag "--${flag}". Because of the way this script saves its run settings, the ` +
             `only way to now turn this back off will be to manually edit or delete the file ${ns.getScriptName()}.config.txt`, true);
@@ -430,6 +431,11 @@ async function checkOnRunningScripts(ns, player) {
         // If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also okay early income)
         // NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
         launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
+    }
+
+    const goplayer = findScript('go.js');
+    if (!options["disable-go"] && !goplayer && homeRam >= 75) {
+        launchScriptHelper(ns, 'go.js', 14 in unlockedSFs && unlockedSFs[14] >= 2 ? ["--cheats"] : []);
     }
 }
 
