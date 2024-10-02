@@ -7,7 +7,7 @@ import {
 } from './helpers.js'
 
 // daemon.js has histocially been the central orchestrator of almost every script in the game.
-// Only recently has it been "enslaved" to an even higher-level orchestrator: autopilot.js
+// Only recently has it been "indentured" to an even higher-level orchestrator: autopilot.js
 // Its primary job is to manage hacking servers for income, but it also manages launching
 // a myriad of helper scripts to take advantage of other game mechanics (such as solving coding contraacts)
 
@@ -835,7 +835,7 @@ async function getStaticServerData(ns, serverNames) {
     dictServerNumPortsRequired = await getServersDict(ns, 'getServerNumPortsRequired', serverNames);
     dictServerGrowths = await getServersDict(ns, 'getServerGrowth', serverNames);
     // The "GetServer" object result is now required to use the formulas API (due to type checking that the parameter is a valid "server" instance)
-    // TODO: See if in the future they add a "ns.formulas.dummyServer()" function or similar, then we no longer need this.    
+    // TODO: See if in the future they add a "ns.formulas.standInServer()" function or similar, then we no longer need this.
     // TODO: Iff this becomes permanent, might as well get other static server data from the resulting server objectswhy is it that every keystroke
     dictInitialServerInfos = await getServersDict(ns, 'getServer', serverNames);
     await refreshDynamicServerData(ns, serverNames);

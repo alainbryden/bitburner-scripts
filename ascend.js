@@ -109,7 +109,7 @@ export async function main(ns) {
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
-    // Sanity check, if we are not slated to install any augmentations, ABORT
+    // If we are not slated to install any augmentations, ABORT
     // Get owned + purchased augmentations, then installed augmentations. Ensure there's a difference
     let purchasedAugmentations = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations(true)', '/Temp/player-augs-purchased.txt');
     let installedAugmentations = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');

@@ -606,7 +606,7 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
     // In BN8, money is hard to come by, so if we're in Daedalus, but can't access TRP rep yet, wait until we have
     // enough rep, or enough money to donate for rep to buy TRP (Reminder: donations always unlocked in BN8)
     if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && (wdHack || 0) == 0) {
-        // Sanity check, ensure the player hasn't manually purchased (but not yet installed) TRP
+        // Ensure the player hasn't manually purchased (but not yet installed) TRP
         const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
         if (!facmanOutput.affordable_augs.includes("The Red Pill") && !ownedAugmentations.includes("The Red Pill")) {
             setStatus(ns, `Not installing until we have enough Daedalus rep to install TRP on our next reset.`)
