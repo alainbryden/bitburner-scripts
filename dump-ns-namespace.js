@@ -15,7 +15,7 @@ export async function main(ns) {
     // Print all keys
     ns.tprint(Object.keys(obj));
     // Attempt to print the contents of all keys that are either properties or parameterless function calls.
-    // TODO: Need a blacklist of functions that should not be called because they will screw with the current game
+    // TODO: Need a denylist of functions that should not be called because they will screw with the current game
     //       (e.g. softReset, ui.resetTheme, stopAction, etc...)
     for (const k of Object.keys(obj)) {
         const strMember = `${strObj}.${k}`
