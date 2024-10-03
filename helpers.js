@@ -287,7 +287,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
                     reason = `, but the reason is unclear. (Perhaps a syntax error?) This script requires ${formatRam(reqRam)} RAM, and ` +
                         `home has ${formatRam(homeMaxRam - homeUsedRam)} of ${formatRam(homeMaxRam)} free, which appears to be sufficient. ` +
                         `If you wish to troubleshoot, you can try manually running the script with the arguments listed below:`;
-            } catch (ex) { ns.print(ex.toString()); /* It was worth a shot. Stick with the generic error message. */ }
+            } catch (ex) { /* It was worth a shot. Stick with the generic error message. */ }
             return `The temp script was not run${reason}.` +
                 `\n  Script:  ${fileName}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
                 `\nThe script that ran this will likely recover and try again later.`
