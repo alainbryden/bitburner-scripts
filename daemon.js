@@ -367,6 +367,11 @@ export async function main(ns) {
     await runPeriodicScripts(ns);
     if (shouldKickstartHackXp) await kickstartHackXp(ns);
 
+    // For early players, provide a hint to buy more home RAM asap:
+    if (!(4 in dictSourceFiles) && !reqRam(64))
+        log(ns, `HINT: Daemon.js can do more if you have more Home Ram. ` +
+            `Head to [alpha ent.] and purchase at 64 GB as soon as possible!`, true, 'info');
+
     // Start the main targetting loop
     await doTargetingLoop(ns);
 }

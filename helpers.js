@@ -272,9 +272,26 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
         // Run the script, now that we're sure it is in place
         return fnRun(fileName, 1 /* Always 1 thread */, ...args);
     }, pid => pid !== 0,
-        () => `The temp script was not run (likely due to insufficient RAM).` +
-            `\n  Script:  ${fileName}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
-            `\nThe script that ran this will likely recover and try again later once you have more free ram.`,
+        async () => {
+            let reason = " (likely due to insufficient RAM)";
+            // Just to be super clear - try to find out how much ram this script requires vs what we have available
+            try {
+                const reqRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getScriptRam(ns.args[0])', null, [fileName]);
+                const homeMaxRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getServerMaxRam(ns.args[0])', null, ["home"]);
+                const homeUsedRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getServerUsedRam(ns.args[0])', null, ["home"]);
+                if (reqRam > homeMaxRam)
+                    reason = ` as it requires ${formatRam(reqRam)} RAM, but home only has ${formatRam(homeMaxRam)}`;
+                else if (reqRam > homeMaxRam - homeUsedRam)
+                    reason = ` as it requires ${formatRam(reqRam)} RAM, but home only has ${formatRam(homeMaxRam - homeUsedRam)} of ${formatRam(homeMaxRam)} free.`;
+                else
+                    reason = `, but the reason is unclear. (Perhaps a syntax error?) This script requires ${formatRam(reqRam)} RAM, and ` +
+                        `home has ${formatRam(homeMaxRam - homeUsedRam)} of ${formatRam(homeMaxRam)} free, which appears to be sufficient. ` +
+                        `If you wish to troubleshoot, you can try manually running the script with the arguments listed below:`;
+            } catch (ex) { ns.print(ex.toString()); /* It was worth a shot. Stick with the generic error message. */ }
+            return `The temp script was not run${reason}.` +
+                `\n  Script:  ${fileName}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
+                `\nThe script that ran this will likely recover and try again later.`
+        },
         maxRetries, retryDelayMs, undefined, verbose, verbose);
 }
 
@@ -331,22 +348,40 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
     maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true) {
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs, attempts = 0;
+    let sucessConditionMet;
     while (attempts++ <= maxRetries) {
+        // Sleep between attempts
+        if (attempts > 1) {
+            await ns.sleep(retryDelayMs);
+            retryDelayMs *= backoffRate;
+        }
         try {
+            sucessConditionMet = true;
             const result = await fnFunctionThatMayFail()
-            const error = typeof errorContext === 'string' ? errorContext : errorContext();
-            if (!fnSuccessCondition(result))
-                throw asError(error);
+            // Check if this is considered a successful result
+            sucessConditionMet = fnSuccessCondition(result);
+            if (sucessConditionMet instanceof Promise)
+                sucessConditionMet = await errorMessage; // If fnSuccessCondition was async, await its result
+            if (!sucessConditionMet) {
+                // If we have not yet reached our maximum number of retries, we can continue, without throwing
+                if (attempts < maxRetries) {
+                    log(ns, `INFO: Attempt ${attempts} of ${maxRetries} failed. Trying again in ${retryDelayMs}ms...`, false, !verbose ? undefined : 'info');
+                    continue;
+                }
+                // Otherwise, throw an error using the message provided by the errorContext string or function argument 
+                let errorMessage = typeof errorContext === 'string' ? errorContext : errorContext(result);
+                if (errorMessage instanceof Promise)
+                    errorMessage = await errorMessage; // If the errorContext function was async, await its result
+                throw asError(errorMessage);
+            }
             return result;
         }
         catch (error) {
             const fatal = attempts >= maxRetries;
-            log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} failed` +
+            log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} raised an error` +
                 (fatal ? `: ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}` : `. Trying again in ${retryDelayMs}ms...`),
                 tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw asError(error);
-            await ns.sleep(retryDelayMs);
-            retryDelayMs *= backoffRate;
         }
     }
 }
