@@ -27,7 +27,7 @@ let playerData = null, bitNode = 0, gangFaction = null;
 let augsAwaitingInstall, startingPlayerMoney, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
 let ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
-let factionData = {}, augmentationData = {};
+let factionData = {}, augmentationData = {}, bitNodeMults = {};
 let printToTerminal, ignorePlayerData;
 let _ns; // Used to avoid passing ns to functions that don't need it except for some logs.
 
@@ -100,7 +100,7 @@ export async function main(ns) {
     augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;
     factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
     ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
-    factionData = {}, augmentationData = {};
+    factionData = {}, augmentationData = {}, bitNodeMults = {};
 
     printToTerminal = (options.v || options.verbose === true || options.verbose === null) && !options['join-only'];
     ignorePlayerData = options.i || options['ignore-player-data'];
@@ -127,6 +127,7 @@ export async function main(ns) {
             `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
     const sf11Level = ownedSourceFiles[11] || 0;
     augCountMult = [1.9, 1.824, 1.786, 1.767][sf11Level];
+
     log(ns, `Player has sf11Level ${sf11Level}, so the multiplier after each aug purchased is ${augCountMult}.`);
 
     // Collect information about the player
@@ -180,6 +181,12 @@ export async function main(ns) {
     if (hideSummaryStats.length == 0) hideSummaryStats = default_hidden_stats;
     const sort = unshorten(options.sort || desiredStatsFilters[0]);
     displayFactionSummary(ns, sort, options.u || options.unique, afterFactions, hideSummaryStats);
+
+    // Determine the current bitnode multipliers, or default to some sane assumptions if they aren't available (requires SF 5.1)
+    bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || {
+        DaedalusAugsRequirement: bitNode == 6 || bitNode == 7 ? 35 : 30,
+        FactionWorkRepGain: bitNode == 2 ? 0.5 : bitNode == 4 ? 0.75 : bitNode == 13 ? 0.6 : bitNode == 14 ? 0.2 : 1,
+    };
 
     // Create the table of all augmentations, and the breakdown of what we can afford
     await manageUnownedAugmentations(ns, omitAugs);
@@ -396,8 +403,11 @@ async function joinFactions(ns, forceJoinFactions) {
     return joined;
 }
 
+/** Compute how much money must be donated to recieve the specified reputation amount. */
+let getCostOfReputation = (rep) => Math.ceil(1e6 * rep / playerData.mults.faction_rep / bitNodeMults.FactionWorkRepGain);
+/** Compute how much money must be donated to the faction to attain the specified reputation amount with this faction. Takes into account the current faction rep. */
+let getReqDonationForRep = (rep_needed, faction) => getCostOfReputation(Math.max(0, rep_needed - (faction.name ? faction : factionData[faction]).reputation));
 /** Compute how much money must be donated to the faction to afford an augmentation. Faction can be either a faction object, or faction name */
-let getReqDonationForRep = (rep, faction) => Math.ceil(1e6 * (Math.max(0, rep - (faction.name ? faction : factionData[faction]).reputation)) / (playerData.mults.faction_rep));
 let getReqDonationForAug = (aug, faction) => getReqDonationForRep(aug.reputation, faction || aug.getFromJoined());
 
 let getTotalCost = (augPurchaseOrder) => augPurchaseOrder.reduce((total, aug, i) => total + aug.price * augCountMult ** i, 0);
@@ -456,9 +466,7 @@ function sortAugs(ns, augs = []) {
 /** @param {NS} ns 
  * Display all information about all augmentations, including lists of available / desired / affordable augmentations in their optimal purchase order.  */
 async function manageUnownedAugmentations(ns, ignoredAugs) {
-    const bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || { DaedalusAugsRequirement: 1 };
-    // Note: A change coming soon will convert DaedalusAugsRequirement from a fractional multiplier, to an integer number of augs. This should support both for now.
-    const reqDaedalusAugs = bitNodeMults.DaedalusAugsRequirement < 2 ? Math.round(30 * bitNodeMults.DaedalusAugsRequirement) : bitNodeMults.DaedalusAugsRequirement;
+    const reqDaedalusAugs = bitNodeMults.DaedalusAugsRequirement;
     let outputRows = [`Currently have ${ownedAugmentations.length}/${reqDaedalusAugs} Augmentations required for Daedalus.`];
     const unownedAugs = Object.values(augmentationData).filter(aug => (!aug.owned || aug.name == strNF) && !ignoredAugs.includes(aug.name));
     if (unownedAugs.length == 0) return log(ns, `All ${Object.keys(augmentationData).length} augmentations are either owned or ignored!`, printToTerminal)
