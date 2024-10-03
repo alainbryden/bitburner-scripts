@@ -129,9 +129,11 @@ export async function main(ns) {
         completionScript = defaultCompletionScript;
         if (completionArgs.length == 0) completionArgs = defaultCompletionArgs;
     }
-    if (ns.run(completionScript, 1, ...completionArgs))
+    if (ns.run(completionScript, 1, ...completionArgs)) {
         log(ns, `INFO: Stanek.js shutting down and launching ${completionScript}...`, false, 'info');
-    else
+        if (!options['no-tail'])
+            ns.closeTail(); // Close the tail window if we opened it
+    } else
         log(ns, `WARNING: Stanek.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
 }
 
