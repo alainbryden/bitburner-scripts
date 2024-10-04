@@ -1,4 +1,7 @@
-import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
+import {
+    log, getConfiguration, getFilePath, waitForProcessToComplete,
+    runCommand, getNsDataThroughFile, getActiveSourceFiles, getErrorInfo
+} from './helpers.js'
 
 const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
@@ -23,13 +26,6 @@ export function autocomplete(data, args) {
 
 let _ns; // Lazy global copy of ns so we can sleep in the click handler
 
-/** Helper to open a tail window and log a message to the console and terminal. Useful when trying to inform the player of a failure.
- * @param {NS} ns **/
-function tailAndLog(ns, message) {
-    ns.tail();
-    log(ns, message, true);
-}
-
 /** @param {NS} ns **/
 export async function main(ns) {
     options = getConfiguration(ns, argsSchema);
@@ -43,12 +39,33 @@ export async function main(ns) {
 
     // Step 1: Go to Aevum if we aren't already there. (Must be done manually if you don't have SF4)
     if (ns.getPlayer().city != "Aevum") {
-        try {
-            if (ns.getPlayer().money < 200000 || !(await getNsDataThroughFile(ns, 'ns.singularity.travelToCity(ns.args[0])', null, ["Aevum"])))
-                return tailAndLog(ns, "ERROR: Sorry, you need at least 200k to travel to the casino.");
-        } catch (err) {
-            return tailAndLog(ns, "ERROR: You must manually travel to to Aevum to use this script until you get SF4");
+        if (ns.getPlayer().money < 200000)
+            return log(ns, "ERROR: Sorry, you need at least 200k to travel to the casino.", true, 'error');
+        // See if we have SF4 to travel automatically
+        const unlockedSFs = await getActiveSourceFiles(ns, true);
+        let travelled = false;
+        if (4 in unlockedSFs) {
+            try {
+                travelled = await getNsDataThroughFile(ns, 'ns.singularity.travelToCity(ns.args[0])', null, ["Aevum"]);
+            } catch { }
+            if (!travelled)
+                log(ns, "WARN: Failed to travel to Aevum automatically (perhaps RAM / SF4 level is too low?). " +
+                    "We will have to go there manually for now.", true, 'warning');
+        } else
+            log(ns, `INFO: We must "manually" travel to Aevum since we don't have SF4`, true);
+        // If automatic travel failed or couldn't be attempted, try clicking around!
+        if (!travelled) {
+            let travelBtn = await findRetry(ns, "//div[@role='button' and ./div/p/text()='Travel']");
+            if (!travelBtn) return;
+            await click(travelBtn);
+            let cityBtn = await findRetry(ns, "//span[contains(@class,'travel') and ./text()='A']");
+            if (!cityBtn) return;
+            await click(cityBtn);
         }
+        if (ns.getPlayer().city == "Aevum")
+            log(ns, `SUCESS: We're now in Aevum!`)
+        else
+            return log(ns, `ERROR: We thought we travelled to Aevum, but we're apparently still in ${ns.getPlayer().city}...`, true, 'error');
     }
 
     // Helper function to detect if the "Stop [[faction|company] work|styding|training]" etc... button from the focus screen is up
@@ -73,7 +90,8 @@ export async function main(ns) {
     // Find the button used to save the game. (Lots of retries because it can take a while after reloading the page)
     const btnSaveGame = await findRetry(ns, "//button[@aria-label = 'save game']");
     if (!btnSaveGame)
-        return tailAndLog(ns, "ERROR: Sorry, couldn't find the Overview Save (💾) button. Is your \"Overview\" panel collapsed or modded?");
+        return log(ns, `ERROR: Sorry, couldn't find the Overview Save (💾) button. ` +
+            `Is your \"Overview\" panel collapsed or modded?`, true);
     let inputWager, btnStartGame;
 
     // Step 2: Try to navigate to the blackjack game until successful, in case something repeatedly steals focus
@@ -94,13 +112,13 @@ export async function main(ns) {
                 await click(await findRetry(ns, "//span[@aria-label = 'Iker Molina Casino']"));
             } catch { // Use SF4 as a fallback, it's more reliable.
                 try { await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', null, ["Iker Molina Casino"]); }
-                catch { return tailAndLog(ns, "ERROR: Failed to travel to the casino both using UI navigation and using SF4 as a fall-back."); }
+                catch { return log(ns, "ERROR: Failed to travel to the casino both using UI navigation and using SF4 as a fall-back.", true); }
             }
             // Step 2.3: Try to start the blackjack game
             const blackjack = await findRetry(ns, "//button[contains(text(), 'blackjack')]");
             if (!blackjack) {
-                tailAndLog(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Trying again... ` +
-                    `Please post a full-game screenshot on Discord if you can't get past this point.`)
+                log(ns, `ERROR: Could not find the "Play blackjack" button. Did something steal focus? Trying again... ` +
+                    `Please post a full-game screenshot on Discord if you can't get past this point.`, true);
                 continue; // Loop back to start and try again
             }
             await click(blackjack);
@@ -109,8 +127,8 @@ export async function main(ns) {
             inputWager = await findRetry(ns, "//input[@value = 1000000]");
             btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
             if (!inputWager || !btnStartGame) {
-                tailAndLog(ns, `ERROR: Could not find one or more game controls. Did something steal focus? Trying again... ` +
-                    `Please post a full-game screenshot on Discord if you can't get past this point.`)
+                log(ns, `ERROR: Could not find one or more game controls. Did something steal focus? Trying again... ` +
+                    `Please post a full-game screenshot on Discord if you can't get past this point.`, true)
                 continue; // Loop back to start and try again
             }
 
@@ -141,8 +159,8 @@ export async function main(ns) {
             break; // We achieved everthing we wanted, we can exit the while loop.
         } catch (err) {
             ns.tail(); // We're having difficulty, pop open a tail window so the user is aware.
-            log(ns, `WARNING: casino.js Caught (and suppressed) an unexpected error while navigating to blackjack. Will try again...\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+            log(ns, `WARNING: casino.js Caught (and suppressed) an unexpected error while navigating to blackjack. ` +
+                `Will try again...\n${getErrorInfo(err)}`, false, 'warning');
         }
     }
 
