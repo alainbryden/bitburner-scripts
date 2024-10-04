@@ -450,10 +450,11 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
             '/Temp/owned-source-files.txt');
     } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
     // If the user is currently in a given bitnode, they will have its features unlocked
+    // TODO: This is true of BN4, but not BN14.2, Check them all!
     if (includeLevelsFromCurrentBitnode) {
         try {
             const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt')).currentNode;
-            dictSourceFiles[currentNode] = Math.max(3, dictSourceFiles[currentNode] || 0);
+            dictSourceFiles[currentNode] = Math.max((currentNode == 4 ? 3 : 1), dictSourceFiles[currentNode] || 0);
         } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
     return dictSourceFiles;

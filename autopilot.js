@@ -432,9 +432,10 @@ async function checkOnRunningScripts(ns, player) {
         launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
     }
 
+    // Launch go.js
     const goplayer = findScript('go.js');
     if (!options["disable-go"] && !goplayer && homeRam >= 75) {
-        launchScriptHelper(ns, 'go.js', 14 in unlockedSFs && unlockedSFs[14] >= 2 ? ["--cheats"] : []);
+        launchScriptHelper(ns, 'go.js', (14 in unlockedSFs) && (unlockedSFs[14] >= 2) ? ["--cheats"] : []);
     }
 }
 
@@ -667,7 +668,7 @@ function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = tru
         log(ns, `INFO: Launched ${baseScriptName} (pid: ${pid}) with args: [${args.join(", ")}]`, true);
     else
         log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]` +
-            err ? `\nCaught: ${getErrorInfo(err)}` : '', true, 'error');
+            (err ? `\nCaught: ${getErrorInfo(err)}` : ''), true, 'error');
     return pid;
 }
 
