@@ -180,23 +180,21 @@ export async function main(ns) {
             if (bet < 0) return await reload(ns); // If somehow we have no money, we can't continue
             await setText(inputWager, `${bet}`);
             await click(btnStartGame);
-            let btnHit, btnStay;
-            try {
-                btnHit = await findRetry(ns, "//button[text() = 'Hit']");
-                btnStay = await findRetry(ns, "//button[text() = 'Stay']");
-                suppressedErrors = 0;
-            } catch (error) {
-                // Detect if we were kicked out
+            // If we can't find these buttons, we've ever been kicked out or didn't managed to "click" start game
+            let btnHit = await findRetry(ns, "//button[text() = 'Hit']", suppressedErrors < 4, 10);
+            let btnStay = await findRetry(ns, "//button[text() = 'Stay']", suppressedErrors < 4, 10);
+            if (!btnHit || !btnStay) {
+                // Detect if we were kicked out (hopefully this is why the buttons are missing)
                 if (await checkForKickedOut())
                     return onCompletion(ns);
-                // Sometimes if we're too quick, "clicking" start game fails and the Hit/Stay buttons are missing
-                // In case this is what happened, suppress the error and start over. If it keeps happening, something else is wrong...
-                if (++suppressedErrors >= 3)
-                    throw (error);
-                // In case we lost our start button, try go find it again?
+                // No? Well sometimes "clicking" start game fails. If this is what happened, 
+                // we can suppress the error and start over. If it keeps happening, something else is wrong...
+                suppressedErrors++; // Once this reahes 4, calls to findRetry above will throw an error on failure.
+                // In case we lost our start button (e.g. re-rendered as different element), find it again
                 btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
                 continue;
             }
+            suppressedErrors = 0;
             let won;
             do { // Inner-loop to play a single hand
                 won = await findRetry(ns, "//p[contains(text(), 'lost')]", true) ? false : // Detect whether we lost or won. Annoyingly, when we win with blackjack, "Won" is Title-Case.
