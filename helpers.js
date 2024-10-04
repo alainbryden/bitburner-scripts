@@ -183,7 +183,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     // If an error occurs, it will write an empty file to avoid old results being misread.
     const commandToFile = `let r;try{r=JSON.stringify(\n` +
         `    ${command}\n` +
-        `);}catch(e){r="ERROR: "+(typeof e=='string'?e:e.message||JSON.stringify(e));}\n` +
+        `);}catch(e){r="ERROR: "+(typeof e=='string'?e:e?.message??JSON.stringify(e));}\n` +
         `const f="${fName}"; if(ns.read(f)!==r) ns.write(f,r,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs);
@@ -200,7 +200,8 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
             (lastRead == undefined ? '\nThe developer has no idea how this could have happened. Please post a screenshot of this error on discord.' :
                 lastRead == initialContents ? `\nThe script that ran this will likely recover and try again later once you have more free ram.` :
                     lastRead == "" ? `\nThe file appears to have been deleted before a result could be retrieved. Perhaps there is a conflicting script.` :
-                        `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
+                        lastRead.includes('API ACCESS ERROR') ? `\nThis script should not have been run until you have the required Source-File upgrades. Sorry about that.` :
+                            `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
         maxRetries, retryDelayMs, undefined, verbose, verbose);
     if (verbose) log(ns, `Read the following data for command ${command}:\n${fileData}`);
     return JSON.parse(fileData); // Deserialize it back into an object/array and return
@@ -379,15 +380,27 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         catch (error) {
             const fatal = attempts >= maxRetries;
             log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} raised an error` +
-                (fatal ? `: ${typeof error === 'string' ? error : error.message || JSON.stringify(error)}` : `. Trying again in ${retryDelayMs}ms...`),
+                (fatal ? `: ${getErrorInfo(error)}` : `. Trying again in ${retryDelayMs}ms...`),
                 tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw asError(error);
         }
     }
 }
 
+/** Helper for extracting the error message from an error thrown by the game. 
+ * @param {string|Error} err - A thrown error message or object
+*/
+export function getErrorInfo(err) {
+    return err === undefined || err == null ? "(null error)" :
+        typeof err === 'string' ? err : // Simple string was thrown
+            err?.toString() ?? err?.message ?? // Proper exception object or error with "message" property?
+            JSON.stringify(err); // Other objects which can hopefully be stringified?
+}
+
 /** Helper to log a message, and optionally also tprint it and toast it
- * @param {NS} ns - The nestcript instance passed to your script's main entry point */
+ * @param {NS} ns - The nestcript instance passed to your script's main entry point 
+ * @param {""|"success"|"warning"|"error"|"info"} toastStyle - If specified, your log will will also become a toast notification
+ */
 export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = Number.MAX_SAFE_INTEGER) {
     checkNsInstance(ns, '"log"');
     ns.print(message);
@@ -437,11 +450,10 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
             '/Temp/owned-source-files.txt');
     } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
     // If the user is currently in a given bitnode, they will have its features unlocked
-    // TODO: This is true of BN4, but not BN14.2, Check them all!
     if (includeLevelsFromCurrentBitnode) {
         try {
             const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt')).currentNode;
-            dictSourceFiles[currentNode] = Math.max((currentNode == 4 ? 3 : 1), dictSourceFiles[currentNode] || 0);
+            dictSourceFiles[currentNode] = Math.max(3, dictSourceFiles[currentNode] || 0);
         } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
     return dictSourceFiles;
@@ -553,7 +565,7 @@ export function getConfiguration(ns, argsSchema) {
             }
         } catch (err) {
             log(ns, `ERROR: There's something wrong with your config file "${confName}", it cannot be loaded.` +
-                `\nThe error encountered was: ${(typeof err === 'string' ? err : err.message || JSON.stringify(err))}` +
+                `\nThe error encountered was: ${getErrorInfo(err)}` +
                 `\nYour config file should either be a dictionary e.g.: { "string-opt": "value", "num-opt": 123, "array-opt": ["one", "two"] }` +
                 `\nor an array of dict entries (2-element arrays) e.g.: [ ["string-opt", "value"], ["num-opt", 123], ["array-opt", ["one", "two"]] ]` +
                 `\n"${confName}" contains:\n${overrides}`, true, 'error', 80);
@@ -567,9 +579,10 @@ export function getConfiguration(ns, argsSchema) {
             `\n  ${a.length == 1 ? "-" : "--"}${a} = ${finalOptions[a] === null ? "null" : JSON.stringify(finalOptions[a])}`).join("") +
             `\nrun ${scriptName} --help  to get more information about these options.`)
         return finalOptions;
-    } catch (err) { // Detect if the user passed invalid arguments, and return help text
-        const error = ns.args.includes("help") || ns.args.includes("--help") ? null : // Detect if the user explictly asked for help and suppress the error
-            (typeof err === 'string' ? err : err.message || JSON.stringify(err));
+    } catch (err) {
+        // Detect if the user passed invalid arguments, and return help text
+        // If the user explictly asked for --help, suppress the parsing error
+        const error = ns.args.includes("help") || ns.args.includes("--help") ? null : getErrorInfo(err);
         // Try to parse documentation about each argument from the source code's comments
         const source = ns.read(scriptName).split("\n");
         let argsRow = 1 + source.findIndex(row => row.includes("argsSchema ="));

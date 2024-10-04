@@ -1,7 +1,7 @@
 import {
     log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-    formatMoney, formatDuration
+    formatMoney, formatDuration, getErrorInfo
 } from './helpers.js'
 
 const persistentLog = "log.autopilot.txt";
@@ -81,9 +81,8 @@ export async function main(ns) {
             await mainLoop(ns);
         }
         catch (err) {
-            log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:\n` +
-                (typeof err === 'string' ? err : err?.stack ? err.stack : JSON.stringify(err)),
-                false, 'warning');
+            log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:` +
+                `\n${getErrorInfo(err)}`, false, 'warning');
         }
         await ns.sleep(options['interval']);
     }
@@ -433,10 +432,9 @@ async function checkOnRunningScripts(ns, player) {
         launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
     }
 
-    // Launch go.js 
     const goplayer = findScript('go.js');
     if (!options["disable-go"] && !goplayer && homeRam >= 75) {
-        launchScriptHelper(ns, 'go.js', (14 in unlockedSFs) && (unlockedSFs[14] >= 2) ? ["--cheats"] : []);
+        launchScriptHelper(ns, 'go.js', 14 in unlockedSFs && unlockedSFs[14] >= 2 ? ["--cheats"] : []);
     }
 }
 
@@ -669,7 +667,7 @@ function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = tru
         log(ns, `INFO: Launched ${baseScriptName} (pid: ${pid}) with args: [${args.join(", ")}]`, true);
     else
         log(ns, `ERROR: Failed to launch ${baseScriptName} with args: [${args.join(", ")}]` +
-            err ? `\nCaught: ` + (typeof err === 'string' ? err : err?.toString() || JSON.stringify(err)) : '', true, 'error');
+            err ? `\nCaught: ${getErrorInfo(err)}` : '', true, 'error');
     return pid;
 }
 
