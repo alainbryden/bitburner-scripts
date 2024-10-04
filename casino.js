@@ -1,4 +1,4 @@
-import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile, autoRetry } from './helpers.js'
+import { log, getConfiguration, getFilePath, waitForProcessToComplete, runCommand, getNsDataThroughFile } from './helpers.js'
 
 const ran_flag = "/Temp/ran-casino.txt"
 let doc = eval("document");
@@ -57,8 +57,18 @@ export async function main(ns) {
             await findRetry(ns, "//button[contains(text(), 'Stop')]", true); // Otherwise, a button with "Stop" on it is probably from the work screen
 
     // Helper function to detect getting kicked out of the casino
-    const checkForKickedOut = async () =>
-        await findRetry(ns, "//span[contains(text(), 'Alright cheater get out of here')]", true);
+    const checkForKickedOut = async () => {
+        let closeModal;
+        do {
+            const kickedOut = await findRetry(ns, "//span[contains(text(), 'Alright cheater get out of here')]", true);
+            if (kickedOut !== null) return kickedOut;
+            // If there are any other modals, they may need to be closed before we can see the kicked out alert.
+            let closeModal = await findRetry(ns, "//button[contains(@class,'closeButton')]", true);
+            if (!closeModal) break;
+            log(ns, "Found a modal that needs to be closed.")
+            await click(closeModal);
+        } while (closeModal !== null);
+    }
 
     // Find the button used to save the game. (Lots of retries because it can take a while after reloading the page)
     const btnSaveGame = await findRetry(ns, "//button[@aria-label = 'save game']");
@@ -165,6 +175,8 @@ export async function main(ns) {
                 // In case this is what happened, suppress the error and start over. If it keeps happening, something else is wrong...
                 if (++suppressedErrors >= 3)
                     throw (error);
+                // In case we lost our start button, try go find it again?
+                btnStartGame = await findRetry(ns, "//button[text() = 'Start']");
                 continue;
             }
             let won;
@@ -278,14 +290,28 @@ function find(xpath) { return doc.evaluate(xpath, doc, null, XPathResult.FIRST_O
    In other cases, we always expect to find the element we're looking for, and if we don't it's an error. */
 async function findRetry(ns, xpath, expectFailure = false, retries = null) {
     try {
-        ns.print(expectFailure ? `Checking if element is on screen: ${xpath}` : `Searching for element ${xpath}`);
-        return await autoRetry(ns, () => find(xpath), e => e !== null,
-            () => expectFailure ? `It's looking like the element with xpath: ${xpath} isn't present...` :
-                `Could not find the element with xpath: ${xpath}\nSomething may have re-routed the UI`,
-            retries != null ? retries : expectFailure ? 4 : 10, 1, 2, !expectFailure, false);
+        log(ns, `INFO: ${(expectFailure ? "Checking if element is on screen" : "Searching for expected element")}: ${xpath}`, false);
+        const maxRetries = retries != null ? retries : expectFailure ? 4 : 10;
+        let attempts = 0, retryDelayMs = 1;
+        while (attempts++ <= maxRetries) {
+            // Sleep between attempts
+            if (attempts > 1) {
+                await ns.sleep(retryDelayMs);
+                retryDelayMs *= 2;
+            }
+            const findAttempt = find(xpath);
+            if (findAttempt !== null)
+                return findAttempt;
+        }
+        if (expectFailure)
+            log(ns, `INFO: Element doesn't appear to be present, moving on...`, false);
+        else
+            log(ns, `FAIL: Could not find the element with xpath: ${xpath}` +
+                `\nSomething may have re-routed the UI.`, true, 'error');
     } catch (e) {
         if (!expectFailure) throw e;
     }
+    return null;
 }
 
 // Better logic for when to HIT / STAY (Partial credit @drider)
