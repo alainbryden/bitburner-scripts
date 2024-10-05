@@ -114,7 +114,7 @@ async function startUp(ns) {
             log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
                 `Some functionality will be disabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
     } catch (err) {
-        if (unlockedSFs[4] || 0 == 3) throw err; // No idea why this failed, treat as temporary and allow auto-retry.		
+        if (unlockedSFs[4] || 0 == 3) throw err; // No idea why this failed, treat as temporary and allow auto-retry.
         log(ns, `WARNING: You only have SF4 level ${unlockedSFs[4]}. Without level 3, some singularity functions will be ` +
             `too expensive to run until you have bought a lot of home RAM.`, true);
     }
@@ -205,7 +205,7 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
 }
 
 /** Logic run periodically throughout the BN to see if we are ready to complete it.
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function checkIfBnIsComplete(ns, player) {
     if (bnCompletionSuppressed) return true;
@@ -286,7 +286,7 @@ async function getRunningScripts(ns) {
 }
 
 /** Helper to get the first instance of a running script by name.
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {ProcessInfo[]} runningScripts - (optional) Cached list of running scripts to avoid repeating this expensive request
  * @param {(value: ProcessInfo, index: number, array: ProcessInfo[]) => unknown} filter - (optional) Filter the list of processes beyond just matching on the script name */
 function findScriptHelper(baseScriptName, runningScripts, filter = null) {
@@ -294,7 +294,7 @@ function findScriptHelper(baseScriptName, runningScripts, filter = null) {
 }
 
 /** Helper to kill a running script instance by name
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {ProcessInfo[]} runningScripts - (optional) Cached list of running scripts to avoid repeating this expensive request
  * @param {ProcessInfo} processInfo - (optional) The process to kill, if we've already found it in advance */
 async function killScript(ns, baseScriptName, runningScripts = null, processInfo = null) {
@@ -308,7 +308,7 @@ async function killScript(ns, baseScriptName, runningScripts = null, processInfo
 }
 
 /** Logic to ensure scripts are running to progress the BN
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function checkOnRunningScripts(ns, player) {
     if (lastScriptsCheck > Date.now() - options['interval-check-scripts']) return;
@@ -359,7 +359,7 @@ async function checkOnRunningScripts(ns, player) {
         }
     }
 
-    // Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.	
+    // Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.
     const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
     const daemonArgs = (player.skills.hacking < hackThreshold) ? [] :
         // Launch daemon in "looping" mode if we have sufficient hack level
@@ -439,7 +439,7 @@ async function checkOnRunningScripts(ns, player) {
 }
 
 /** Logic to steal 10b from the casino
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function maybeDoCasino(ns, player) {
     if (ranCasino || options['disable-casino']) return;
@@ -484,7 +484,7 @@ async function maybeDoCasino(ns, player) {
 }
 
 /** Retrieves the last faction manager output file, parses, and types it.
- * @param {NS} ns 
+ * @param {NS} ns
  * @returns {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }}
  */
 function getFactionManagerOutput(ns) {
@@ -493,7 +493,7 @@ function getFactionManagerOutput(ns) {
 }
 
 /** Logic to detect if it's a good time to install augmentations, and if so, do so
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 async function maybeInstallAugmentations(ns, player) {
     if (!(4 in unlockedSFs)) {
@@ -587,7 +587,7 @@ async function maybeInstallAugmentations(ns, player) {
 }
 
 /** Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player
  * @param {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }} facmanOutput
 */
@@ -624,7 +624,7 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
 }
 
 /** Consolidated logic for all the times we want to reserve money
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} player */
 function manageReservedMoney(ns, player, stocksValue) {
     if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
@@ -642,11 +642,11 @@ function manageReservedMoney(ns, player, stocksValue) {
     return currentReserve == reserve ? true : ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
     // NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
     // - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
-    // - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores 
+    // - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores
     //	 the global reserve, so this 8B is for stocks only. The 2B remaining is plenty to kickstart the rest.
-    // - Once high-hack/gang income is achieved, this 8B will not be missed anyway. 
+    // - Once high-hack/gang income is achieved, this 8B will not be missed anyway.
     /*
-    if(!ranCasino) { // In practice, 
+    if(!ranCasino) { // In practice,
         ns.write("reserve.txt", 300000, "w"); // Prevent other scripts from spending our casino seed money
         return moneyReserved = true;
     }

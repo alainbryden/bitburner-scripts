@@ -1,4 +1,4 @@
-/** @param {NS} ns 
+/** @param {NS} ns
  * the purpose of the program-manager is to buy all the programs
  * from the darkweb we can afford so we don't have to do it manually
  * or write them ourselves. Like tor-manager, this script dies a natural death

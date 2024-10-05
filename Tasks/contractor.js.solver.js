@@ -413,8 +413,8 @@ const codingContractTypesMetadata = [{
 {
     name: 'Shortest Path in a Grid',
     solver: function (data) {
-        //slightly adapted and simplified to get rid of MinHeap usage, and construct a valid path from potential candidates   
-        //MinHeap replaced by simple array acting as queue (breadth first search)  
+        //slightly adapted and simplified to get rid of MinHeap usage, and construct a valid path from potential candidates
+        //MinHeap replaced by simple array acting as queue (breadth first search)
         const width = data[0].length;
         const height = data.length;
         const dstY = height - 1;
@@ -464,7 +464,7 @@ const codingContractTypesMetadata = [{
         // }
 
         //Simplified version. d < distance[yN][xN] should never happen for BFS if d != infinity, so we skip changeweight and simplify implementation
-        //algo always expands shortest path, distance != infinity means a <= lenght path reaches it, only remaining case to solve is infinity    
+        //algo always expands shortest path, distance != infinity means a <= lenght path reaches it, only remaining case to solve is infinity
         queue.push([0, 0]);
         while (queue.length > 0) {
             const [y, x] = queue.shift()
@@ -641,9 +641,9 @@ const codingContractTypesMetadata = [{
         }
         build.unshift(overallParity); // now we need the "overall" parity back in it's place
         // try fix the actual encoded binary string if there is an error
-        if (fixIndex > 0 && testArray[0] == false) { // if the overall is false and the sum of calculated values is greater equal 0, fix the corresponding hamming-bit           
+        if (fixIndex > 0 && testArray[0] == false) { // if the overall is false and the sum of calculated values is greater equal 0, fix the corresponding hamming-bit
             build[fixIndex] = build[fixIndex] == "0" ? "1" : "0";
-        } else if (testArray[0] == false) { // otherwise, if the the overallparity is the only wrong, fix that one           
+        } else if (testArray[0] == false) { // otherwise, if the the overallparity is the only wrong, fix that one
             overallParity = overallParity == "0" ? "1" : "0";
         } else if (testArray[0] == true && testArray.some((truth) => truth == false)) {
             return 0; // ERROR: There's some strange going on... 2 bits are altered? How? This should not happen

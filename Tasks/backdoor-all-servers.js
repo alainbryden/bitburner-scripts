@@ -2,7 +2,7 @@ import { getNsDataThroughFile, getFilePath, log } from '../helpers.js'
 
 const spawnDelay = 50; // Delay to allow time for `installBackdoor` to start running before a background script connects back to 'home'
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Scan all servers, backdoor anything that can be backdoored, and leave a file to indicate it's been done
  * Requires: SF-4.1 **/
 export let main = async ns => {

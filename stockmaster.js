@@ -67,7 +67,7 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** Requires access to the TIX API. Purchases access to the 4S Mkt Data API as soon as it can 
+/** Requires access to the TIX API. Purchases access to the 4S Mkt Data API as soon as it can
  * @param {NS} ns */
 export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
@@ -436,10 +436,10 @@ let launchSummaryTail = async ns => {
         return;
     //await getNsDataThroughFile(ns, `ns.scriptKill('${summaryTailScript}', ns.getHostname())`, summaryTailScript.replace('.js', '-kill.js')); // Only needed if we're changing the script below
     await runCommand(ns, `ns.disableLog('sleep'); ns.tail(); let lastRead = '';
-        while (true) { 
+        while (true) {
             let read = ns.read('${summaryFile}');
             if (lastRead != read) ns.print(lastRead = read);
-            await ns.sleep(1000); 
+            await ns.sleep(1000);
         }`, summaryTailScript);
 }
 
@@ -451,7 +451,7 @@ let sellShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym
 let transactStock = async (ns, sym, numShares, action) =>
     await getNsDataThroughFile(ns, `ns.stock.${action}(ns.args[0], ns.args[1])`, null, [sym, numShares]);
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Automatically buys either a short or long position depending on the outlook of the stock. */
 async function doBuy(ns, stk, sharesToBuy) {
     // We include -2*commission in the "holdings value" of our stock, but if we make repeated purchases of the same stock, we have to track
@@ -491,7 +491,7 @@ async function doBuy(ns, stk, sharesToBuy) {
     return sharesToBuy * price + commission; // Return the amount spent on the transaction so it can be subtracted from our cash on hand
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Sell our current position in this stock. */
 async function doSellAll(ns, stk) {
     let long = stk.sharesLong > 0;
@@ -589,21 +589,21 @@ async function tryGet4SApi(ns, playerStats, budget) {
     return false;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * @param {"hasWSEAccount"|"hasTIXAPIAccess"|"has4SData"|"has4SDataTIXAPI"} stockFn
  * Helper to check for one of the stock access functions */
 async function checkAccess(ns, stockFn) {
     return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`)
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * @param {"purchaseWseAccount"|"purchaseTixApi"|"purchase4SMarketData"|"purchase4SMarketDataTixApi"} stockFn
  * Helper to try and buy a stock access. Yes, the code is the same as above, but I wanted to be explicit. */
 async function tryBuy(ns, stockFn) {
     return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`)
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * @param {number} budget - The amount we are willing to spend on WSE and API access
  * Tries to purchase access to the stock market **/
 async function tryGetStockMarketAccess(ns, budget) {

@@ -7,7 +7,7 @@ export function autocomplete(data, args) {
     ];
 }
 
-/** Intended to help me explore the NS namespace by dumping properties and function results. 
+/** Intended to help me explore the NS namespace by dumping properties and function results.
  * @param {NS} ns */
 export async function main(ns) {
     const obj = ns.args.length > 0 ? ns[ns.args[0]] : ns;

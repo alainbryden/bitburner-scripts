@@ -43,7 +43,7 @@ const cannotWorkForFactions = ["Church of the Machine God", "Bladeburners", "Sha
 // These factions should ideally be completed in this order
 const preferredEarlyFactionOrder = [
     "Netburners", // Improve hash income, which is useful or critical for almost all BNs
-    "Tian Di Hui", "Aevum", // These give all the company_rep and faction_rep bonuses early game    
+    "Tian Di Hui", "Aevum", // These give all the company_rep and faction_rep bonuses early game
     "Daedalus", // Once we have all faction_rep boosting augs, there's no reason not to work towards Daedalus as soon as it's available/feasible so we can buy Red Pill
     "CyberSec", /* Quick, and NightSec aug depends on an aug from here */ "NiteSec", "Tetrads", // Cha augs to speed up earning company promotions
     "Bachman & Associates", // Boost company/faction rep for future augs
@@ -255,7 +255,7 @@ async function mainLoop(ns) {
             }
         }
     }
-    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, we may choose to we pause working.        
+    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, we may choose to we pause working.
     if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
         if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working in favour of bladeburner progress
             // Check if the player has joined bladeburner (can stop checking once we see they are)
@@ -431,7 +431,7 @@ async function earnFactionInvite(ns, factionName) {
         workedForInvite = await crimeForKillsKarmaStats(ns, requiredKillsByFaction[factionName] || 0, requiredKarmaByFaction[factionName] || 0, requiredCombatByFaction[factionName] || 0);
 
     // Study for hack levels if that's what's keeping us
-    // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
+    // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP
     let serverReqHackingLevel = 0;
     if (requirement = requiredBackdoorByFaction[factionName]) {
         serverReqHackingLevel = await getServerRequiredHackLevel(ns, requirement);
@@ -465,7 +465,7 @@ async function earnFactionInvite(ns, factionName) {
                 `city ${player.city} does not have a university from which to take free computer science.`);
         if (studying)
             workedForInvite = await monitorStudies(ns, 'hacking', requirement);
-        // If we studied for hacking, and were awaiting a backdoor, spawn the backdoor script now  
+        // If we studied for hacking, and were awaiting a backdoor, spawn the backdoor script now
         if (workedForInvite && serverReqHackingLevel) {
             player = await getPlayerInfo(ns);
             if (player.skills.hacking > requirement) {
@@ -724,7 +724,7 @@ async function getGangInfo(ns) {
     return await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt')
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  *  @returns {Promise<Number>} Current reputation with the specified faction */
 async function getFactionReputation(ns, factionName) {
     return await getNsDataThroughFile(ns, `ns.singularity.getFactionRep(ns.args[0])`, null, [factionName]);
@@ -748,7 +748,7 @@ async function getServerRequiredHackLevel(ns, serverName) {
     return await getNsDataThroughFile(ns, `ns.getServerRequiredHackingLevel(ns.args[0])`, null, [serverName]);
 }
 
-/** A special check for when we unlock donations with Daedalus, this is usually a good time to reset. 
+/** A special check for when we unlock donations with Daedalus, this is usually a good time to reset.
  * @param {NS} ns */
 async function daedalusSpecialCheck(ns, favorRepRequired, currentReputation) {
     if (favorRepRequired == 0 || currentReputation < favorRepRequired) return false;
@@ -761,7 +761,7 @@ async function daedalusSpecialCheck(ns, favorRepRequired, currentReputation) {
 }
 
 let lastFactionWorkStatus = "";
-/** @param {NS} ns 
+/** @param {NS} ns
  * Checks how much reputation we need with this faction to either buy all augmentations or get 150 favour, then works to that amount.
  * */
 export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = undefined) {
@@ -819,7 +819,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         // Periodically check again what the best faction work is (may change with stats over time)
         if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval)
             workAssigned = false; // This will force us to redetermine the best faction work.
-        // Heads up! Current implementation of "detectBestFactionWork" changes the work currently being done, so we must always re-assign work afterwards 
+        // Heads up! Current implementation of "detectBestFactionWork" changes the work currently being done, so we must always re-assign work afterwards
         if (!workAssigned)
             bestFactionJob = await detectBestFactionWork(ns, factionName);
         // For purposes of being informative, log a message if the detected "bestFactionJob" is different from what we were previously doing
@@ -827,7 +827,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             log(ns, `INFO: Detected that "${bestFactionJob}" gives more rep than previous work "${factionJob}". Switching...`);
             workAssigned = false;
         }
-        // Ensure we are doing the best faction work (must always be done after "detect" routine is run)    
+        // Ensure we are doing the best faction work (must always be done after "detect" routine is run)
         if (!workAssigned) {
             if (await startWorkForFaction(ns, factionName, bestFactionJob, shouldFocus)) {
                 workAssigned = true;
@@ -905,7 +905,7 @@ async function measureCompanyRepGainRate(ns, companyName) {
 }
 
 /** Try all work types and see what gives the best rep gain with this faction!
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {string} factionName The name of the faction to work for
  * @returns {Promise<FactionWorkType>} The faction work type measured to give the best reputation gain rate */
 async function detectBestFactionWork(ns, factionName) {
@@ -930,7 +930,7 @@ async function detectBestFactionWork(ns, factionName) {
     return bestWork;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  *  @param {Array<string>} megacorpFactionsInPreferredOrder - The list of all corporate factions to work for, sorted in the order they should be worked for
  *  @param {Array<string>} megacorpFactionsInPreferredOrder - The list of all corporate factions, sorted in the order they should be worked for
  * */
@@ -1071,7 +1071,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         }
         await tryBuyReputation(ns);
 
-        // Regardless of the earlier promotion logic, always try for a promotion to make sure we don't miss a promotion due to buggy logic 
+        // Regardless of the earlier promotion logic, always try for a promotion to make sure we don't miss a promotion due to buggy logic
         if (await tryApplyToCompany(ns, companyName, currentRole)) {
             player = await getPlayerInfo(ns); // Find out what our new job is
             log(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${player.jobs[companyName]}. Promotion logic must be off..."`, false, 'warning');

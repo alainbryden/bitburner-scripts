@@ -12,7 +12,7 @@ export function formatMoney(num, maxSignificantFigures = 6, maxDecimalPlaces = 3
 const symbols = ["", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "e33", "e36", "e39"];
 
 /**
- * Return a formatted representation of the monetary amount using scale sympols (e.g. 6.50M) 
+ * Return a formatted representation of the monetary amount using scale sympols (e.g. 6.50M)
  * @param {number} num - The number to format
  * @param {number=} maxSignificantFigures - (default: 6) The maximum significant figures you wish to see (e.g. 123, 12.3 and 1.23 all have 3 significant figures)
  * @param {number=} maxDecimalPlaces - (default: 3) The maximum decimal places you wish to see, regardless of significant figures. (e.g. 12.3, 1.2, 0.1 all have 1 decimal)
@@ -191,7 +191,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     const fnIsAlive = (ignored_pid) => ns.read(fName) === initialContents;
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
     if (verbose) log(ns, `Process ${pid} is done. Reading the contents of ${fName}...`);
-    // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying. 
+    // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying.
     let lastRead;
     const fileData = await autoRetry(ns, () => ns.read(fName),
         f => (lastRead = f) !== undefined && f !== "" && f !== initialContents && !(typeof f == "string" && f.startsWith("ERROR: ")),
@@ -298,7 +298,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
 
 /**
  * Wait for a process id to complete running
- * Importing incurs a maximum of 0.1 GB RAM (for ns.isRunning) 
+ * Importing incurs a maximum of 0.1 GB RAM (for ns.isRunning)
  * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {number} pid - The process id to monitor
  * @param {boolean} verbose - (default false) If set to true, pid and result of command are logged. **/
@@ -309,7 +309,7 @@ export async function waitForProcessToComplete(ns, pid, verbose = false) {
 }
 /**
  * An advanced version of waitForProcessToComplete that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
- * Importing incurs 0 GB RAM (assuming fnIsAlive is implemented using another ns function you already reference elsewhere like ns.ps) 
+ * Importing incurs 0 GB RAM (assuming fnIsAlive is implemented using another ns function you already reference elsewhere like ns.ps)
  * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {(pid: number) => Promise<boolean>} fnIsAlive - A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
  * @param {number} pid - The process id to monitor
@@ -369,7 +369,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
                     log(ns, `INFO: Attempt ${attempts} of ${maxRetries} failed. Trying again in ${retryDelayMs}ms...`, false, !verbose ? undefined : 'info');
                     continue;
                 }
-                // Otherwise, throw an error using the message provided by the errorContext string or function argument 
+                // Otherwise, throw an error using the message provided by the errorContext string or function argument
                 let errorMessage = typeof errorContext === 'string' ? errorContext : errorContext(result);
                 if (errorMessage instanceof Promise)
                     errorMessage = await errorMessage; // If the errorContext function was async, await its result
@@ -387,7 +387,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
     }
 }
 
-/** Helper for extracting the error message from an error thrown by the game. 
+/** Helper for extracting the error message from an error thrown by the game.
  * @param {string|Error} err A thrown error message or object
 */
 export function getErrorInfo(err) {
@@ -469,15 +469,15 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
 }
 
 /** Return bitNode multiplers, or a best guess based on hard-coded values if they cannot currently be retrieved (no SF5, or insufficient RAM)
- *  @param {NS} ns The nestcript instance passed to your script's main entry point 
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point
  * @returns {Promise<BitNodeMultipliers>} the current bitNode multipliers, or a best guess if we do not currently have access. */
 export async function tryGetBitNodeMultipliers(ns) {
     return await tryGetBitNodeMultipliers_Custom(ns, getNsDataThroughFile);
 }
 
 /** tryGetBitNodeMultipliers Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
- * @param {NS} ns The nestcript instance passed to your script's main entry point 
- * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage 
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
  * @returns {Promise<BitNodeMultipliers>} the current bitNode multipliers, or a best guess if we do not currently have access. */
 export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
@@ -493,10 +493,10 @@ export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile
     return await getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile);
 }
 
-/** Cheeky hard-coded values stolen from https://github.com/bitburner-official/bitburner-src/blob/dev/src/BitNode/BitNode.tsx#L456 
+/** Cheeky hard-coded values stolen from https://github.com/bitburner-official/bitburner-src/blob/dev/src/BitNode/BitNode.tsx#L456
  *  so that we essentially can provide bitNode multipliers even without SF-5 or sufficient RAM to request them.
  *  We still prefer to use the API though, this is just a a fallback, but it may become stale over time.
- * @param {NS} ns The nestcript instance passed to your script's main entry point  
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
  * @returns {Promise<BitNodeMultipliers>} a mocked BitNodeMultipliers instance with hard-coded values. */
 async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile) {
@@ -559,7 +559,7 @@ async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile) {
     }
 }
 
-/** Returns the number of instances of the current script running on the specified host. 
+/** Returns the number of instances of the current script running on the specified host.
  * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {string} onHost - The host to search for the script on
  * @param {boolean} warn - Whether to automatically log a warning when there are more than other running instances
@@ -581,7 +581,7 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
 }
 
 /** Helper function to get all stock symbols, or null if you do not have TIX api access.
- *  @param {NS} ns The nestcript instance passed to your script's main entry point 
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point
  * @returns {Promise<string[]>} array of stock symbols */
 export async function getStockSymbols(ns) {
     return await getNsDataThroughFile(ns,
@@ -590,7 +590,7 @@ export async function getStockSymbols(ns) {
 }
 
 /** Helper function to get the total value of stocks using as little RAM as possible.
- *  @param {NS} ns The nestcript instance passed to your script's main entry point 
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point
  * @returns {Promise<number>} The current total dollar value of all owned stocks */
 export async function getStocksValue(ns) {
     let stockSymbols = await getStockSymbols(ns);
@@ -610,7 +610,7 @@ export async function getStocksValue(ns) {
             - 100000 * (Math.sign(stk.pos[0]) + Math.sign(stk.pos[2])), 0);
 }
 
-/** Returns a helpful error message if we forgot to pass the ns instance to a function 
+/** Returns a helpful error message if we forgot to pass the ns instance to a function
  *  @param {NS} ns The nestcript instance passed to your script's main entry point */
 export function checkNsInstance(ns, fnName = "this function") {
     if (ns === undefined || !ns.print) throw new Error(`The first argument to ${fnName} should be a 'ns' instance.`);
@@ -628,7 +628,7 @@ export function getConfiguration(ns, argsSchema) {
     // If the user has a local config file, override the defaults in the argsSchema
     const confName = `${scriptName}.config.txt`;
     const overrides = ns.read(confName);
-    const overriddenSchema = overrides ? [...argsSchema] : argsSchema; // Clone the original args schema    
+    const overriddenSchema = overrides ? [...argsSchema] : argsSchema; // Clone the original args schema
     if (overrides) {
         try {
             let parsedOverrides = JSON.parse(overrides); // Expect a parsable dict or array of 2-element arrays like args schema

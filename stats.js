@@ -127,7 +127,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
                 val1.push(true, `${formatNumberShort(hashes[0], 3, 1)}/${formatNumberShort(hashes[1], 3, 1)}`,
                     `Current Hashes ${hashes[0].toLocaleString('en')} / Current Hash Capacity ${hashes[1].toLocaleString('en')}`)
             } else val1.push(false)
-            // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)               
+            // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)
             if (ns.isRunning('spend-hacknet-hashes.js', 'home', '--liquidate') || ns.isRunning('spend-hacknet-hashes.js', 'home', '-l')) {
                 val2.push(true, "Liquidating", 'You have a script running that is selling hashes as quickly as possible (likely `spend-hacknet-hashes.js --liquidate`)')
             } else val2.push(false)
@@ -300,7 +300,7 @@ async function getGangInfo(ns) {
     return await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt')
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * @returns {Promise<Server[]>} **/
 async function getAllServersInfo(ns) {
     const serverNames = await getNsDataThroughFile(ns, 'scanAllServers(ns)');
@@ -323,7 +323,7 @@ const css = (rootStyle) => `<style id="statsCSS">
     .tooltip .tooltiptext {
         visibility: hidden; position: absolute; z-index: 1;
         right: 20px; top: 19px; padding: 2px 10px;
-        text-align: right; white-space: pre;       
+        text-align: right; white-space: pre;
         border-radius: 6px; border: ${rootStyle?.border || "inherit"};
         background-color: ${rootStyle?.backgroundColor || "#900C"};
     }

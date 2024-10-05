@@ -369,7 +369,7 @@ function coverage(x0, y0, rotation, fragment) {
 
 /** @param {number} width
  *  @param {number} height
- *  @param {[number, number][]} coords 
+ *  @param {[number, number][]} coords
  *  @return {[number, number][]} */
 function adjacents(width, height, coords) {
     const adjacent = [...new Array(width)].map(() => [...new Array(height)].map(() => false));

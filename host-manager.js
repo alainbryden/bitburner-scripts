@@ -4,7 +4,7 @@ import { log, getConfiguration, instanceCount, getNsDataThroughFile, scanAllServ
 // until it thinks RAM is underutilized enough that you don't need to anymore.
 
 const purchasedServerName = "daemon"; // The name to give all purchased servers. Also used to determine which servers were purchased
-let maxPurchasableServerRamExponent; // The max server ram you can buy as an exponent (power of 2). Typically 1 petabyte (2^20), but less in some BNs 
+let maxPurchasableServerRamExponent; // The max server ram you can buy as an exponent (power of 2). Typically 1 petabyte (2^20), but less in some BNs
 let maxPurchasedServers; // The max number of servers you can have in your farm. Typically 25, but can be less in some BNs
 let costByRamExponent = {}; // A dictionary of how much each server size costs, prepped in advance.
 
@@ -96,7 +96,7 @@ function setStatus(ns, logMessage) {
     return logMessage != lastStatus ? ns.print(lastStatus = logMessage) : false;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
   * Attempts to buy a server at or better than your home machine. **/
 async function tryToBuyBestServerPossible(ns) {
     // Gether the list of all purchased servers.
@@ -131,7 +131,7 @@ async function tryToBuyBestServerPossible(ns) {
 
     // Determine our budget for spending money on home RAM
     let spendableMoney = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, null, ["home"]);
-    if (options['reserve-by-time']) { // Option to vary pctReservedMoney by time since augment. 
+    if (options['reserve-by-time']) { // Option to vary pctReservedMoney by time since augment.
         // Decay factor of 0.2 = Starts willing to spend 95% of our money, backing down to ~75% at 1 hour, ~60% at 2 hours, ~25% at 6 hours, and ~10% at 10 hours.
         // Decay factor of 0.3 = Starts willing to spend 95% of our money, backing down to ~66% at 1 hour, ~45% at 2 hours, ~23% at 4 hours, ~10% at 6 hours
         // Decay factor of 0.5 = Starts willing to spend 95% of our money, then halving every hour (to ~48% at 1 hour, ~24% at 2 hours, ~12% at 3 hours, etc)

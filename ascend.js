@@ -12,7 +12,7 @@ const argsSchema = [
     // Spawn this script after installing augmentations (Note: Args not supported by the game)
     ['on-reset-script', null], // By default, will start with `stanek.js` if you have stanek's gift, otherwise `daemon.js`.
     ['ticks-to-wait-for-additional-purchases', 10], // Don't reset until we've gone this many game ticks without any new purchases being made (10 * 200ms (game tick time) ~= 2 seconds)
-    ['max-wait-time', 60000], // The maximum number of milliseconds we'll wait for external scripts to purchase whatever permanent upgrades they can before we ascend anyway.    
+    ['max-wait-time', 60000], // The maximum number of milliseconds we'll wait for external scripts to purchase whatever permanent upgrades they can before we ascend anyway.
     ['prioritize-home-ram', false], // If set to true, will spend as much money as possible on upgrading home RAM before buying augmentations
     /* Deprecated */['prioritize-augmentations', true], // (Legacy flag, now ignored - left for backwards compatibility)
 ];
@@ -25,7 +25,7 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * This script is meant to do all the things best done when ascending (in a generally ideal order) **/
 export async function main(ns) {
     const options = getConfiguration(ns, argsSchema);

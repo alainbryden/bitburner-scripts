@@ -22,7 +22,7 @@ export async function main(ns) {
             return log(ns, `WARNING: Nothing to do, you've already populated Stanek's Gift. Exiting...`, true);
     }
 
-    // Find the saved layout that best matches 
+    // Find the saved layout that best matches
     const height = options['force-height'] || await getNsDataThroughFile(ns, 'ns.stanek.giftHeight()');
     const width = options['force-width'] || await getNsDataThroughFile(ns, 'ns.stanek.giftWidth()');
     const usableLayouts = layouts.filter(l => l.height <= height && l.width <= width);

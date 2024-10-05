@@ -18,7 +18,7 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Will try to download a fresh version of every file on the current server.
  * You are responsible for:
  * - Backing up your save / scripts first (try `download *` in the terminal)
@@ -76,7 +76,7 @@ export function rewriteFileForSubfolder(ns, path) {
     return true;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Gets a list of files to download, either from the github repository (if supported), or using a local directory listing **/
 async function repositoryListing(ns, folder = '') {
     // Note: Limit of 60 free API requests per day, don't over-do it

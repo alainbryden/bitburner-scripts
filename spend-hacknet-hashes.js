@@ -26,7 +26,7 @@ export function autocomplete(data, args) {
     return [];
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Executes instructions to spend hacknet hashes continuously.
  * NOTE: This script is written to support multiple concurrent instances running with different arguments. **/
 export async function main(ns) {
@@ -86,7 +86,7 @@ export async function main(ns) {
                         (spendAllHashes ? '' : ` to avoid reaching capacity (${capacity})`) +
                         ` while earning ${globalProduction.toPrecision(3)} hashes per second.`);
             };
-            // Spend hashes normally on any/all user-specified purchases        
+            // Spend hashes normally on any/all user-specified purchases
             await fnSpendHashes(toBuy, liquidate);
             // Determine if we should try to upgrade our hacknet capacity
             const remaining = capacity - ns.hacknet.numHashes();
