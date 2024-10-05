@@ -971,21 +971,29 @@ class Server {
         return Math.log(this.targetGrowthCoefficientAfterTheft()) / Math.log(this.adjustedGrowthRate());
     }
     percentageStolenPerHackThread() {
+        // Value is cached until the next call to resetCaches()
         if (this._percentStolenPerHackThread !== null) return this._percentStolenPerHackThread;
+        // All calculations assume the server will be weakened to minimum security
+        const hackDifficulty = this.getMinSecurity();
+        if (hackDifficulty > 100) return 0; // Shouldn't happen, but cannot hack servers whose minimum security is over 100
+        // Use the formulas API if we have access, to ensure the answer is accurate
         if (hasFormulas) {
             try {
                 // Mock the properties required to determine the hackPercent at minimum security
-                this.server.hackDifficulty = this.getMinSecurity();
+                this.server.hackDifficulty = hackDifficulty;
                 this.server.requiredHackingSkill = this.requiredHackLevel;
                 return this._percentStolenPerHackThread =
-                    this.ns.formulas.hacking.hackPercent(this.server, _cachedPlayerInfo); // hackAnalyzePercent(this.name) / 100;
+                    this.ns.formulas.hacking.hackPercent(this.server, _cachedPlayerInfo);
             } catch {
                 hasFormulas = false;
             }
         }
-        return this._percentStolenPerHackThread =
-            Math.min(1, Math.max(0, (((100 - Math.min(100, this.getMinSecurity())) / 100) *
-                ((playerHackSkill() - (this.requiredHackLevel - 1)) / playerHackSkill()) / 240)));
+        // Taken from https://github.com/bitburner-official/bitburner-src/blob/dev/src/Hacking.ts#L43 (calculatePercentMoneyHacked)
+        const playerHackSkill = playerHackSkill();
+        const difficultyMult = (100 - hackDifficulty) / 100;
+        const skillMult = (playerHackSkill - (this.requiredHackLevel - 1)) / playerHackSkill;
+        const percentMoneyHacked = (difficultyMult * skillMult * _cachedPlayerInfo.mults.hacking_money * bitNodeMults.ScriptHackMoney) / 240;
+        return this._percentStolenPerHackThread = Math.min(1, Math.max(0, percentMoneyHacked));
     }
     actualPercentageToSteal() {
         return this.getHackThreadsNeeded() * this.percentageStolenPerHackThread();
