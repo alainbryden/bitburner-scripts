@@ -6,13 +6,13 @@ If you manually `nano git-pull.js` from the terminal and copy the [contents of t
 
 If you `run autopilot.js` from the terminal, it will start several other scripts.
 
-You can think of this as the "master orchestrator" script. It will kick off `daemon.js` (you primary hacking script), which in turn kicks off several other helper-scripts. It will monitor your progress throughout the game and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
+You can think of this as the "master orchestrator" script. It will kick off `daemon.js` (your primary hacking script), which in turn kicks off several other helper-scripts. It will monitor your progress throughout the game, and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
 
 Most scripts can also be run on their own, but are primarily designed to be orchestrated by `autopilot.js` or `daemon.js`.
 
 ## Manually run scripts
 
-Some scripts are meant to be manually run as needed. Most scripts take arguments to tweak or customize their behaviour based on your preferences or special circumstance. More on this in [below](#customizing-script-behaviour-basic).
+Some scripts are meant to be manually run as needed. Most scripts take arguments to tweak or customize their behaviour based on your preferences or special circumstance. More on this [below](#customizing-script-behaviour-basic).
 Run scripts with the `--help` flag to get a list of their arguments, default values, and a brief description of each:
 ![image](https://user-images.githubusercontent.com/2285037/166085058-952b0805-cf4e-4548-8829-1e1ebeb5428b.png)
 You will also see an error-version of this dialog if you make a mistake in how you run the script.
