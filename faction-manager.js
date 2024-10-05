@@ -268,7 +268,7 @@ async function updateFactionData(ns, factionsToOmit) {
     let dictFactionReps = await getSingularityDict(ns, 'getFactionRep', factionNames);
     let dictFactionFavors = await getSingularityDict(ns, 'getFactionFavor', factionNames);
 
-    // Need information about our gang to work around a TRP bug - gang faction appears to have it available, but it's not (outside of BN2)  
+    // Need information about our gang to work around a TRP bug - gang faction appears to have it available, but it's not (outside of BN2)
     if (gangFaction && bitNode != 2)
         dictFactionAugs[gangFaction] = dictFactionAugs[gangFaction]?.filter(a => a != "The Red Pill");
 
@@ -461,7 +461,7 @@ function sortAugs(ns, augs = []) {
     return augs;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Display all information about all augmentations, including lists of available / desired / affordable augmentations in their optimal purchase order.  */
 async function manageUnownedAugmentations(ns, ignoredAugs) {
     const reqDaedalusAugs = bitNodeMults.DaedalusAugsRequirement;
@@ -502,7 +502,7 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
             (options.purchase ? '' : ' Run with the --purchase flag to make the purchase.'), printToTerminal);
 }
 
-/** @param {[]} sortedAugs 
+/** @param {[]} sortedAugs
  * Helper to compute the total rep cost for augmentations, including the cost of donating for access. */
 function computeCosts(sortedAugs) {
     const repCostByFaction = computeAugsRepReqDonationByFaction(sortedAugs);
@@ -534,7 +534,7 @@ function filterMissingPrereqs(ns, subset) {
 }
 
 /** Helper to generate outputs for different subsets of the augmentations, each in optimal sort order
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {boolean|undefined} printList - if undefined => automatically print if sort order changed
  *  */
 async function manageFilteredSubset(ns, outputRows, subsetName, subset, printList = undefined, removeMissingPrereqs = true, reorder = true) {
@@ -558,7 +558,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
     return subsetSorted;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Prepares a "purchase order" of augs that we can afford.
  * Note: Stores this info in global properties `purchaseableAugs` and `purchaseFactionDonations` so that a final action in the main method will do the purchase. */
 async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
@@ -722,7 +722,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     if (nextUpNf) outputRows.push(nextUpNf);
 };
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Find out the optimal set of factions and rep-donations required to access them */
 function computeAugsRepReqDonationByFaction(augmentations) {
     const repCostByFaction = {};
@@ -748,7 +748,7 @@ function computeAugsRepReqDonationByFaction(augmentations) {
     return repCostByFaction;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Donate any required rep and purchase the desired augmentations */
 async function purchaseDesiredAugs(ns) {
     let totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
@@ -811,7 +811,7 @@ function displayFactionSummary(ns, sortBy, unique, overrideFinishedFactions, exc
     joinedFactions.push(...overrideFinishedFactions.filter(f => !joinedFactions.includes(f)));
     for (const faction of overrideFinishedFactions)
         simulatedOwnedAugmentations.push(...factionData[faction]?.unownedAugmentations() || []);
-    // Grab disctinct augmentations stats 
+    // Grab disctinct augmentations stats
     const relevantAugStats = allAugStats.filter(s => !excludedStats.find(excl => s.includes(excl)) &&
         undefined !== summaryFactions.find(f => f.unownedAugmentations().find(aug => 1 != (augmentationData[aug].stats[s] || 1))));
     summary += `${summaryFactions.length} factions with augmentations (✓=Joined ✉=Invited ✗=Locked, sorted by total ${sortBy}):`;

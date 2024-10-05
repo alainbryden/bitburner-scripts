@@ -19,7 +19,7 @@ const argsSchema = [
     // By default, starting an augmentation with stanek.js will still spawn daemon.js, but will instruct it not to schedule any hack cycles against home by 'reserving' all its RAM
     // TODO: Set these defaults in some way that the user can explicitly specify that they want to run **no** startup script and **no** completion script
     ['on-startup-script', null], // (Defaults in code) Spawn this script when stanek is launched WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek
-    ['on-startup-script-args', []], // Args for the above (Defaults in code) WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek 
+    ['on-startup-script-args', []], // Args for the above (Defaults in code) WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek
     // When stanek completes, it will run daemon.js again (which will terminate the initial ram-starved daemon that is running)
     ['on-completion-script', null], // (Default in code) Spawn this script when max-charges is reached
     ['on-completion-script-args', []], // (Default in code) Optional args to pass to the script when launched
@@ -36,7 +36,7 @@ let options, currentServer, maxCharges, idealReservedRam, chargeAttempts, sf4Lev
 
 /** Maximizes charge on stanek fragments based on current home RAM.
  * NOTE: You should have no other scripts running on home while you do this to get the best peak charge possible
- *       Stanek stats benefit more from charges with a high avg RAM used per charge, rather than just more charges. 
+ *       Stanek stats benefit more from charges with a high avg RAM used per charge, rather than just more charges.
  * @param {NS} ns **/
 export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
@@ -122,7 +122,7 @@ export async function main(ns) {
         }
     }
     log(ns, `SUCCESS: All stanek fragments at desired charge ${maxCharges}`, true, 'success');
-    // Run the completion script before shutting down    
+    // Run the completion script before shutting down
     let completionScript = options['on-completion-script'];
     let completionArgs = unEscapeArrayArgs(options['on-completion-script-args']);
     if (!completionScript) { // Apply defaults if not present.

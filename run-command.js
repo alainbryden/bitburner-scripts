@@ -2,7 +2,7 @@ import { runCommand } from './helpers.js'
 
 const escapeChars = ['"', "'", "`"];
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * The argument can consist of multiple commands to run. The output of the first command will automatically be printed
  * unless a subsequent command includes '; output = ...' - in which case that result will be printed instead. **/
 export async function main(ns) {

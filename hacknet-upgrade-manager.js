@@ -141,7 +141,7 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
     if (cost > playerMoney - reserve) {
         setStatus(ns, `The next best purchase would be ${strPurchase}, but the cost exceeds the our ` +
             `current available funds` + (reserve == 0 ? '.' : ` (after reserving ${formatMoney(reserve)}).`));
-        return 0; // 
+        return 0; //
     }
     let success = shouldBuyNewNode ? ns.hacknet.purchaseNode() !== -1 : bestUpgrade.upgrade(nodeToUpgrade, 1);
     if (success && options.toast) ns.toast(`Purchased ${strPurchase}`, 'success');

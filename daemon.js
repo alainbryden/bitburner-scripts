@@ -227,7 +227,7 @@ export async function main(ns) {
     maxTargets = 2;
     lowUtilizationIterations = highUtilizationIterations = 0;
     allHostNames = [], _allServers = [], psCache = [];
-    // Get information about the player's current stats (also populates a cache)    
+    // Get information about the player's current stats (also populates a cache)
     const playerInfo = await getPlayerInfo(ns);
 
     // Try to get "resetInfo", with a fallback for a failed dynamic call (i.e. low-ram conditions)
@@ -1916,7 +1916,7 @@ class Tool {
         this.isThreadSpreadingAllowed = toolConfig.threadSpreadingAllowed === true;
         this.cost = toolCost;
     }
-    /** @param {Server} server 
+    /** @param {Server} server
      * @returns {boolean} true if the server has this tool and enough ram to run it. */
     canRun(server) {
         return doesFileExist(server.ns, this.name, server.name) && server.ramAvailable() >= this.cost;
