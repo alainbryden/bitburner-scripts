@@ -391,10 +391,13 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
  * @param {string|Error} err A thrown error message or object
 */
 export function getErrorInfo(err) {
-    return err === undefined || err == null ? "(null error)" :
-        typeof err === 'string' ? err : // Simple string was thrown
-            err?.toString() ?? err?.message ?? // Proper exception object or error with "message" property?
-            JSON.stringify(err); // Other objects which can hopefully be stringified?
+    if (err === undefined || err == null) return "(null error)"; // Nothing caught
+    if (typeof err === 'string') return err; // Simple string was thrown
+    if (typeof err === 'Error' || err.toString !== undefined && err.toString() != '[object Object]')
+        return err.toString(); // Meaningful toString implementation
+    if (err?.message) return err.message; // Has a message property
+    // Other objects will be serialized
+    return (typeof err) + ' { ' + Object.keys(err).map(key => `${key}: ${err[key]}`).join(', ') + ' }'; // Other objects will be serialized
 }
 
 /** Helper to log a message, and optionally also tprint it and toast it
