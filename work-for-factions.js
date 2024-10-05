@@ -83,8 +83,9 @@ const waitForFactionInviteTime = 30 * 1000; // The game will only issue one new 
 let shouldFocus; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
 let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
-let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
+let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
+let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // Trick to get strong typing in mono
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -162,17 +163,7 @@ async function loadStartupData(ns) {
     repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     const playerInfo = await getPlayerInfo(ns);
     const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
-    bitnodeMultipliers = await tryGetBitNodeMultipliers(ns) ||
-    {   // BN mults are used to estimate time to train up stats. Default to 1.0 if unknown
-        HackingLevelMultiplier: 1.0,
-        StrengthLevelMultiplier: 1.0,
-        DefenseLevelMultiplier: 1.0,
-        DexterityLevelMultiplier: 1.0,
-        AgilityLevelMultiplier: 1.0,
-        CharismaLevelMultiplier: 1.0,
-        ClassGymExpGain: 1.0,
-        CrimeExpGain: 1.0,
-    };
+    bitNodeMults = await tryGetBitNodeMultipliers(ns);
 
     // Get some faction and augmentation information to decide what remains to be purchased
     dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', allKnownFactions);
@@ -406,10 +397,10 @@ async function earnFactionInvite(ns, factionName) {
     // Establish some helper functions used to determine how fast we can train a stat
     const title = s => s && s[0].toUpperCase() + s.slice(1); // Annoyingly bitnode multis capitalize the first letter physical stat name
     const heuristic = (stat, trainingBitnodeMult) =>
-        Math.sqrt(player.mults[stat] * bitnodeMultipliers[`${title(stat)}LevelMultiplier`] *
+        Math.sqrt(player.mults[stat] * bitNodeMults[`${title(stat)}LevelMultiplier`] *
             /* */ player.mults[`${stat}_exp`] * trainingBitnodeMult);
-    const crimeHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.CrimeExpGain); // When training with crime
-    const classHeuristic = (stat) => heuristic(stat, bitnodeMultipliers.ClassGymExpGain); // When training in university
+    const crimeHeuristic = (stat) => heuristic(stat, bitNodeMults.CrimeExpGain); // When training with crime
+    const classHeuristic = (stat) => heuristic(stat, bitNodeMults.ClassGymExpGain); // When training in university
     // Check which stats need to be trained up
     requirement = requiredCombatByFaction[factionName];
     let deficientStats = !requirement ? [] : physicalStats.map(stat => ({ stat, value: player.skills[stat] })).filter(stat => stat.value < requirement);
@@ -430,8 +421,8 @@ async function earnFactionInvite(ns, factionName) {
                 `You can control this with --training-stat-per-multi-threshold. Current sqrt(mult*exp_mult*bn_mult*bn_exp_mult) ` +
                 `should be ~${formatNumberShort(em, 2)}, have ` + deficientStats.map(s => s.stat).map(s => `${s.slice(0, 3)}: sqrt(` +
                     `${formatNumberShort(player.mults[s])}*${formatNumberShort(player.mults[`${s}_exp`])}*` +
-                    `${formatNumberShort(bitnodeMultipliers[`${title(s)}LevelMultiplier`])}*` +
-                    `${formatNumberShort(bitnodeMultipliers.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
+                    `${formatNumberShort(bitNodeMults[`${title(s)}LevelMultiplier`])}*` +
+                    `${formatNumberShort(bitNodeMults.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
         doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
     if (doCrime && options['no-crime'])
@@ -459,7 +450,7 @@ async function earnFactionInvite(ns, factionName) {
         else if (classHeuristic('hacking') < em)
             return ns.print(`Your combination of Hacking mult (${formatNumberShort(player.mults.hacking)}), exp_mult ` +
                 `(${formatNumberShort(player.mults.hacking_exp)}), and bitnode hacking / study exp mults ` +
-                `(${formatNumberShort(bitnodeMultipliers.HackingLevelMultiplier)}) / (${formatNumberShort(bitnodeMultipliers.ClassGymExpGain)}) ` +
+                `(${formatNumberShort(bitNodeMults.HackingLevelMultiplier)}) / (${formatNumberShort(bitNodeMults.ClassGymExpGain)}) ` +
                 `are probably too low to increase hack from ${player.skills.hacking} to ${requirement} in a reasonable amount of time ` +
                 `(${formatNumberShort(classHeuristic('hacking'))} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
         let studying = false;

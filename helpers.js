@@ -125,7 +125,7 @@ export function getFnIsAliveViaNsPs(ns) {
  * Retrieve the result of an ns command by executing it in a temporary .js script, writing the result to a file, then shuting it down
  * Importing incurs a maximum of 1.1 GB RAM (0 GB for ns.read, 1 GB for ns.run, 0.1 GB for ns.isRunning).
  * Has the capacity to retry if there is a failure (e.g. due to lack of RAM available). Not recommended for performance-critical code.
- * @param {NS} ns - The nestcript instance passed to your script's main entry point
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
  * @param {string=} fName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
@@ -154,7 +154,7 @@ function getDefaultCommandFileName(command, ext = '.txt') {
  * An advanced version of getNsDataThroughFile that lets you pass your own "fnRun" implementation to reduce RAM requirements
  * Importing incurs no RAM (now that ns.read is free) plus whatever fnRun you provide it
  * Has the capacity to retry if there is a failure (e.g. due to lack of RAM available). Not recommended for performance-critical code.
- * @param {NS} ns - The nestcript instance passed to your script's main entry point
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  **/
@@ -208,7 +208,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
 }
 
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
- * @param {NS} ns - The nestcript instance passed to your script's main entry point
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
  * @param {string=} fileName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
@@ -221,7 +221,7 @@ export async function runCommand(ns, command, fileName, args = [], verbose = fal
 }
 
 const _cachedExports = [];
-/** @param {NS} ns - The nestcript instance passed to your script's main entry point
+/** @param {NS} ns The nestcript instance passed to your script's main entry point
  * @returns {string[]} The set of all funciton names exported by this file. */
 function getExports(ns) {
     if (_cachedExports.length > 0) return _cachedExports;
@@ -238,7 +238,7 @@ function getExports(ns) {
 /**
  * An advanced version of runCommand that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
  * Importing incurs 0 GB RAM (assuming fnRun, fnWrite are implemented using another ns function you already reference elsewhere like ns.exec)
- * @param {NS} ns - The nestcript instance passed to your script's main entry point
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
  * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
  * @param {string=} fileName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
@@ -299,11 +299,10 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
 /**
  * Wait for a process id to complete running
  * Importing incurs a maximum of 0.1 GB RAM (for ns.isRunning) 
- * @param {NS} ns - The nestcript instance passed to your script's main entry point
- * @param {int} pid - The process id to monitor
- * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
- **/
-export async function waitForProcessToComplete(ns, pid, verbose) {
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @param {number} pid - The process id to monitor
+ * @param {boolean} verbose - (default false) If set to true, pid and result of command are logged. **/
+export async function waitForProcessToComplete(ns, pid, verbose = false) {
     checkNsInstance(ns, '"waitForProcessToComplete"');
     if (!verbose) disableLogs(ns, ['isRunning']);
     return await waitForProcessToComplete_Custom(ns, ns.isRunning, pid, verbose);
@@ -311,9 +310,10 @@ export async function waitForProcessToComplete(ns, pid, verbose) {
 /**
  * An advanced version of waitForProcessToComplete that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
  * Importing incurs 0 GB RAM (assuming fnIsAlive is implemented using another ns function you already reference elsewhere like ns.ps) 
- * @param {NS} ns - The nestcript instance passed to your script's main entry point
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {(pid: number) => Promise<boolean>} fnIsAlive - A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
- **/
+ * @param {number} pid - The process id to monitor
+ * @param {boolean} verbose - (default false) If set to true, pid and result of command are logged. **/
 export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose) {
     checkNsInstance(ns, '"waitForProcessToComplete_Custom"');
     if (!verbose) disableLogs(ns, ['sleep']);
@@ -344,7 +344,7 @@ function asError(error) {
 }
 
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
- * @param {NS} ns - The nestcript instance passed to your script's main entry point */
+ * @param {NS} ns The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
     maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true) {
     checkNsInstance(ns, '"autoRetry"');
@@ -388,7 +388,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
 }
 
 /** Helper for extracting the error message from an error thrown by the game. 
- * @param {string|Error} err - A thrown error message or object
+ * @param {string|Error} err A thrown error message or object
 */
 export function getErrorInfo(err) {
     return err === undefined || err == null ? "(null error)" :
@@ -398,9 +398,11 @@ export function getErrorInfo(err) {
 }
 
 /** Helper to log a message, and optionally also tprint it and toast it
- * @param {NS} ns - The nestcript instance passed to your script's main entry point 
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @param {string} message The message to display
+ * @param {boolean} alsoPrintToTerminal Set to true to print not only to the current script's tail file, but to the terminal
  * @param {""|"success"|"warning"|"error"|"info"} toastStyle - If specified, your log will will also become a toast notification
- */
+ * @param {int} */
 export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = Number.MAX_SAFE_INTEGER) {
     checkNsInstance(ns, '"log"');
     ns.print(message);
@@ -415,7 +417,8 @@ export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = 
 }
 
 /** Helper to get a list of all hostnames on the network
- * @param {NS} ns - The nestcript instance passed to your script's main entry point */
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @returns {string[]}>} **/
 export function scanAllServers(ns) {
     checkNsInstance(ns, '"scanAllServers"');
     let discoveredHosts = []; // Hosts (a.k.a. servers) we have scanned
@@ -431,15 +434,18 @@ export function scanAllServers(ns) {
     return discoveredHosts; // The list of scanned hosts should now be the set of all hosts in the game!
 }
 
-/** @param {NS} ns 
- * Get a dictionary of active source files, taking into account the current active bitnode as well (optionally disabled). **/
+/** Get a dictionary of active source files, taking into account the current active bitNode as well (optionally disabled).
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @returns {Promise<{[k: number]: number}>} A dictionary keyed by source file number, where the value is the level (between 1 and 3 for all but BN12) **/
 export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode = true) {
     return await getActiveSourceFiles_Custom(ns, getNsDataThroughFile, includeLevelsFromCurrentBitnode);
 }
 
-/** @param {NS} ns 
- * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile
- * getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
+/** getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
+ * @param {bool} includeLevelsFromCurrentBitnode Set to true to use the current bitNode number to infer the effective source code level (for purposes of determining what features are unlocked)
+ * @returns {Promise<{[k: number]: number}>} A dictionary keyed by source file number, where the value is the level (between 1 and 3 for all but BN12) **/
 export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, includeLevelsFromCurrentBitnode = true) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
     // Find out what source files the user has unlocked
@@ -449,36 +455,113 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
             `Object.fromEntries(ns.singularity.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`,
             '/Temp/owned-source-files.txt');
     } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
-    // If the user is currently in a given bitnode, they will have its features unlocked
-    // TODO: This is true of BN4, but not BN14.2, Check them all!
+    // If the user is currently in a given bitNode, they will have its features unlocked
     if (includeLevelsFromCurrentBitnode) {
         try {
             const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt')).currentNode;
-            dictSourceFiles[currentNode] = Math.max((currentNode == 4 ? 3 : 1), dictSourceFiles[currentNode] || 0);
+            dictSourceFiles[currentNode] = Math.max(3, dictSourceFiles[currentNode] || 0);
         } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
     return dictSourceFiles;
 }
 
-/** @param {NS} ns 
- * Return bitnode multiplers, or null if they cannot be accessed. **/
+/** Return bitNode multiplers, or a best guess based on hard-coded values if they cannot currently be retrieved (no SF5, or insufficient RAM)
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point 
+ * @returns {Promise<BitNodeMultipliers>} the current bitNode multipliers, or a best guess if we do not currently have access. */
 export async function tryGetBitNodeMultipliers(ns) {
     return await tryGetBitNodeMultipliers_Custom(ns, getNsDataThroughFile);
 }
 
-/** @param {NS} ns
- * tryGetBitNodeMultipliers Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
+/** tryGetBitNodeMultipliers Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
+ * @param {NS} ns The nestcript instance passed to your script's main entry point 
+ * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage 
+ * @returns {Promise<BitNodeMultipliers>} the current bitNode multipliers, or a best guess if we do not currently have access. */
 export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
     let canGetBitNodeMultipliers = false;
-    try { canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile)); } catch { }
-    if (!canGetBitNodeMultipliers) return null;
-    try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-multipliers.txt'); } catch { }
-    return null;
+    try {
+        canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile));
+    } catch { }
+    if (canGetBitNodeMultipliers) {
+        try {
+            return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitNode-multipliers.txt');
+        } catch { }
+    }
+    return await getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile);
 }
 
-/** @param {NS} ns 
- * Returns the number of instances of the current script running on the specified host. **/
+/** Cheeky hard-coded values stolen from https://github.com/bitburner-official/bitburner-src/blob/dev/src/BitNode/BitNode.tsx#L456 
+ *  so that we essentially can provide bitNode multipliers even without SF-5 or sufficient RAM to request them.
+ *  We still prefer to use the API though, this is just a a fallback, but it may become stale over time.
+ * @param {NS} ns The nestcript instance passed to your script's main entry point  
+ * @param {(ns: NS, command: string, fName?: string, args?: any, verbose?: any, maxRetries?: number, retryDelayMs?: number) => Promise<any>} fnGetNsDataThroughFile getActiveSourceFiles Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage
+ * @returns {Promise<BitNodeMultipliers>} a mocked BitNodeMultipliers instance with hard-coded values. */
+async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile) {
+    let bn = 1;
+    try { bn = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt')).currentNode; }
+    catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
+    return {
+        AgilityLevelMultiplier: [1, 1, 1, 1, 1, 1, 1, 1, 0.45, 0.4, 1, 1, 0.7, 0.5][bn - 1],
+        AugmentationMoneyCost: [1, 1, 3, 1, 2, 1, 3, 1, 1, 5, 2, 1, 1, 1.5][bn - 1],
+        AugmentationRepCost: [1, 1, 3, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1][bn - 1],
+        BladeburnerRank: [1, 1, 1, 1, 1, 1, 0.6, 0, 0.9, 0.8, 1, 1, 0.45, 0.6][bn - 1],
+        BladeburnerSkillCost: [1, 1, 1, 1, 1, 1, 2, 1, 1.2, 1, 1, 1, 2, 2][bn - 1],
+        CharismaLevelMultiplier: [1, 1, 1, 1, 1, 1, 1, 1, 0.45, 0.4, 1, 1, 1, 1][bn - 1],
+        ClassGymExpGain: [1, 1, 1, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 1][bn - 1],
+        CodingContractMoney: [1, 1, 1, 1, 1, 1, 1, 0, 1, 0.5, 0.25, 1, 0.4, 1][bn - 1],
+        CompanyWorkExpGain: [1, 1, 1, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 1][bn - 1],
+        CompanyWorkMoney: [1, 1, 0.25, 0.1, 1, 0.5, 0.5, 0, 1, 0.5, 0.5, 1, 0.4, 1][bn - 1],
+        CompanyWorkRepGain: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.2][bn - 1],
+        CorporationDivisions: [1, 0.9, 1, 1, 0.75, 0.8, 0.8, 0, 0.8, 0.9, 0.9, 0.5, 0.4, 0.8][bn - 1],
+        CorporationSoftcap: [1, 0.9, 1, 1, 1, 0.9, 0.9, 0, 0.75, 0.9, 0.9, 0.8, 0.4, 0.9][bn - 1],
+        CorporationValuation: [1, 1, 1, 1, 0.75, 0.2, 0.2, 0, 0.5, 0.5, 0.1, 1, 0.001, 0.4][bn - 1],
+        CrimeExpGain: [1, 1, 1, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 1][bn - 1],
+        CrimeMoney: [1, 3, 0.25, 0.2, 0.5, 0.75, 0.75, 0, 0.5, 0.5, 3, 1, 0.4, 0.75][bn - 1],
+        CrimeSuccessRate: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.4][bn - 1],
+        DaedalusAugsRequirement: [30, 30, 30, 30, 30, 35, 35, 30, 30, 30, 30, 31, 30, 30][bn - 1],
+        DefenseLevelMultiplier: [1, 1, 1, 1, 1, 1, 1, 1, 0.45, 0.4, 1, 1, 0.7, 1][bn - 1],
+        DexterityLevelMultiplier: [1, 1, 1, 1, 1, 1, 1, 1, 0.45, 0.4, 1, 1, 0.7, 0.5][bn - 1],
+        FactionPassiveRepGain: [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1][bn - 1],
+        FactionWorkExpGain: [1, 1, 1, 0.5, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 1][bn - 1],
+        FactionWorkRepGain: [1, 0.5, 1, 0.75, 1, 1, 1, 1, 1, 1, 1, 1, 0.6, 0.2][bn - 1],
+        FourSigmaMarketDataApiCost: [1, 1, 1, 1, 1, 1, 2, 1, 4, 1, 4, 1, 10, 1][bn - 1],
+        FourSigmaMarketDataCost: [1, 1, 1, 1, 1, 1, 2, 1, 5, 1, 4, 1, 10, 1][bn - 1],
+        GangSoftcap: [1, 1, 0.9, 1, 1, 0.7, 0.7, 0, 0.8, 0.9, 1, 0.8, 0.3, 0.7][bn - 1],
+        GangUniqueAugs: [1, 1, 0.5, 0.5, 0.5, 0.2, 0.2, 0, 0.25, 0.25, 0.75, 1, 0.1, 0.4][bn - 1],
+        GoPower: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4][bn - 1],
+        HackExpGain: [1, 1, 1, 0.4, 0.5, 0.25, 0.25, 1, 0.05, 1, 0.5, 1, 0.1, 1][bn - 1],
+        HackingLevelMultiplier: [1, 0.8, 0.8, 1, 1, 0.35, 0.35, 1, 0.5, 0.35, 0.6, 1, 0.25, 0.4][bn - 1],
+        HackingSpeedMultiplier: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.3][bn - 1],
+        HacknetNodeMoney: [1, 1, 0.25, 0.05, 0.2, 0.2, 0.2, 0, 1, 0.5, 0.1, 1, 0.4, 0.25][bn - 1],
+        HomeComputerRamCost: [1, 1, 1.5, 1, 1, 1, 1, 1, 5, 1.5, 1, 1, 1, 1][bn - 1],
+        InfiltrationMoney: [1, 3, 1, 1, 1.5, 0.75, 0.75, 0, 1, 0.5, 2.5, 1, 1, 0.75][bn - 1],
+        InfiltrationRep: [1, 1, 1, 1, 1.5, 1, 1, 1, 1, 1, 2.5, 1, 1, 1][bn - 1],
+        ManualHackMoney: [1, 1, 1, 1, 1, 1, 1, 0, 1, 0.5, 1, 1, 1, 1][bn - 1],
+        PurchasedServerCost: [1, 1, 2, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1][bn - 1],
+        PurchasedServerSoftcap: [1, 1.3, 1.3, 1.2, 1.2, 2, 2, 4, 1, 1.1, 2, 1, 1.6, 1][bn - 1],
+        PurchasedServerLimit: [1, 1, 1, 1, 1, 1, 1, 1, 0, 0.6, 1, 1, 1, 1][bn - 1],
+        PurchasedServerMaxRam: [1, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 1, 1, 1, 1][bn - 1],
+        RepToDonateToFaction: [1, 1, 0.5, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1][bn - 1],
+        ScriptHackMoney: [1, 1, 0.2, 0.2, 0.15, 0.75, 0.5, 0.3, 0.1, 0.5, 1, 1, 0.2, 0.3][bn - 1],
+        ScriptHackMoneyGain: [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1][bn - 1],
+        ServerGrowthRate: [1, 0.8, 0.2, 1, 1, 1, 1, 1, 1, 1, 0.2, 1, 1, 1][bn - 1],
+        ServerMaxMoney: [1, 0.08, 0.04, 0.1125, 1, 0.2, 0.2, 1, 0.01, 1, 0.01, 1, 0.3375, 0.7][bn - 1],
+        ServerStartingMoney: [1, 0.4, 0.2, 0.75, 0.5, 0.5, 0.5, 1, 0.1, 1, 0.1, 1, 0.75, 0.5][bn - 1],
+        ServerStartingSecurity: [1, 1, 1, 1, 2, 1.5, 1.5, 1, 2.5, 1, 1, 1.5, 3, 1.5][bn - 1],
+        ServerWeakenRate: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1][bn - 1],
+        StrengthLevelMultiplier: [1, 1, 1, 1, 1, 1, 1, 1, 0.45, 0.4, 1, 1, 0.7, 0.5][bn - 1],
+        StaneksGiftPowerMultiplier: [1, 2, 0.75, 1.5, 1.3, 0.5, 0.9, 1, 0.5, 0.75, 1, 1, 2, 0.5][bn - 1],
+        StaneksGiftExtraSize: [0, -6, -2, 0, 0, 2, -1, -99, 2, -3, 0, 1, 1, -1][bn - 1],
+        WorldDaemonDifficulty: [1, 5, 2, 3, 1.5, 2, 2, 1, 2, 2, 1.5, 1, 3, 5][bn - 1]
+    }
+}
+
+/** Returns the number of instances of the current script running on the specified host. 
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @param {string} onHost - The host to search for the script on
+ * @param {boolean} warn - Whether to automatically log a warning when there are more than other running instances
+ * @param {tailOtherInstances} warn - Whether to open the tail window of other running instances so that they can be easily killed
+ * @returns {Promise<number>} The number of other instance of this script running on this host. */
 export async function instanceCount(ns, onHost = "home", warn = true, tailOtherInstances = true) {
     checkNsInstance(ns, '"alreadyRunning"');
     const scriptName = ns.getScriptName();
@@ -495,7 +578,8 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
 }
 
 /** Helper function to get all stock symbols, or null if you do not have TIX api access.
- * @param {NS} ns */
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point 
+ * @returns {Promise<string[]>} array of stock symbols */
 export async function getStockSymbols(ns) {
     return await getNsDataThroughFile(ns,
         `(() => { try { return ns.stock.getSymbols(); } catch { return null; } })()`,
@@ -503,7 +587,8 @@ export async function getStockSymbols(ns) {
 }
 
 /** Helper function to get the total value of stocks using as little RAM as possible.
- * @param {NS} ns */
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point 
+ * @returns {Promise<number>} The current total dollar value of all owned stocks */
 export async function getStocksValue(ns) {
     let stockSymbols = await getStockSymbols(ns);
     if (stockSymbols == null) return 0; // No TIX API Access
@@ -522,8 +607,8 @@ export async function getStocksValue(ns) {
             - 100000 * (Math.sign(stk.pos[0]) + Math.sign(stk.pos[2])), 0);
 }
 
-/** @param {NS} ns 
- * Returns a helpful error message if we forgot to pass the ns instance to a function */
+/** Returns a helpful error message if we forgot to pass the ns instance to a function 
+ *  @param {NS} ns The nestcript instance passed to your script's main entry point */
 export function checkNsInstance(ns, fnName = "this function") {
     if (ns === undefined || !ns.print) throw new Error(`The first argument to ${fnName} should be a 'ns' instance.`);
     return ns;
@@ -532,7 +617,7 @@ export function checkNsInstance(ns, fnName = "this function") {
 /** A helper to parse the command line arguments with a bunch of extra features, such as
  * - Loading a persistent defaults override from a local config file named after the script.
  * - Rendering "--help" output without all scripts having to explicitly specify it
- * @param {NS} ns
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {[string, string | number | boolean | string[]][]} argsSchema - Specification of possible command line args. **/
 export function getConfiguration(ns, argsSchema) {
     checkNsInstance(ns, '"getConfig"');

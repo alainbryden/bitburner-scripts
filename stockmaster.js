@@ -31,6 +31,7 @@ const catchUpTickTime = 4000;
 let lastTick = 0;
 let sleepInterval = 1000;
 let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
+let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)();
 
 let options;
 const argsSchema = [
@@ -135,11 +136,7 @@ export async function main(ns) {
 
     allStockSymbols = await getStockSymbols(ns);
     allStocks = await initAllStocks(ns);
-
-    let bitnodeMults;
-    if (5 in dictSourceFiles) bitnodeMults = await tryGetBitNodeMultipliers(ns);
-    // Assume bitnode mults are 1 if user doesn't have this API access yet
-    if (!bitnodeMults) bitnodeMults = { FourSigmaMarketDataCost: 1, FourSigmaMarketDataApiCost: 1 };
+    bitNodeMults = await tryGetBitNodeMultipliers(ns);
 
     if (showMarketSummary) await launchSummaryTail(ns); // Opens a separate script / window to continuously display the Pre4S forecast
 
@@ -163,7 +160,7 @@ export async function main(ns) {
             const holdings = await refresh(ns, !pre4s, allStocks, myStocks); // Returns total stock value
             const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
             const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
-            if (pre4s && !mock && await tryGet4SApi(ns, playerStats, bitnodeMults, corpus * (options['buy-4s-budget'] - fracH) - reserve))
+            if (pre4s && !mock && await tryGet4SApi(ns, playerStats, corpus * (options['buy-4s-budget'] - fracH) - reserve))
                 continue; // Start the loop over if we just bought 4S API access
             // Be more conservative with our decisions if we don't have 4S data
             const thresholdToBuy = pre4s ? options['pre-4s-buy-threshold-return'] : options['buy-threshold'];
@@ -564,10 +561,10 @@ async function liquidate(ns) {
 
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
-async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
+async function tryGet4SApi(ns, playerStats, budget) {
     if (await checkAccess(ns, 'has4SDataTIXAPI')) return false; // Only return true if we just bought it
-    const cost4sData = 1E9 * bitnodeMults.FourSigmaMarketDataCost;
-    const cost4sApi = 25E9 * bitnodeMults.FourSigmaMarketDataApiCost;
+    const cost4sData = 1E9 * bitNodeMults.FourSigmaMarketDataCost;
+    const cost4sApi = 25E9 * bitNodeMults.FourSigmaMarketDataApiCost;
     const has4S = await checkAccess(ns, 'has4SData');
     const totalCost = (has4S ? 0 : cost4sData) + cost4sApi;
     // Liquidate shares if it would allow us to afford 4S API data
@@ -588,11 +585,6 @@ async function tryGet4SApi(ns, playerStats, bitnodeMults, budget) {
         return true;
     } else {
         log(ns, 'ERROR attempting to purchase 4SMarketDataTixApi!', false, 'error');
-        if (!(5 in dictSourceFiles)) { // If we do not have access to bitnode multipliers, assume the cost is double and try again later
-            log(ns, 'INFO: Bitnode mults are not available (SF5) - assuming everything is twice as expensive in the current bitnode.');
-            bitnodeMults.FourSigmaMarketDataCost *= 2;
-            bitnodeMults.FourSigmaMarketDataApiCost *= 2;
-        }
     }
     return false;
 }

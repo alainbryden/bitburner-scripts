@@ -165,7 +165,7 @@ async function initialize(ns) {
     // Initialize information about gang members and crimes
     allTaskNames = await getNsDataThroughFile(ns, 'ns.gang.getTaskNames()')
     allTaskStats = await getGangInfoDict(ns, allTaskNames, 'getTaskStats');
-    multGangSoftcap = (await tryGetBitNodeMultipliers(ns))?.GangSoftcap || 1;
+    multGangSoftcap = (await tryGetBitNodeMultipliers(ns)).GangSoftcap;
     myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()');
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
     for (const member of Object.values(dictMembers)) // Initialize the current activity of each member
@@ -230,7 +230,7 @@ async function onTerritoryTick(ns, myGangInfo) {
 
     // Update gang members in case someone died in a clash
     myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()');
-    const canRecruit =  await getNsDataThroughFile(ns, 'ns.gang.canRecruitMember()');
+    const canRecruit = await getNsDataThroughFile(ns, 'ns.gang.canRecruitMember()');
     if (canRecruit)
         await doRecruitMember(ns) // Recruit new members if available
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');

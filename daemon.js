@@ -124,9 +124,9 @@ let recoveryThreadPadding = 1; // How many multiples to increase the weaken/grow
 let daemonHost = null; // the name of the host of this daemon, so we don't have to call the function more than once.
 let hasFormulas = true;
 let currentTerminalServer = ""; // Periodically updated when intelligence farming, the current connected terminal server.
-let dictSourceFiles = (/**@returns{{[bitnode: number]: number;}}*/() => undefined)(); // Available source files
-let bitnodeMults = null; // bitnode multipliers that can be automatically determined after SF-5
-let isInBn8 = false; // Flag indicating whether we are in BN8 (where lots of rules change)
+let dictSourceFiles = (/**@returns{{[bitNode: number]: number;}}*/() => undefined)(); // Available source files
+let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)();
+let currentBn = 0, isInBn8 = false; // Flag indicating whether we are in BN8 (where lots of rules change)
 let haveTixApi = false, have4sApi = false; // Whether we have WSE API accesses
 let _cachedPlayerInfo = (/**@returns{Player}*/() => undefined)(); // stores multipliers for player abilities and other player info
 let _ns = (/**@returns{NS}*/() => undefined)(); // Globally available ns reference, for convenience
@@ -196,7 +196,7 @@ function reservedMoney(ns) {
     let playerMoney = ns.getServerMoneyAvailable("home");
     if (!ownedCracks.includes("SQLInject.exe") && playerMoney > 200e6)
         shouldReserve += 250e6; // Start saving at 200m of the 250m required for SQLInject
-    const fourSigmaCost = (bitnodeMults.FourSigmaMarketDataApiCost * 25000000000);
+    const fourSigmaCost = (bitNodeMults.FourSigmaMarketDataApiCost * 25000000000);
     if (!have4sApi && playerMoney >= fourSigmaCost / 2)
         shouldReserve += fourSigmaCost; // Start saving if we're half-way to buying 4S market access
     return shouldReserve;
@@ -239,7 +239,8 @@ export async function main(ns) {
     } catch {
         resetInfo = { currentNode: 1, lastAugReset: Date.now() };
     }
-    isInBn8 = resetInfo.currentNode === 8; // We do some things differently if we're in BN8 (Stock Market BN)
+    currentBn = resetInfo.currentNode;
+    isInBn8 = currentBn === 8; // We do some things differently if we're in BN8 (Stock Market BN)
     dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
     log(ns, "The following source files are active: " + JSON.stringify(dictSourceFiles));
 
@@ -302,7 +303,7 @@ export async function main(ns) {
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
     let shouldUpgradeHacknet = async () => ((await whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)) === null) && reservedMoney(ns) < ns.getServerMoneyAvailable("home");
     // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
-    let shouldImproveHacking = () => bitnodeMults.ScriptHackMoneyGain != 0 && !isInBn8 || ns.getServerMoneyAvailable("home") > 1e12;
+    let shouldImproveHacking = () => bitNodeMults.ScriptHackMoneyGain != 0 && !isInBn8 || ns.getServerMoneyAvailable("home") > 1e12;
     // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
     periodicScripts = [
         // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
@@ -352,7 +353,7 @@ export async function main(ns) {
     const allServers = await getNsDataThroughFile(ns, 'scanAllServers(ns)');
     await getStaticServerData(ns, allServers); // Gather information about servers that will never change
     await buildServerList(ns, false, allServers); // create the exhaustive server list
-    await establishMultipliers(ns); // figure out the various bitnode and player multipliers
+    await establishMultipliers(ns); // figure out the various bitNode and player multipliers
     maxTargets = options['initial-max-targets'];
     if (stockFocus) // Ensure we attempt to target at least all servers that represent stocks if in stock-focus mode
         maxTargets = Math.max(maxTargets, Object.keys(serverStockSymbols).length);
@@ -817,7 +818,7 @@ async function doTargetingLoop(ns) {
 }
 
 // How much a weaken thread is expected to reduce security by
-let actualWeakenPotency = () => bitnodeMults.ServerWeakenRate * weakenThreadPotency;
+let actualWeakenPotency = () => bitNodeMults.ServerWeakenRate * weakenThreadPotency;
 
 // Get a dictionary from retrieving the same infromation for every server name
 async function getServersDict(ns, command, serverNames) {
@@ -948,7 +949,7 @@ class Server {
         return this._isXpFarming;
     }
     serverGrowthPercentage() {
-        return this.serverGrowth * bitnodeMults.ServerGrowthRate * getPlayerHackingGrowMulti() / 100;
+        return this.serverGrowth * bitNodeMults.ServerGrowthRate * getPlayerHackingGrowMulti() / 100;
     }
     adjustedGrowthRate() {
         return Math.min(maxGrowthRate, 1 + ((unadjustedGrowthRate - 1) / this.getMinSecurity()));
@@ -989,9 +990,9 @@ class Server {
             }
         }
         // Taken from https://github.com/bitburner-official/bitburner-src/blob/dev/src/Hacking.ts#L43 (calculatePercentMoneyHacked)
-        const playerHackSkill = playerHackSkill();
+        const hackLevel = playerHackSkill();
         const difficultyMult = (100 - hackDifficulty) / 100;
-        const skillMult = (playerHackSkill - (this.requiredHackLevel - 1)) / playerHackSkill;
+        const skillMult = (hackLevel - (this.requiredHackLevel - 1)) / hackLevel;
         const percentMoneyHacked = (difficultyMult * skillMult * _cachedPlayerInfo.mults.hacking_money * bitNodeMults.ScriptHackMoney) / 240;
         return this._percentStolenPerHackThread = Math.min(1, Math.max(0, percentMoneyHacked));
     }
@@ -1249,7 +1250,7 @@ function getFlagsArgs(toolName, target, allowLooping = true) {
         args.push(stockMode && (toolName == "hack" && shouldManipulateHack[target] || toolName == "grow" && shouldManipulateGrow[target]) ? 1 : 0);
     if (["hack", "weak"].includes(toolName))
         args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
-            (toolName == "hack" && (bitnodeMults.ScriptHackMoneyGain == 0 || isInBn8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
+            (toolName == "hack" && (bitNodeMults.ScriptHackMoneyGain == 0 || isInBn8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
     args.push(allowLooping && loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
     return args;
 }
@@ -1557,7 +1558,7 @@ async function farmHackXp(ns, fractionOfFreeRamToConsume = 1, verbose = false, n
         singleServerLimit = 0;
         lastCycleTotalRam = totalServerRam;
     }
-    let tryAdvanceMode = bitnodeMults.ScriptHackMoneyGain != 0; // We can't attempt hack-based XP if it's impossible to gain hack income (XP will always be 1/4)
+    let tryAdvanceMode = bitNodeMults.ScriptHackMoneyGain != 0; // We can't attempt hack-based XP if it's impossible to gain hack income (XP will always be 1/4)
     let singleServerMode = false; // Start off maximizing hack threads for best targets by spreading their weaken/grow threads to other servers
     for (let i = 0; i < numTargets; i++) {
         let lastSchedulingResult;
@@ -1868,16 +1869,9 @@ function getHomeProcIsAlive(ns) {
 
 async function establishMultipliers(ns) {
     log(ns, "establishMultipliers");
-
-    bitnodeMults = (await tryGetBitNodeMultipliers_Custom(ns, getNsDataThroughFile)) || {
-        // prior to SF-5, bitnodeMults stays null and these mults are set to 1.
-        ServerGrowthRate: 1,
-        ServerWeakenRate: 1,
-        FourSigmaMarketDataApiCost: 1,
-        ScriptHackMoneyGain: 1
-    };
+    bitNodeMults = await tryGetBitNodeMultipliers_Custom(ns, getNsDataThroughFile);
     if (verbose)
-        log(ns, `Bitnode mults:\n  ${Object.keys(bitnodeMults).filter(k => bitnodeMults[k] != 1.0).map(k => `${k}: ${bitnodeMults[k]}`).join('\n  ')}`);
+        log(ns, `Bitnode mults:\n  ${Object.keys(bitNodeMults).filter(k => bitNodeMults[k] != 1.0).map(k => `${k}: ${bitNodeMults[k]}`).join('\n  ')}`);
 }
 
 class Tool {

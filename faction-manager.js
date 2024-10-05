@@ -27,7 +27,8 @@ let playerData = null, bitNode = 0, gangFaction = null;
 let augsAwaitingInstall, startingPlayerMoney, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFactionDonations = [];
 let ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
-let factionData = {}, augmentationData = {}, bitNodeMults = {};
+let factionData = {}, augmentationData = {};
+let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)();
 let printToTerminal, ignorePlayerData;
 let _ns; // Used to avoid passing ns to functions that don't need it except for some logs.
 
@@ -182,11 +183,8 @@ export async function main(ns) {
     const sort = unshorten(options.sort || desiredStatsFilters[0]);
     displayFactionSummary(ns, sort, options.u || options.unique, afterFactions, hideSummaryStats);
 
-    // Determine the current bitnode multipliers, or default to some sane assumptions if they aren't available (requires SF 5.1)
-    bitNodeMults = await tryGetBitNodeMultipliers(ns, false) || {
-        DaedalusAugsRequirement: bitNode == 6 || bitNode == 7 ? 35 : 30,
-        FactionWorkRepGain: bitNode == 2 ? 0.5 : bitNode == 4 ? 0.75 : bitNode == 13 ? 0.6 : bitNode == 14 ? 0.2 : 1,
-    };
+    // Determine the current bitnode multipliers
+    bitNodeMults = await tryGetBitNodeMultipliers(ns);
 
     // Create the table of all augmentations, and the breakdown of what we can afford
     await manageUnownedAugmentations(ns, omitAugs);
