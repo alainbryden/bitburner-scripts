@@ -867,6 +867,8 @@ async function refreshDynamicServerData(ns, serverNames) {
     // If required, determine the current terminal server (used when intelligence farming)
     if (options.i)
         currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()'));
+    // Check whether we've purchased access to the formulas API ("formulas.exe")
+    hasFormulas = doesFileExist(ns, "Formulas.exe")
 }
 
 class Server {
