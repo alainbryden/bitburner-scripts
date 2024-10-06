@@ -10,7 +10,7 @@
  * - Insight (alainbryden)
  */
 
-import { getConfiguration, instanceCount, getActiveSourceFiles, getNsDataThroughFile } from "./helpers";
+import { getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile } from "./helpers";
 
 let cheats = false;
 let logtime = false;
@@ -58,7 +58,20 @@ export async function main(ns) {
     if (!silent) { ns.tail() }
 
     ns.disableLog("go.makeMove")
-    await playGo(ns)
+
+    let ranToCompletion = false;
+    while (!ranToCompletion) {
+        try {
+            await playGo(ns);
+            ranToCompletion = true;
+        }
+        catch (err) {
+            log(ns, `WARNING: go.js Caught (and suppressed) an unexpected error:\n${getErrorInfo(err)}`, false, 'warning');
+            log(ns, `INFO: Will sleep for 10 seconds than try playing again.`, false);
+            ns.tail();
+            await ns.sleep(10 * 1000);
+        }
+    }
 }
 
 // Ram-dodging helpers (Allows the script to only require as much RAM as its most expensive function)
