@@ -418,8 +418,12 @@ export function getErrorInfo(err) {
             strErr = `${defaultToString}\n${strErr}`;
     }
     if (strErr) return strErr;
-    // Other objects will be serialized
-    return (typeof err) + ' { ' + Object.keys(err).map(key => `${key}: ${err[key]}`).join(', ') + ' }'; // Other objects will be serialized
+    // Other types will be serialized
+    let typeName = typeof err; // Get the type thrown
+    // If the type is an "object", try to get its name from the constructor name (may be minified)
+    if (typeName == 'object') typeName = `${typeName} (${err.constructor.name})`;
+    return `non-Error type thrown: ${typeName}` +
+        ' { ' + Object.keys(err).map(key => `${key}: ${err[key]}`).join(', ') + ' }';
 }
 
 /** Helper to log a message, and optionally also tprint it and toast it
