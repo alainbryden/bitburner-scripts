@@ -210,7 +210,8 @@ export async function main(ns) {
 
     // Ensure no other copies of this script are running (they share memory)
     const scriptName = ns.getScriptName();
-    const competingDaemons = processList(ns, "home").filter(s => s.filename == scriptName && s.pid != ns.pid);
+    const competingDaemons = processList(ns, "home", false /* Important! Don't use the (global shared) cache. */)
+        .filter(s => s.filename == scriptName && s.pid != ns.pid);
     if (competingDaemons.length > 0) { // We expect only 1, due to this logic, but just in case, generalize the code below to support multiple.
         const daemonPids = competingDaemons.map(p => p.pid);
         log(ns, `Info: Killing another '${scriptName}' instance running on home (pid: ${daemonPids} args: ` +
@@ -226,7 +227,17 @@ export async function main(ns) {
     lastUpdateTime = Date.now();
     maxTargets = 2;
     lowUtilizationIterations = highUtilizationIterations = 0;
-    allHostNames = [], _allServers = [], psCache = [];
+    allHostNames = [], _allServers = [];
+    resetServerSortCache();
+    ownedCracks = [];
+    // XpMode Related Caches
+    singleServerLimit = 0, lastCycleTotalRam = 0; // Cache of total ram on the server to check whether we should attempt to lift the above restriction.
+    targetsByExp = [], farmXpReentryLock = [], nextXpCycleEnd = [];
+    loopsHackThreadsByServer = {}, loopsByServer_Grow = {}, loopsByServer_Weaken = {};
+    // Stock mode related caches
+    serversWithOwnedStock = [], shouldManipulateGrow = [], shouldManipulateHack = [];
+    failedStockUpdates = 0;
+
     // Get information about the player's current stats (also populates a cache)
     const playerInfo = await getPlayerInfo(ns);
 
@@ -1529,9 +1540,9 @@ function getBestXPFarmTarget() {
     return getXPFarmTargetsByExp()[0];
 }
 
-let singleServerLimit; // If prior cycles failed to be scheduled, force one additional server into single-server mode until we aqcuire more RAM
+let singleServerLimit = 0; // If prior cycles failed to be scheduled, force one additional server into single-server mode until we aqcuire more RAM
 let lastCycleTotalRam = 0; // Cache of total ram on the server to check whether we should attempt to lift the above restriction.
-let targetsByExp = null; // Cached list of targets in order of best exp earning. We don't keep updating this, because we don't want the allocated host to change
+let targetsByExp = []; // Cached list of targets in order of best exp earning. We don't keep updating this, because we don't want the allocated host to change
 
 /** @param {NS} ns
  * Grind hack XP by filling a bunch of RAM with hack() / grow() / weaken() against a relatively easy target */
