@@ -123,13 +123,14 @@ export function getFnIsAliveViaNsPs(ns) {
 
 /**
  * Retrieve the result of an ns command by executing it in a temporary .js script, writing the result to a file, then shuting it down
- * Importing incurs a maximum of 1.1 GB RAM (0 GB for ns.read, 1 GB for ns.run, 0.1 GB for ns.isRunning).
+ * Importing incurs 1.0 GB RAM (uses ns.run), but if you are already using ns.exec in your script for other purposes,
+ * you can call getNsDataThroughFile_Custom with fnRun set to the result of `getFnRunViaNsExec(ns)` and incur no additional RAM.
  * Has the capacity to retry if there is a failure (e.g. due to lack of RAM available). Not recommended for performance-critical code.
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
- * @param {args=} args - args to be passed in as arguments to command being run as a new script.
- * @param {bool=} verbose - (default false) If set to true, pid and result of command are logged.
+ * @param {string} command The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
+ * @param {string?} fName (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
+ * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged.
  **/
 export async function getNsDataThroughFile(ns, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
@@ -142,6 +143,7 @@ export async function getNsDataThroughFile(ns, command, fName = null, args = [],
 function getDefaultCommandFileName(command, ext = '.txt') {
     // If prefixed with "ns.", strip that out
     let fname = command;
+    if (fname.startsWith("await ")) fname = fname.slice(6);
     if (fname.startsWith("ns.")) fname = fname.slice(3);
     // Remove anything between parentheses
     fname = fname.replace(/ *\([^)]*\) */g, "");
@@ -151,12 +153,16 @@ function getDefaultCommandFileName(command, ext = '.txt') {
 }
 
 /**
- * An advanced version of getNsDataThroughFile that lets you pass your own "fnRun" implementation to reduce RAM requirements
- * Importing incurs no RAM (now that ns.read is free) plus whatever fnRun you provide it
+ * An advanced version of getNsDataThroughFile that lets you pass your own "fnRun" implementation to reduce RAM
+ * requirements (if you already reference ns.exec in your script, pass the result of `getFnRunViaNsExec(ns)`)
+ * Importing incurs no RAM (now that ns.read is free) plus whatever fnRun you provide it.
  * Has the capacity to retry if there is a failure (e.g. due to lack of RAM available). Not recommended for performance-critical code.
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
- * @param {args=} args - args to be passed in as arguments to command being run as a new script.
+ * @param {function} fnRun A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
+ * @param {string} command The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
+ * @param {string?} fName (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
+ * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged.
  **/
 export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
@@ -209,10 +215,10 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
 
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fileName - (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
- * @param {args=} args - args to be passed in as arguments to command being run as a new script.
- * @param {bool=} verbose - (default false) If set to true, the evaluation result of the command is printed to the terminal
+ * @param {string} command The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
+ * @param {string?} fileName (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
+ * @param {boolean?} verbose (default false) If set to true, the evaluation result of the command is printed to the terminal
  */
 export async function runCommand(ns, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand"');
@@ -239,10 +245,10 @@ function getExports(ns) {
  * An advanced version of runCommand that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
  * Importing incurs 0 GB RAM (assuming fnRun, fnWrite are implemented using another ns function you already reference elsewhere like ns.exec)
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @param {function} fnRun - A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
- * @param {string} command - The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
- * @param {string=} fileName - (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
- * @param {args=} args - args to be passed in as arguments to command being run as a new script.
+ * @param {function} fnRun A single-argument function used to start the new sript, e.g. `ns.run` or `(f,...args) => ns.exec(f, "home", ...args)`
+ * @param {string} command The ns command that should be invoked to get the desired data (e.g. "ns.getServer('home')" )
+ * @param {string?} fileName (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
+ * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
  **/
 export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand_Custom"');
@@ -300,8 +306,8 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
  * Wait for a process id to complete running
  * Importing incurs a maximum of 0.1 GB RAM (for ns.isRunning)
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @param {number} pid - The process id to monitor
- * @param {boolean} verbose - (default false) If set to true, pid and result of command are logged. **/
+ * @param {number} pid The process id to monitor
+ * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged. **/
 export async function waitForProcessToComplete(ns, pid, verbose = false) {
     checkNsInstance(ns, '"waitForProcessToComplete"');
     if (!verbose) disableLogs(ns, ['isRunning']);
@@ -311,10 +317,10 @@ export async function waitForProcessToComplete(ns, pid, verbose = false) {
  * An advanced version of waitForProcessToComplete that lets you pass your own "isAlive" test to reduce RAM requirements (e.g. to avoid referencing ns.isRunning)
  * Importing incurs 0 GB RAM (assuming fnIsAlive is implemented using another ns function you already reference elsewhere like ns.ps)
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @param {(pid: number) => Promise<boolean>} fnIsAlive - A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
- * @param {number} pid - The process id to monitor
- * @param {boolean} verbose - (default false) If set to true, pid and result of command are logged. **/
-export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose) {
+ * @param {(pid: number) => Promise<boolean>} fnIsAlive A single-argument function used to start the new sript, e.g. `ns.isRunning` or `pid => ns.ps("home").some(process => process.pid === pid)`
+ * @param {number} pid The process id to monitor
+ * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged. **/
+export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose = false) {
     checkNsInstance(ns, '"waitForProcessToComplete_Custom"');
     if (!verbose) disableLogs(ns, ['sleep']);
     // Wait for the PID to stop running (cheaper than e.g. deleting (rm) a possibly pre-existing file and waiting for it to be recreated)
@@ -421,7 +427,7 @@ export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = 
 
 /** Helper to get a list of all hostnames on the network
  * @param {NS} ns The nestcript instance passed to your script's main entry point
- * @returns {string[]}>} **/
+ * @returns {string[]} **/
 export function scanAllServers(ns) {
     checkNsInstance(ns, '"scanAllServers"');
     let discoveredHosts = []; // Hosts (a.k.a. servers) we have scanned
@@ -458,11 +464,13 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
             `Object.fromEntries(ns.singularity.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`,
             '/Temp/owned-source-files.txt');
     } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
-    // If the user is currently in a given bitNode, they will have its features unlocked
+    // If the user is currently in a given bitnode, they will have its features unlocked
+    // TODO: This is true of BN4, but not BN14.2, Check them all!
     if (includeLevelsFromCurrentBitnode) {
         try {
             const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt')).currentNode;
-            dictSourceFiles[currentNode] = Math.max(3, dictSourceFiles[currentNode] || 0);
+            let effectiveSfLevel = currentNode == 4 ? 3 : 1; // In BN4, we get the perks of SF4.3
+            dictSourceFiles[currentNode] = Math.max(effectiveSfLevel, dictSourceFiles[currentNode] || 0);
         } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
     return dictSourceFiles;
