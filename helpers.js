@@ -394,14 +394,30 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
 }
 
 /** Helper for extracting the error message from an error thrown by the game.
- * @param {string|Error} err A thrown error message or object
+ * @param {Error|string} err A thrown error message or object
 */
 export function getErrorInfo(err) {
     if (err === undefined || err == null) return "(null error)"; // Nothing caught
     if (typeof err === 'string') return err; // Simple string was thrown
-    if (typeof err === 'Error' || err.toString !== undefined && err.toString() != '[object Object]')
-        return err.toString(); // Meaningful toString implementation
-    if (err?.message) return err.message; // Has a message property
+    let strErr = null;
+    // Add the stack trace below, if available
+    if (err instanceof Error) {
+        if (err.stack) // Stack is the most useful for debugging an issue
+            strErr = err.stack;
+        if (err.cause) // Some errors have a nested "cause" error object - recurse!
+            strErr = (strErr ? strErr + '\n' : '') + getErrorInfo(err.cause);
+    }
+    // Get the default string representation of this object
+    let defaultToString = err.toString === undefined ? null : err.toString();
+    if (defaultToString && defaultToString != '[object Object]') { // Ensure the string representation is meaningful
+        // If we have no error message yet, use this
+        if (!strErr)
+            strErr = defaultToString
+        // If we have a stack trace, ensure it contains the error message (it doesn't always: https://mtsknn.fi/blog/js-error-stack/ )
+        else if (!strErr.includes(defaultToString))
+            strErr = `${defaultToString}\n${strErr}`;
+    }
+    if (strErr) return strErr;
     // Other objects will be serialized
     return (typeof err) + ' { ' + Object.keys(err).map(key => `${key}: ${err[key]}`).join(', ') + ' }'; // Other objects will be serialized
 }
