@@ -402,8 +402,9 @@ export function getErrorInfo(err) {
     let strErr = null;
     // Add the stack trace below, if available
     if (err instanceof Error) {
-        if (err.stack) // Stack is the most useful for debugging an issue
-            strErr = err.stack;
+        if (err.stack) // Stack is the most useful for debugging an issue. (Remove bitburner source code from the stack though.)
+            strErr = '  ' + err.stack.split('\n').filter(s => !s.includes('bitburner-official'))
+                .join('\n    '); // While we're here, indent the stack trace to help distinguish it from the rest.
         if (err.cause) // Some errors have a nested "cause" error object - recurse!
             strErr = (strErr ? strErr + '\n' : '') + getErrorInfo(err.cause);
     }
@@ -415,9 +416,9 @@ export function getErrorInfo(err) {
             strErr = defaultToString
         // If we have a stack trace, ensure it contains the error message (it doesn't always: https://mtsknn.fi/blog/js-error-stack/ )
         else if (!strErr.includes(defaultToString))
-            strErr = `${defaultToString}\n${strErr}`;
+            strErr = `${defaultToString}\n  ${strErr}`;
     }
-    if (strErr) return strErr;
+    if (strErr) return strErr.trimEnd(); // Some stack traces have trailing line breaks.
     // Other types will be serialized
     let typeName = typeof err; // Get the type thrown
     // If the type is an "object", try to get its name from the constructor name (may be minified)
