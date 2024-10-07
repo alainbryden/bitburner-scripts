@@ -95,15 +95,12 @@ export async function main(ns) {
     async function checkForKickedOut(retries = 10) {
         let closeModal;
         do {
-            ns.print(1);
             const kickedOut = await tryfindElement(ns, "//span[contains(text(), 'Alright cheater get out of here')]", retries);
             if (kickedOut !== null) return true; // Success: We've been kicked out
             // If there are any other modals, they may need to be closed before we can see the kicked out alert.
             let closeModal = await tryfindElement(ns, "//button[contains(@class,'closeButton')]", retries);
-            ns.print(2);
             if (!closeModal) break; // There appears to be no other modals blocking in the way
             log(ns, "Found a modal that needs to be closed.")
-            ns.print(3);
             await click(ns, closeModal); // Click the close button on this modal so we can see others behind it
         } while (closeModal !== null);
         return false;
@@ -351,13 +348,19 @@ export async function main(ns) {
  * @param {NS} ns
  * @returns {Promise<null|"win"|"lose"|"tie">} null indicates no outcome could be detected (game either not over or still in progres) */
 async function getWinLoseOrTie(ns) {
-    if (await tryfindElement(ns, "//p[contains(text(), 'lost')]"))
-        return "lose";
-    // Annoyingly, when we win with blackjack, "Won" is Title-Case, but normal wins is just "won".
-    if (await tryfindElement(ns, "//p/text()[contains(.,'won') or contains(.,'Won')]"))
-        return "win";
-    if (await tryfindElement(ns, "//p[contains(text(), 'Tie')]"))
-        return "tie";
+    // To strike a balance between quickly finding the right outcome, and not wasting too much time,
+    // cycle between each xpath search, increasing the the number of retries each time, until we hit 5 each.
+    // 1+2+3+4+5=15 total retries, but all with small ms wait times (<20ms), so should still only take a second
+    let retries = 0;
+    while (retries++ < 5) {
+        if (await tryfindElement(ns, "//p[contains(text(), 'lost')]", retries))
+            return "lose";
+        // Annoyingly, when we win with blackjack, "Won" is Title-Case, but normal wins is just "won".
+        if (await tryfindElement(ns, "//p/text()[contains(.,'won') or contains(.,'Won')]", retries))
+            return "win";
+        if (await tryfindElement(ns, "//p[contains(text(), 'Tie')]", retries))
+            return "tie";
+    }
     return null;
 }
 
