@@ -491,8 +491,11 @@ function internalFind(xpath) { return doc.evaluate(xpath, doc, null, XPathResult
  * @param {string?} customErrorMessage (optional) A custom error message to replace the default on failure. */
 async function internalfindWithRetry(ns, xpath, expectFailure, maxRetries, customErrorMessage = null) {
     try {
+        // NOTE: We cannot actually log the xpath we're searching for because depending on the xpath, it might match our log!
+        // So here's a trick to convert the characters into "look-alikes"
+        let logSafeXPath = xpath.substring(2, 20) + "..."; // TODO: Some trick to convert the characters into "look-alikes" (ạḅc̣ḍ...)
         if (verbose)
-            log(ns, `INFO: ${(expectFailure ? "Checking if element is on screen" : "Searching for expected element")}: ${xpath}`, false);
+            log(ns, `INFO: ${(expectFailure ? "Checking if element is on screen" : "Searching for expected element")}: \"${logSafeXPath}\"`, false);
         // If enabled give the game some time to render an item before we try to find it on screen
         if (options['find-sleep-time'])
             await ns.sleep(options['find-sleep-time']);
@@ -501,7 +504,7 @@ async function internalfindWithRetry(ns, xpath, expectFailure, maxRetries, custo
             // Sleep between attempts
             if (attempts > 1) {
                 if (verbose || !expectFailure)
-                    log(ns, (expectFailure ? 'INFO' : 'WARN') + `: Attempt ${attempts - 1} of ${maxRetries} to find \"${xpath}\" failed. Retrying...`, false);
+                    log(ns, (expectFailure ? 'INFO' : 'WARN') + `: Attempt ${attempts - 1} of ${maxRetries} to find \"${logSafeXPath}\" failed. Retrying...`, false);
                 await ns.sleep(retryDelayMs);
                 retryDelayMs *= 2; // back-off rate (increases next sleep time before retrying)
                 retryDelayMs = Math.min(retryDelayMs, 200); // Cap the retry rate at 200 ms (game tick rate)
@@ -514,7 +517,7 @@ async function internalfindWithRetry(ns, xpath, expectFailure, maxRetries, custo
             if (verbose)
                 log(ns, `INFO: Element doesn't appear to be present, moving on...`, false);
         } else
-            throw new Error(customErrorMessage ?? `Could not find the element with xpath: ${xpath}\n` +
+            throw new Error(customErrorMessage ?? `Could not find the element with xpath: \"${logSafeXPath}\"\n` +
                 `Something may have stolen focus or otherwise routed the UI away from the Casino.`, true, 'error');
     } catch (e) {
         if (!expectFailure) throw e;
