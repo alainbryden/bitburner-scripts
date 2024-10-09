@@ -31,6 +31,8 @@ const argsSchema = [ // The set of all command line arguments
     ['disable-go', false], // Set to true to disable the Go script
     ['on-completion-script', null], // Spawn this script when we defeat the bitnode
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
+    ['xp-mode-interval-minutes', 60], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
+    ['xp-mode-duration-minutes', 10], // The number of minutes to keep daemon.js in --xp-only mode before switching back to normal money-earning mode.
 ];
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -45,7 +47,7 @@ let playerInBladeburner = false; // Whether we've joined bladeburner
 let wdHack = 0; // If the WD server is available (i.e. TRP is installed), caches the required hack level
 let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
-let reserveForDaedalus = false, daedalusUnavailable = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
+let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false, prioritizeHackForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
 let killScripts = []; // A list of scripts flagged to be restarted due to changes in priority
 let dictOwnedSourceFiles = [], unlockedSFs = [], nextBn = 0; // Info for the current bitnode
@@ -94,7 +96,8 @@ async function startUp(ns) {
     await persistConfigChanges(ns);
 
     // Reset global state
-    playerInGang = rushGang = playerInBladeburner = ranCasino = reserveForDaedalus = daedalusUnavailable =
+    playerInGang = rushGang = playerInBladeburner = ranCasino =
+        alreadyJoinedDaedalus = autoJoinDaedalusUnavailable = reservingMoneyForDaedalus = prioritizeHackForDaedalus =
         bnCompletionSuppressed = stanekLaunched = false;
     playerInstalledAugCount = wdHack = null;
     installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
@@ -102,7 +105,6 @@ async function startUp(ns) {
     installedAugmentations = killScripts = [];
 
     // Collect and cache some one-time data
-    const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
     resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     bitNodeMults = await tryGetBitNodeMultipliers(ns);
     dictOwnedSourceFiles = await getActiveSourceFiles(ns, false);
@@ -118,8 +120,9 @@ async function startUp(ns) {
         log(ns, `WARNING: You only have SF4 level ${unlockedSFs[4]}. Without level 3, some singularity functions will be ` +
             `too expensive to run until you have bought a lot of home RAM.`, true);
     }
-    if (getTimeInBitnode() < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
-        await initializeNewBitnode(ns, player);
+    // We currently no longer have any one-time logic that needs to be run at the start of a new bitnode
+    //if (getTimeInBitnode() < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
+    //    await initializeNewBitnode(ns);
 
     // Decide what the next-up bitnode should be
     const getSFLevel = bn => Number(bn + "." + ((dictOwnedSourceFiles[bn] || 0) + (resetInfo.currentNode == bn ? 1 : 0)));
@@ -154,8 +157,9 @@ async function persistConfigChanges(ns) {
 
 /** Logic run once at the beginning of a new BN
  * @param {NS} ns */
-async function initializeNewBitnode(ns, player) {
+async function initializeNewBitnode(ns) {
     // Nothing to do here (yet)
+    //const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
 }
 
 /** Logic run periodically throughout the BN
@@ -176,31 +180,72 @@ async function mainLoop(ns) {
  * @param {NS} ns
  * @param {Player} player **/
 async function checkOnDaedalusStatus(ns, player, stocksValue) {
-    // Logic below is for rushing a daedalus invite.
-    // We do not need to run if we've previously determined that Daedalus cannot be unlocked (insufficient augs), or if we've already got TRP
-    if (daedalusUnavailable || (wdHack || 0) > 0) return reserveForDaedalus = false;
-    if (player.skills.hacking < 2500) return reserveForDaedalus = false;
-    if (player.factions.includes("Daedalus")) {
-        if (reserveForDaedalus) {
-            log(ns, "SUCCESS: We sped along joining the faction 'Daedalus'. Restarting work-for-factions.js to speed along earn rep.", false, 'success');
-            killScripts.push("work-for-factions.js"); // Schedule this to be killed (will be restarted) on the next script loop.
-            lastScriptsCheck = 0;
-        }
-        return reserveForDaedalus = false;
-    }
-    if (reserveForDaedalus) { // Already waiting for a Daedalus invite, try joining them
-        return (4 in unlockedSFs) ? await getNsDataThroughFile(ns, 'ns.singularity.joinFaction(ns.args[0])', null, ["Daedalus"]) :
-            log(ns, "INFO: Please manually join the faction 'Daedalus' as soon as possible to proceed", false, 'info');
-    }
-    // See if we have enough augmentations to attempt to join Daedalus
+    // Early exit conditions, if we Daedalus is not (or is no longer) a concern for this reset
+    if (alreadyJoinedDaedalus || autoJoinDaedalusUnavailable) return;
+    // If we've already installed the red pill (w0r1d_d43m0n will have a non-zero hack) we no longer need this faction.
+    if ((wdHack || 0) > 0) return;
+    // See if we even have enough augmentations to attempt to join Daedalus (once we have a count of our augmentations)
     if (playerInstalledAugCount !== null && playerInstalledAugCount < bitNodeMults.DaedalusAugsRequirement)
-        return daedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
-    // If we have sufficient augs and hacking, all we need is the money (100b)
+        return autoJoinDaedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
+
+    // See if we've already joined this faction
+    if (player.factions.includes("Daedalus")) {
+        alreadyJoinedDaedalus = true;
+        // If we previously took any action to "rush" Daedalus, keep the momentum going by restarting work-for-factions.js 
+        // so that it immediately re-assesses priorities and sees there's a new priority faction to earn reputation for.
+        if (prioritizeHackForDaedalus || reservingMoneyForDaedalus) {
+            let reason;
+            if (prioritizeHackForDaedalus) {
+                prioritizeHackForDaedalus = false; // Can turn off this flag now so daemon.js can be reverted
+                reason = "by prioritizing hack exp gains";
+            }
+            if (reservingMoneyForDaedalus) {
+                reservingMoneyForDaedalus = false; // Turn this flag off now so we reset our reserve.txt
+                reason = (reason ? reason + " and" : "by") + " saving up our money";
+            }
+            log(ns, `SUCCESS: We sped along joining the faction 'Daedalus' ${reason}. ` + // Pat ourselves on the back
+                `Restarting work-for-factions.js to speed along earn rep.`, false, 'success');
+            killScripts.push("work-for-factions.js"); // Schedule this to be killed (will be restarted) on the next script loop.
+            lastScriptsCheck = 0; // Reset cooldown on checking whether any changes need to be made to running scripts
+        }
+        return;
+    }
+    const moneyReq = 100E9;
+    // If we've previously set a flag to wait for the daedalus invite and reserve money, try to speed-along joining them
+    if (reservingMoneyForDaedalus && player.money >= moneyReq) // If our cash has dipped below the threshold again, we may need to take action below
+        return await getNsDataThroughFile(ns, 'ns.singularity.joinFaction(ns.args[0])', null, ["Daedalus"]); // Note, we should have already checked that we have SF4 access before reserving money
+
+    // Remaining logic below is for rushing a Daedalus invite in the current reset
     const totalWorth = player.money + stocksValue;
-    if (totalWorth > 100E9 && player.money < 100E9) {
-        reserveForDaedalus = true;
-        log(ns, "INFO: Temporarily liquidating stocks to earn an invite to Daedalus...", true, 'info');
-        launchScriptHelper(ns, 'stockmaster.js', ['--liquidate']);
+    // Check for sufficient hacking level before attempting to reserve money
+    if (player.skills.hacking < 2500) {
+        // If we happen to already have enough money for daedalus and are only waiting on hack-level,
+        // set a flag to switch daemon.js into --xp-only mode, to prioritize earning hack exp over money
+        if (totalWorth >= moneyReq) prioritizeHackForDaedalus = true;
+        return reservingMoneyForDaedalus = false; // Don't reserve money until hack level suffices
+    }
+    // If we have sufficient augs and hacking, the only requirement left is the money (100b)
+    if (totalWorth > moneyReq && player.money < moneyReq) {
+        // Note: Without SF4, we have no way of knowing how many augmentations we own, so we should probably
+        //       never reserve money in case this requirement is not met, then we're just wasting money
+        if (!(4 in unlockedSFs)) {
+            log(ns, `SUCCESS: ${player.money < moneyReq ? "If you sell your stocks, y" : "Y"}ou should have enough money ` +
+                `(>=${formatMoney(moneyReq)}) and a sufficiently high hack level (>=${2500}) to get an invite from the faction Daedalus. ` +
+                `Before you attempt this though, ensure you have ${bitNodeMults.DaedalusAugsRequirement} ` +
+                `augmentations installed (scripts cannot check this without SF4).`, true, 'success');
+            autoJoinDaedalusUnavailable = true; // We won't show this again.
+        }
+        reservingMoneyForDaedalus = true; // Flag to pause all spending (set reserve.txt) until we've gotten the Daedalus invite
+        if (player.money < moneyReq) { // Only liquidate stocks if we don't have enough cash lying around.
+            log(ns, "INFO: Temporarily liquidating stocks to earn an invite to Daedalus...", true, 'info');
+            launchScriptHelper(ns, 'stockmaster.js', ['--liquidate']);
+        } // else if we don't liquidate stocks, and our money dips below 100E9 again, we can always do it on the next loop
+    }
+    else if (reservingMoneyForDaedalus && totalWorth < moneyReq) { // Other scripts not respecting the reserve, or stocks lost value
+        reservingMoneyForDaedalus = false; // Cancel the hold on funds, wait for total worth to increase again
+        log(ns, `WARN: We previously had sufficient wealth to earn a Daedalus invite (>=${formatMoney(moneyReq)}), ` +
+            `but our wealth somehow decreased (to ${formatMoney(totalWorth)}) before the invite was recieved, ` +
+            `so we'll need to wait for it to recover and try again later.`, false, 'warning');
     }
 }
 
@@ -253,7 +298,7 @@ async function checkIfBnIsComplete(ns, player) {
         log(ns, `--disable-auto-destroy-bn is set, you can manually exit the bitnode when ready.`, true);
         return bnCompletionSuppressed = true;
     }
-    if (!(4 in dictOwnedSourceFiles)) {
+    if (!(4 in unlockedSFs)) {
         log(ns, `You do not own SF4, so you must manually exit the bitnode (` +
             `${player.skills.hacking >= wdHack ? "by hacking W0r1dD43m0n" : "on the bladeburner BlackOps tab"}).`, true);
         return bnCompletionSuppressed = true;
@@ -324,7 +369,7 @@ async function checkOnRunningScripts(ns, player) {
     const homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
 
     // Launch stock-master in a way that emphasizes it as our main source of income early-on
-    if (!findScript('stockmaster.js') && !reserveForDaedalus && homeRam >= 32)
+    if (!findScript('stockmaster.js') && !reservingMoneyForDaedalus && homeRam >= 32)
         launchScriptHelper(ns, 'stockmaster.js', [
             "--fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
             "--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
@@ -359,23 +404,60 @@ async function checkOnRunningScripts(ns, player) {
         }
     }
 
-    // Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.
-    const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
-    const daemonArgs = (player.skills.hacking < hackThreshold) ? [] :
-        // Launch daemon in "looping" mode if we have sufficient hack level
-        ["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share",
-            // Use recovery thread padding sparingly until our hack level is significantly higher
-            "--recovery-thread-padding", 1.0 + (player.skills.hacking - hackThreshold) / 1000.0];
-    daemonArgs.push('--disable-script', getFilePath('work-for-factions.js')); // We will run this ourselves with args of our choosing
-    // In BN8, always run in a mode that prioritizes stock market manipulation
-    if (resetInfo.currentNode == 8) daemonArgs.push("--stock-manipulation-focus");
-    // Don't run the script to join and manage bladeburner if it is explicitly disabled
-    if (options['disable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
-    // If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
-    if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
-        daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
+    const existingDaemon = findScript('daemon.js');
+    let daemonArgs = []; // The args we currently want deamon to have
+    let daemonRelaunchMessage; // Will hold any special messages we want to show the user if relaunching daemon.
 
-    // Once stanek's gift is accepted, launch it once per reset (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
+    // If daemon.js is already running in --looping-mode, we should not restart it, because
+    // TODO: currently daemon.js has no ability to kill it's loops on shutdown (so the next instance will be stuck with no RAM available)
+    if (existingDaemon?.args.includes("--looping-mode"))
+        daemonArgs = existingDaemon.args;
+    else {
+        // Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.
+        const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
+        // When our hack level gets sufficiently high, hack/grow/weaken go so fast that spawning new scripts for each cycle becomes very
+        // expensive / laggy. To help with this, daemon.js supports "looping mode", to just spawn one long-lived script that does H/G/W in a loop.
+        if (player.skills.hacking >= hackThreshold) {
+            daemonArgs = ["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share",
+                // Use recovery thread padding sparingly until our hack level is significantly higher (capped at 3x padding)
+                "--recovery-thread-padding", 1.0 + Math.max(2, (player.skills.hacking - hackThreshold) / 1000.0)];
+            // Log a special notice if we're going to be relaunching daemon.js for this reason
+            if (!existingDaemon || !(existingDaemon.args.includes("--looping-mode")))
+                daemonRelaunchMessage = `Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`;
+        }
+        // Periodically try to push higher hack levels by running daemon.js in "xp-focus" mode, where it prioritizes earning hack exp rather than money
+        // Once we decide to put daemon.js in --looping mode though, we should no longer do this, since TODO: currently it does not kill it's loops on shutdown, so they'll be stuck in --xp-only mode
+        else if (prioritizeHackForDaedalus || bitNodeMults.ScriptHackMoney == 0) { // In BNs that give no money for hacking, always start daemon.js in --xp-only mode
+            daemonArgs.push("--xp-only", "--silent-misfires");
+            if (!existingDaemon?.args.includes("--xp-only"))
+                daemonRelaunchMessage = prioritizeHackForDaedalus ?
+                    `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
+                    `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.`;
+        } else { // Otherwise, respect the configured interval / duration
+            const xpInterval = options['xp-mode-interval-minutes'];
+            const xpDuration = options['xp-mode-duration-minutes'];
+            const minutesInBn = getTimeInBitnode() / 60.0 / 1000.0;
+            if (xpInterval > 0 && xpDuration > 0 && minutesInBn > xpInterval &&
+                ((minutesInBn + xpDuration) % (xpInterval + xpDuration)) <= xpDuration) {
+                daemonArgs.push("--xp-only", "--silent-misfires")
+                if (!existingDaemon?.args.includes("--xp-only"))
+                    daemonRelaunchMessage = `Relaunching daemon.js to focus on earning Hack Experience for ${xpDuration} minutes (--xp-mode-duration-minutes)`;
+            } else if (existingDaemon?.args.includes("--xp-only")) {
+                daemonRelaunchMessage = `Time is up for "xp-mode", Relaunching daemon.js normally to focus on earning money for ${xpInterval} minutes (--xp-mode-interval-minutes)`;
+            }
+        }
+        // Prevent daemon from starting "work-for-faction.js" since we now manage that script
+        daemonArgs.push('--disable-script', getFilePath('work-for-factions.js'));
+        // In BN8, always run in a mode that prioritizes stock market manipulation
+        if (resetInfo.currentNode == 8) daemonArgs.push("--stock-manipulation-focus");
+        // Don't run the script to join and manage bladeburner if it is explicitly disabled
+        if (options['disable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
+        // If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
+        if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
+            daemonArgs.push('--reserved-ram', 32 * ((unlockedSFs[4] ?? 0) == 2 ? 4 : 16));
+    }
+
+    // Once stanek's gift is accepted, launch it once per reset before we launch daemon (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
     let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
     if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
         stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
@@ -385,11 +467,12 @@ async function checkOnRunningScripts(ns, player) {
         stanekRunning = true;
     }
 
-    // Launch daemon with the desired arguments (or re-launch if we recently decided to switch to looping mode) - so long as stanek isn't charging
-    const daemon = findScript('daemon.js');
-    if (!stanekRunning && (!daemon || player.skills.hacking >= hackThreshold && !daemon.args.includes("--looping-mode"))) {
-        if (player.skills.hacking >= hackThreshold)
-            log(ns, `INFO: Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
+    // Launch (or re-launch) daemon if it is not already running with all our desired args - so long as stanek isn't charging
+    if (!stanekRunning && (!existingDaemon || daemonArgs.some(arg => !existingDaemon.args.includes(arg)))) {
+        if (existingDaemon) {
+            daemonRelaunchMessage ??= `Relaunching daemon.js with new arguments since the current instance doesn't include all the args we want.`;
+            log(ns, daemonRelaunchMessage);
+        }
         launchScriptHelper(ns, 'daemon.js', daemonArgs);
         daemonStartTime = Date.now();
     }
@@ -628,7 +711,7 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
 function manageReservedMoney(ns, player, stocksValue) {
     if (reservedPurchase) return; // Do not mess with money reserved for installing augmentations
     const currentReserve = Number(ns.read("reserve.txt") || 0);
-    if (reserveForDaedalus) // Reserve 100b to get the daedalus invite
+    if (reservingMoneyForDaedalus) // Reserve 100b to get the daedalus invite
         return currentReserve == 100E9 ? true : ns.write("reserve.txt", 100E9, "w");
     // Otherwise, reserve money for stocks for a while, as it's our main source of income early in the BN
     // It also acts as a decent way to save up for augmentations
