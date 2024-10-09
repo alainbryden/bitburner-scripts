@@ -232,7 +232,7 @@ export async function main(ns) {
     ownedCracks = [];
     // XpMode Related Caches
     singleServerLimit = 0, lastCycleTotalRam = 0; // Cache of total ram on the server to check whether we should attempt to lift the above restriction.
-    targetsByExp = [], farmXpReentryLock = [], nextXpCycleEnd = [];
+    targetsByExp = [], jobHostMappings = {}, farmXpReentryLock = [], nextXpCycleEnd = [];
     loopsHackThreadsByServer = {}, loopsByServer_Grow = {}, loopsByServer_Weaken = {};
     // Stock mode related caches
     serversWithOwnedStock = [], shouldManipulateGrow = [], shouldManipulateHack = [];
@@ -591,7 +591,7 @@ async function doTargetingLoop(ns) {
             await runPeriodicScripts(ns);
             if (stockMode) await updateStockPositions(ns); // In stock market manipulation mode, get our current position in all stocks
             let targetingOrder = await getAllServersByTargetOrder();
-            if (xpOnly) targetingOrder = _sortServersAndReturn(targetingOrder, (a, b) => b.getExpPerSecond() - a.getExpPerSecond());
+            if (xpOnly) targetingOrder = targetsByExp.concat(...targetingOrder.filter(t => !targetsByExp.includes(t)));
 
             if (loops % 60 == 0) { // For more expensive updates, only do these every so often
                 // If we have not yet launched all helpers (e.g. awaiting more home ram, or TIX API to be purchased) see if any are now ready to be run
@@ -808,7 +808,9 @@ async function doTargetingLoop(ns) {
                 keyUpdates += `\n > ${failed.length} servers failed to be scheduled (insufficient RAM?).`;
             keyUpdates += `\n > Targeting: ${targeting.length} servers, Prepping: ${prepping.length + cantHackButPrepping.length}`;
             if (xpOnly)
-                keyUpdates += `\n > Grinding XP from ${targeting.map(s => s.name).join(", ")}`;
+                keyUpdates += targeting.length > 0 ? `\n > Grinding XP from ${targeting.map(s => s.name).join(", ")}` :
+                    prepping.length > 0 ? `\n > Prepping to grind XP from ${prepping.map(s => s.name).join(", ")}` :
+                        '\nERROR: In --xp-mode, but doing nothing!';
             // To reduce log spam, only log if some key status changes, or if it's been a minute
             if (keyUpdates != lastUpdate || (Date.now() - lastUpdateTime) > 60000) {
                 log(ns, (lastUpdate = keyUpdates) +
@@ -1542,7 +1544,8 @@ function getBestXPFarmTarget() {
 
 let singleServerLimit = 0; // If prior cycles failed to be scheduled, force one additional server into single-server mode until we aqcuire more RAM
 let lastCycleTotalRam = 0; // Cache of total ram on the server to check whether we should attempt to lift the above restriction.
-let targetsByExp = []; // Cached list of targets in order of best exp earning. We don't keep updating this, because we don't want the allocated host to change
+let targetsByExp = (/**@returns{Server[]}*/() => [])(); // Cached list of targets in order of best exp earning. We don't keep updating this, because we don't want the allocated host to change
+let jobHostMappings = {};
 
 /** @param {NS} ns
  * Grind hack XP by filling a bunch of RAM with hack() / grow() / weaken() against a relatively easy target */
@@ -1555,8 +1558,26 @@ async function farmHackXp(ns, fractionOfFreeRamToConsume = 1, verbose = false, n
     var jobHosts = serversByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 128); // Get the set of servers that can be reasonably expected to host decent-sized jobs
     if (jobHosts.length == 0) jobHosts = serversByMaxRam.filter(s => s.hasRoot() && s.totalRam() > 16); // Lower our standards if we're early-game and nothing qualifies
     var homeRam = Math.max(0, ns.getServerMaxRam("home") - homeReservedRam); // If home ram is large enough, the XP contributed by additional targets is insignificant compared to the risk of increased lag/latency.
-    targetsByExp ??= getXPFarmTargetsByExp(); // TODO: Might need to take action to stabilize the sort order of this so that we dont change host allocations
-    numTargets = Math.min(maxTargets, targetsByExp.length, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
+    // Determine which servers to target for XP
+    numTargets = Math.min(maxTargets, Math.floor(jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length)); // Limit targets (too many creates lag which worsens performance, and need a dedicated server for each)
+    const newTargets = getXPFarmTargetsByExp();
+    if (!loopingMode)
+        targetsByExp = newTargets; // Normally, we just take the latests Xp targetting order
+    else if (loopingMode && targetsByExp.length < numTargets) { // In looping mode, we must keep the target-host mapping stable, we only revisit if we have capacity for new targets
+        targetsByExp = targetsByExp.concat(...(newTargets
+            .filter(t => !targetsByExp.includes(t)) // Only take targets not already in the target list
+            .slice(0, numTargets - targetsByExp.length)));// Only take as many as we have are willing to target right now, allowing for the future target priority order to change
+        // Immediately map any new targets to the next largest available host.
+        for (let target of targetsByExp)
+            if (!(target.name in jobHostMappings))
+                jobHostMappings[target.name] = jobHosts.filter(h => !(h.name in Object.values(jobHostMappings)))[0];
+        if (verbose) {
+            log(ns, `INFO: Hack XP targetting order: ${targetsByExp.map(h => `${h.name} (${formatNumber(h.getExpPerSecond())})`).join(',')}`);
+            log(ns, `INFO: Hack XP host (RAM) order: ${jobHosts.map(h => `${h.name} (${formatRam(h.totalRam())})`).join(',')}`);
+        }
+    }
+    //log(ns, `INFO: numTargets ${numTargets}, maxTargets ${maxTargets}, targetsByExp.length ${targetsByExp.length}, homeRam ${homeRam}, hosts>homeRam ${jobHosts.filter(s => s.totalRam() > 0.01 * homeRam).length}, `);
+    numTargets = Math.min(numTargets, targetsByExp.length);
     if (options.i) { // To farm intelligence, use manual hack on only the current connected server
         if (currentTerminalServer.name != "home") {
             numTargets = 1;
@@ -1573,10 +1594,16 @@ async function farmHackXp(ns, fractionOfFreeRamToConsume = 1, verbose = false, n
     let singleServerMode = false; // Start off maximizing hack threads for best targets by spreading their weaken/grow threads to other servers
     for (let i = 0; i < numTargets; i++) {
         let lastSchedulingResult;
-        singleServerMode = singleServerMode || (i >= (jobHosts.length - 1 - singleServerLimit) || jobHosts[i + 1].totalRam() < 1000); // Switch to single-server mode if running out of hosts with high ram
+        // By defaults we match the host with the highest ram to the target with the largest exp-potential
+        // but in looping-mode, targets are "locked" to a host once started.
+        let selectedTarget = targetsByExp[i];
+        let selectedHost = loopingMode ? jobHostMappings[i] : jobHosts[i];
+        // If we aren't already configured for singleServerMode, switch to single-server mode if running out of hosts with high ram
+        singleServerMode = singleServerMode || (i >= (jobHosts.length - 1 - singleServerLimit) || jobHosts[i + 1].totalRam() < 1000);
         etas.push(lastSchedulingResult = (await scheduleHackExpCycle(ns, targetsByExp[i], fractionOfFreeRamToConsume, verbose, tryAdvanceMode, jobHosts[i], singleServerMode)) || Number.MAX_SAFE_INTEGER);
         if (lastSchedulingResult == Number.MAX_SAFE_INTEGER) break; // Stop scheduling targets if the last attempt failed
     }
+    if (verbose) log(ns, `INFO: farmHackXp has processed ${numTargets} targets.`);
     // Wait for all job scheduling threads to return, and sleep for the smallest cycle time remaining
     return Math.max(0, Math.min(...etas));
 }
@@ -1856,7 +1883,7 @@ function _sortServersAndReturn(toSort, compareFn) {
 function getAllServersByFreeRam() {
     return _sortServersAndReturn(_serverListByFreeRam ??= getAllServers().slice(), function (a, b) {
         var ramDiff = b.ramAvailable() - a.ramAvailable();
-        return ramDiff != 0.0 ? ramDiff : a.name.localeCompare(b.name); // Break ties by sorting by name
+        return ramDiff != 0.0 ? ramDiff : sortServerTieBreaker(a, b);
     });
 }
 
@@ -1864,8 +1891,19 @@ function getAllServersByFreeRam() {
 function getAllServersByMaxRam() {
     return _sortServersAndReturn(_serverListByMaxRam ??= getAllServers().slice(), function (a, b) {
         var ramDiff = b.totalRam() - a.totalRam();
-        return ramDiff != 0.0 ? ramDiff : a.name.localeCompare(b.name); // Break ties by sorting by name
+        return ramDiff != 0.0 ? ramDiff : sortServerTieBreaker(a, b);
     });
+}
+
+/** Comparison function that breaks ties when sorting two servers
+ * @param {Server} a
+ * @param {Server} b
+ * @returns {0|1|-1} */
+function sortServerTieBreaker(a, b) {
+    // Sort servers by name, except daemon servers are sorted by their prefix
+    return (a.name.startsWith(purchasedServersName) && b.name.startsWith(purchasedServersName)) ?
+        (Number("1" + a.name.substring(purchasedServersName.length + 1)) - Number("1" + b.name.substring(purchasedServersName.length + 1))) :
+        a.name.localeCompare(b.name); // Other servers, basic sort by name
 }
 
 /** @returns {Promise<Server[]>} Sorted in the order we should prioritize spending ram on targeting them (for hacking) */
@@ -1880,17 +1918,22 @@ async function getAllServersByTargetOrder() {
         if (a.canHack() != b.canHack()) return a.canHack() ? -1 : 1; // Sort all hackable servers first
         if (stockFocus) { // If focused on stock-market manipulation, sort up servers with a stock, prioritizing those we have some position in
             let stkCmp = serversWithOwnedStock.includes(a.name) == serversWithOwnedStock.includes(b.name) ? 0 : serversWithOwnedStock.includes(a.name) ? -1 : 1;
-            if (stkCmp == 0) stkCmp = ((shouldManipulateGrow[a.name] || shouldManipulateHack[a.name]) == (shouldManipulateGrow[b.name] || shouldManipulateHack[b.name])) ? 0 :
-                shouldManipulateGrow[a.name] || shouldManipulateHack[a.name] ? -1 : 1;
+            let manipA = (shouldManipulateGrow[a.name] || shouldManipulateHack[a.name]); // Whether we want to manipulate the stock associated with server A
+            let manipB = (shouldManipulateGrow[b.name] || shouldManipulateHack[b.name]); // Whether we want to manipulate the stock associated with server A
+            if (stkCmp == 0) stkCmp = manipA == manipB ? 0 : manipA ? -1 : 1;
             if (stkCmp != 0) return stkCmp;
         }
         // Next, Sort prepped servers to the front. Assume that if we're targetting, we're prepped (between cycles)
-        if ((a.isPrepped() || dictIsTargeting[a.name]) != (b.isPrepped() || dictIsTargeting[b.name]))
-            return a.isPrepped() || dictIsTargeting[a.name] ? -1 : 1;
+        let aIsPrepped = (a.isPrepped() || dictIsTargeting[a.name]);
+        let bIsPrepped = (b.isPrepped() || dictIsTargeting[b.name]);
+        if (aIsPrepped != bIsPrepped) return aIsPrepped ? -1 : 1;
         if (!a.canHack()) return a.requiredHackLevel - b.requiredHackLevel; // Unhackable servers are sorted by lowest hack requirement
         //if (!a.isPrepped()) return a.timeToWeaken() - b.timeToWeaken(); // Unprepped servers are sorted by lowest time to weaken
         // For ready-to-hack servers, the sort order is based on money, RAM cost, and cycle time
-        return b.getMoneyPerRamSecond() - a.getMoneyPerRamSecond(); // Prepped servers are sorted by most money/ram.second
+        let bestGains = b.getMoneyPerRamSecond() - a.getMoneyPerRamSecond(); // Prepped servers are sorted by most money/ram.second
+        if (bestGains != 0) return bestGains;
+        // In the unlikely event that two servers have the same gains, sort them alphabetically to ensure a stable sort
+        return a.name.localeCompare(b.name)
     });
 }
 
