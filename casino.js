@@ -160,9 +160,9 @@ export async function main(ns) {
             // Step 2.3: Navigate to the City Casino
             try { // Try to do this without SF4, because it's faster and doesn't require a temp script to be cleaned up below
                 // Click our way to the city casino
-                await click(ns, await findRequiredElement(ns, "//div[(@role = 'button') and (contains(., 'City'))]",
+                await click(ns, await findRequiredElement(ns, "//div[(@role = 'button') and (contains(., 'City'))]", 15
                     `Couldn't find the "🏙 City" menu button. Is your \"World\" nav menu collapsed?`));
-                await click(ns, await findRequiredElement(ns, "//span[@aria-label = 'Iker Molina Casino']"));
+                await click(ns, await findRequiredElement(ns, "//Button[contains(., 'Iker Molina Casino')]"));
             } catch (err) { // Try to use SF4 as a fallback, it's more reliable.
                 let success = false, err2;
                 try { success = await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', null, ["Iker Molina Casino"]); }
