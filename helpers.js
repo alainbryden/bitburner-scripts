@@ -414,8 +414,8 @@ export function getErrorInfo(err) {
         // If we have no error message yet, use this
         if (!strErr)
             strErr = defaultToString
-        // If we have a stack trace, ensure it contains the error message (it doesn't always: https://mtsknn.fi/blog/js-error-stack/ )
-        else if (!strErr.includes(defaultToString))
+        // Add the error message if the stack didn't already include it (it doesn't always: https://mtsknn.fi/blog/js-error-stack/ )
+        else if (!err.stack || !err.stack.includes(defaultToString))
             strErr = `${defaultToString}\n  ${strErr}`;
     }
     if (strErr) return strErr.trimEnd(); // Some stack traces have trailing line breaks.
