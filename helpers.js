@@ -368,7 +368,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             // Check if this is considered a successful result
             sucessConditionMet = fnSuccessCondition(result);
             if (sucessConditionMet instanceof Promise)
-                sucessConditionMet = await errorMessage; // If fnSuccessCondition was async, await its result
+                sucessConditionMet = await sucessConditionMet; // If fnSuccessCondition was async, await its result
             if (!sucessConditionMet) {
                 // If we have not yet reached our maximum number of retries, we can continue, without throwing
                 if (attempts < maxRetries) {
