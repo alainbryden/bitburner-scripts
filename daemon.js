@@ -288,6 +288,10 @@ export async function main(ns) {
         if (recoveryThreadPadding == 1) recoveryThreadPadding = 10;
         if (stockMode) stockFocus = true; // Need to actively kill scripts that go against stock because they will live forever
     }
+    if (xpOnly && !options['no-share']) {
+        options['no-share'] = true;
+        log(ns, '--no-share has been implied by -x (--xp-only)');
+    }
 
     // These scripts are started once and expected to run forever (or terminate themselves when no longer needed)
     const openTailWindows = !options['no-tail-windows'];
