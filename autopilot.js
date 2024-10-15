@@ -428,7 +428,7 @@ async function checkOnRunningScripts(ns, player) {
         // Periodically try to push higher hack levels by running daemon.js in "xp-focus" mode, where it prioritizes earning hack exp rather than money
         // Once we decide to put daemon.js in --looping mode though, we should no longer do this, since TODO: currently it does not kill it's loops on shutdown, so they'll be stuck in --xp-only mode
         else if (prioritizeHackForDaedalus || bitNodeMults.ScriptHackMoney == 0) { // In BNs that give no money for hacking, always start daemon.js in --xp-only mode
-            daemonArgs.push("--xp-only", "--silent-misfires");
+            daemonArgs.push("--xp-only", "--silent-misfires", "--no-share");
             if (!existingDaemon?.args.includes("--xp-only"))
                 daemonRelaunchMessage = prioritizeHackForDaedalus ?
                     `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
@@ -439,7 +439,7 @@ async function checkOnRunningScripts(ns, player) {
             const minutesInBn = getTimeInBitnode() / 60.0 / 1000.0;
             if (xpInterval > 0 && xpDuration > 0 && minutesInBn > xpInterval &&
                 ((minutesInBn + xpDuration) % (xpInterval + xpDuration)) <= xpDuration) {
-                daemonArgs.push("--xp-only", "--silent-misfires")
+                daemonArgs.push("--xp-only", "--silent-misfires", "--no-share")
                 if (!existingDaemon?.args.includes("--xp-only"))
                     daemonRelaunchMessage = `Relaunching daemon.js to focus on earning Hack Experience for ${xpDuration} minutes (--xp-mode-duration-minutes)`;
             } else if (existingDaemon?.args.includes("--xp-only")) {
@@ -468,7 +468,10 @@ async function checkOnRunningScripts(ns, player) {
     }
 
     // Launch (or re-launch) daemon if it is not already running with all our desired args - so long as stanek isn't charging
-    if (!stanekRunning && (!existingDaemon || daemonArgs.some(arg => !existingDaemon.args.includes(arg)))) {
+    let launchDaemon = !existingDaemon || daemonArgs.some(arg => !existingDaemon.args.includes(arg)) ||
+        // Special cases: We also must relaunch daemon if it is running with certain flags we wish to remove
+        (["--xp-only"].some(arg => !daemonArgs.includes(arg) && existingDaemon.args.includes(arg)))
+    if (!stanekRunning && launchDaemon) {
         if (existingDaemon) {
             daemonRelaunchMessage ??= `Relaunching daemon.js with new arguments since the current instance doesn't include all the args we want.`;
             log(ns, daemonRelaunchMessage);
