@@ -560,7 +560,7 @@ async function tryRunTool(ns, tool) {
 async function exec(ns, script, hostname = null, numThreadsOrOptions = null, ...args) {
     // Defaults
     hostname ??= daemonHost;
-    numThreadsOrOptions = { threads: 1, temporary: true };
+    numThreadsOrOptions ??= { threads: 1, temporary: true };
     let fnRunScript = () => ns.exec(script, hostname, numThreadsOrOptions, ...args);
     // Wrap the script execution in an auto-retry if it fails to start
     // It doesn't make sense to auto-retry hack tools, only add error handling to other scripts
