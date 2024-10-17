@@ -19,7 +19,8 @@ export async function main(ns) {
     if (!options) return; // Invalid options, or ran in --help mode.
     disableLogs(ns, ["scan", "sleep"]);
 
-    let serverNames = scanAllServers(ns);
+    let serverNames = [""]; // Provide a type hint to the IDE
+    serverNames = scanAllServers(ns);
 
     var weaken_ram = 1.75;
     var grow_ram = 1.75;
@@ -41,14 +42,16 @@ export async function main(ns) {
     //ns.print(JSON.stringify(player));
 
     if (options['at-hack-level']) player.skills.hacking = options['at-hack-level'];
-    var servers = serverNames.map(ns.getServer);
+    let servers = serverNames.map(ns.getServer);
     // Compute the total RAM available to us on all servers (e.g. for running hacking scripts)
     var ram_total = servers.reduce(function (total, server) {
         if (!server.hasAdminRights || (server.hostname.startsWith('hacknet') && !options['include-hacknet-ram'])) return total;
         return total + server.maxRam;
     }, 0);
 
-    // Helper to compute server gain/exp rates at a specific hacking level
+    /** Helper to compute server gain/exp rates at a specific hacking level
+     * @param {Server} server
+     * @param {Player} player */
     function getRatesAtHackLevel(server, player, hackLevel) {
         // Assume we will have wekened the server to min-security and taken it to max money before targetting
         server.hackDifficulty = server.minDifficulty;
@@ -82,7 +85,15 @@ export async function main(ns) {
         }
         catch {
             // Formulas API unavailable?
-            return [server.moneyMax, server.moneyMax, 1 / server.minDifficulty];
+            // Fall-back to returning a "gain rates" based purely on current hack time (i.e. ignoring the RAM associated with required grow/weaken threads)
+            let timeToHack = ns.getWeakenTime(server.hostname) / 4.0;
+            // Realistically, batching scripts run on carefully timed intervals (e.g. batches scheduled no less than 200 ms apart).
+            // So for very small time-to-weakens, we use a "capped" gain rate based on a more achievable number of hacks per second.
+            let cappedTimeToHack = Math.max(timeToHack, 200)
+            // the server computes experience gain based on the server's base difficulty. To get a rate, we divide that by the timeToWeaken
+            let relativeExpGain = 3 + server.minDifficulty * 0.3; // Ignore HackExpGain mults since they affect all servers equally
+
+            return [server.moneyMax / timeToHack, server.moneyMax / cappedTimeToHack, relativeExpGain / timeToHack];
         } finally {
             player.skills.hacking = real_player_hack_skill; // Restore the real hacking skill if we changed it temporarily
         }
