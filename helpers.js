@@ -52,9 +52,11 @@ export function formatRam(num, printGB) {
     if(printGB) {
         return `${Math.round(num).toLocaleString('en')} GB`;
     }
-    let idx = Math.floor(Math.log10(num) / 3);
+    let idx = Math.floor(Math.log10(num) / 3) || 0;
     if (idx >= memorySuffixes.length) {
         idx = memorySuffixes.length - 1;
+    } else if (idx < 0) {
+        idx = 0;
     }
     return (num / 1000 ** idx).toFixed(3).toLocaleString('en') + " " + memorySuffixes[idx];
 }
