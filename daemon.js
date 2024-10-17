@@ -582,7 +582,7 @@ async function exec(ns, script, hostname = null, numThreadsOrOptions = null, ...
  * Execute an external script that roots a server, and wait for it to complete. **/
 async function doRoot(ns, server) {
     if (verbose) log(ns, `Rooting Server ${server.name}`);
-    const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), daemonHost, 1, server.name);
+    const pid = await exec(ns, getFilePath('/Tasks/crack-host.js'), daemonHost, { temporary: true }, server.name);
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
     server.resetCaches(); // If rooted status was cached, we must now reset it
 }
