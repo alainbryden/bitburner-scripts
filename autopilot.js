@@ -585,6 +585,10 @@ async function maybeInstallAugmentations(ns, player) {
         setStatus(ns, `No singularity access, so you're on your own. You should manually work for factions and install augmentations!`);
         return false; // Cannot automate augmentations or installs without singularity
     }
+		const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()');
+		if(!hasTixApiAccess) {
+			return false; //We cant liquidate
+		}
     // If we previously attempted to reserve money for an augmentation purchase order, do a fresh facman run to ensure it's still available
     if (reservedPurchase && installCountdown <= Date.now()) {
         log(ns, "INFO: Manually running faction-manager.js to ensure previously reserved purchase is still obtainable.");
