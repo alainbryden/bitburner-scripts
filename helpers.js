@@ -132,10 +132,10 @@ export function getFnIsAliveViaNsPs(ns) {
  * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
  * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged.
  **/
-export async function getNsDataThroughFile(ns, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile(ns, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
-    return await getNsDataThroughFile_Custom(ns, ns.run, command, fName, args, verbose, maxRetries, retryDelayMs);
+    return await getNsDataThroughFile_Custom(ns, ns.run, command, fName, args, verbose, maxRetries, retryDelayMs, silent);
 }
 
 /** Convert a command name like "ns.namespace.someFunction(args, args)" into
@@ -164,7 +164,7 @@ function getDefaultCommandFileName(command, ext = '.txt') {
  * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
  * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged.
  **/
-export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     if (!verbose) disableLogs(ns, ['read']);
     fName = fName || getDefaultCommandFileName(command);
@@ -192,7 +192,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
         `);}catch(e){r="ERROR: "+(typeof e=='string'?e:e?.message??JSON.stringify(e));}\n` +
         `const f="${fName}"; if(ns.read(f)!==r) ns.write(f,r,'w')`;
     // Run the command with auto-retries if it fails
-    const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs);
+    const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs, silent);
     // Wait for the process to complete. Note, as long as the above returned a pid, we don't actually have to check it, just the file contents
     const fnIsAlive = (ignored_pid) => ns.read(fName) === initialContents;
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
@@ -208,7 +208,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
                     lastRead == "" ? `\nThe file appears to have been deleted before a result could be retrieved. Perhaps there is a conflicting script.` :
                         lastRead.includes('API ACCESS ERROR') ? `\nThis script should not have been run until you have the required Source-File upgrades. Sorry about that.` :
                             `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
-        maxRetries, retryDelayMs, undefined, verbose, verbose);
+        maxRetries, retryDelayMs, undefined, verbose, verbose, silent);
     if (verbose) log(ns, `Read the following data for command ${command}:\n${fileData}`);
     return JSON.parse(fileData); // Deserialize it back into an object/array and return
 }
@@ -220,10 +220,10 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
  * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
  * @param {boolean?} verbose (default false) If set to true, the evaluation result of the command is printed to the terminal
  */
-export async function runCommand(ns, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function runCommand(ns, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"runCommand"');
     if (!verbose) disableLogs(ns, ['run']);
-    return await runCommand_Custom(ns, ns.run, command, fileName, args, verbose, maxRetries, retryDelayMs);
+    return await runCommand_Custom(ns, ns.run, command, fileName, args, verbose, maxRetries, retryDelayMs, silent);
 }
 
 const _cachedExports = [];
@@ -250,7 +250,7 @@ function getExports(ns) {
  * @param {string?} fileName (default "/Temp/{commandhash}-data.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
  **/
-export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function runCommand_Custom(ns, fnRun, command, fileName, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"runCommand_Custom"');
     if (!Array.isArray(args)) throw new Error(`args specified were a ${typeof args}, but an array is required.`);
     if (!verbose) disableLogs(ns, ['sleep']);
@@ -274,19 +274,20 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
             ns.write(fileName, script, "w");
             // Wait for the script to appear and be readable (game can be finicky on actually completing the write)
             await autoRetry(ns, () => ns.read(fileName), c => c == script, () => `Temporary script ${fileName} is not available, ` +
-                `despite having written it. (Did a competing process delete or overwrite it?)`, maxRetries, retryDelayMs, undefined, verbose, verbose);
+                `despite having written it. (Did a competing process delete or overwrite it?)`, maxRetries, retryDelayMs, undefined, verbose, verbose, silent);
         }
         // NEW! We can inject "RunOptions" as the middle arg (rather than an integer thread count)
         // Run the script, now that we're sure it is in place
         return fnRun(fileName, { temporary: true }, ...args);
     }, pid => pid !== 0,
         async () => {
+            if (silent) return `(silent = true)`; // No reason needed in silent mode, messages should all be suppressed
             let reason = " (likely due to insufficient RAM)";
             // Just to be super clear - try to find out how much ram this script requires vs what we have available
             try {
-                const reqRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getScriptRam(ns.args[0])', null, [fileName]);
-                const homeMaxRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getServerMaxRam(ns.args[0])', null, ["home"]);
-                const homeUsedRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getServerUsedRam(ns.args[0])', null, ["home"]);
+                const reqRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getScriptRam(ns.args[0])', null, [fileName], false, 1, 0, true);
+                const homeMaxRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getServerMaxRam(ns.args[0])', null, ["home"], false, 1, 0, true);
+                const homeUsedRam = await getNsDataThroughFile_Custom(ns, fnRun, 'ns.getServerUsedRam(ns.args[0])', null, ["home"], false, 1, 0, true);
                 if (reqRam > homeMaxRam)
                     reason = ` as it requires ${formatRam(reqRam)} RAM, but home only has ${formatRam(homeMaxRam)}`;
                 else if (reqRam > homeMaxRam - homeUsedRam)
@@ -300,7 +301,7 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
                 `\n  Script:  ${fileName}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
                 `\nThe script that ran this will likely recover and try again later.`
         },
-        maxRetries, retryDelayMs, undefined, verbose, verbose);
+        maxRetries, retryDelayMs, undefined, verbose, verbose, silent);
 }
 
 /**
@@ -353,7 +354,7 @@ function asError(error) {
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
  * @param {NS} ns The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
-    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true) {
+    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true, silent = false) {
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs, attempts = 0;
     let sucessConditionMet;
@@ -373,7 +374,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
             if (!sucessConditionMet) {
                 // If we have not yet reached our maximum number of retries, we can continue, without throwing
                 if (attempts < maxRetries) {
-                    log(ns, `INFO: Attempt ${attempts} of ${maxRetries} failed. Trying again in ${retryDelayMs}ms...`, false, !verbose ? undefined : 'info');
+                    if (!silent) log(ns, `INFO: Attempt ${attempts} of ${maxRetries} failed. Trying again in ${retryDelayMs}ms...`, false, !verbose ? undefined : 'info');
                     continue;
                 }
                 // Otherwise, throw an error using the message provided by the errorContext string or function argument
@@ -386,7 +387,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
         }
         catch (error) {
             const fatal = attempts >= maxRetries;
-            log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} raised an error` +
+            if (!silent) log(ns, `${fatal ? 'FAIL' : 'INFO'}: Attempt ${attempts} of ${maxRetries} raised an error` +
                 (fatal ? `: ${getErrorInfo(error)}` : `. Trying again in ${retryDelayMs}ms...`),
                 tprintFatalErrors && fatal, !verbose ? undefined : (fatal ? 'error' : 'info'))
             if (fatal) throw asError(error);

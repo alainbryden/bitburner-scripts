@@ -882,7 +882,7 @@ async function refreshDynamicServerData(ns, serverNames) {
     dictServerMinSecurityLevels = await getServersDict(ns, 'getServerMinSecurityLevel', serverNames);
     dictServerMaxMoney = await getServersDict(ns, 'getServerMaxMoney', serverNames);
     // Get the information about the relative profitability of each server (affects targetting order)
-    const pid = await exec(ns, getFilePath('analyze-hack.js'), daemonHost, 1, '--all', '--silent');
+    const pid = await exec(ns, getFilePath('analyze-hack.js'), null, null, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
     const analyzeHackResult = dictServerProfitInfo = ns.read('/Temp/analyze-hack.txt');
     if (!analyzeHackResult)
