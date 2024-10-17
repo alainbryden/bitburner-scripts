@@ -33,6 +33,7 @@ const argsSchema = [
     ['n', false], // Can toggle on using hacknet nodes for extra hacking ram (at the expense of hash production)
     ['use-hacknet-nodes', false], // Same as above (kept for backwards compatibility, but these are now called hacknet-servers)
     ['use-hacknet-servers', false], // Same as above, but the game recently renamed these
+    ['hacknet-use-ram-percentage', 0.75],
     ['spend-hashes-for-money-when-under', 10E6], // (Default 10m) Convert 4 hashes to money whenever we're below this amount
     ['disable-spend-hashes', false], // An easy way to set the above to a very large negative number, thus never spending hashes for Money
     ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
@@ -118,6 +119,7 @@ let xpOnly = false; // "-x" command line arg - focus on a strategy that produces
 let verbose = false; // "-v" command line arg - Detailed logs about batch scheduling / tuning
 let runOnce = false; // "-o" command line arg - Good for debugging, run the main targettomg loop once then stop
 let useHacknetNodes = false; // "-n" command line arg - Can toggle using hacknet nodes for extra hacking ram
+let hacknetUsePercentage = 0.75 // How much ram percentage ram from the hacknet is getting used.
 let loopingMode = false;
 let recoveryThreadPadding = 1; // How many multiples to increase the weaken/grow threads to recovery from misfires automatically (useful when RAM is abundant and timings are tight)
 
@@ -260,6 +262,7 @@ export async function main(ns) {
     stockMode = (options.s || options['stock-manipulation'] || options['stock-manipulation-focus']) && !options['disable-stock-manipulation'];
     stockFocus = options['stock-manipulation-focus'] && !options['disable-stock-manipulation'];
     useHacknetNodes = options.n || options['use-hacknet-nodes'] || options['use-hacknet-servers'];
+    hacknetUsePercentage =  Math.max(options['hacknet-use-ram-percentage'])
     verbose = options.v || options['verbose'];
     runOnce = options.o || options['run-once'];
     loopingMode = options['looping-mode'];
@@ -1041,8 +1044,11 @@ class Server {
     isHost() { return this.name == daemonHost; }
     totalRam() {
         let maxRam = this.ns.getServerMaxRam(this.name);
-        if (this.name == "home")
+        if (this.name == "home") {
             maxRam = Math.max(0, maxRam - homeReservedRam); // Complete HACK: but for most planning purposes, we want to pretend home has less ram to leave room for temp scripts to run
+        } else if (this.name.startsWith('hacknet-server-')) {
+            maxRam = maxRam * hacknetUsePercentage;
+        }
         return maxRam;
     }
     usedRam() { return this.ns.getServerUsedRam(this.name); }
