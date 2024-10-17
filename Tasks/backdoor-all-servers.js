@@ -66,7 +66,7 @@ export async function main(ns) {
             }
             ns.print(`Installing backdoor on "${server}"...`);
             // Kick off a separate script that will run backdoor before we connect to home.
-            var pid = ns.run(scriptPath, 1, server);
+            var pid = ns.run(scriptPath, { temporary: true }, server);
             if (pid === 0)
                 return log(ns, `WARN: Couldn't initiate a new backdoor of "${server}" (insufficient RAM?). Will try again later.`, false, 'warning');
             await ns.sleep(spawnDelay); // Wait some time for the external backdoor script to initiate its backdoor of the current connected server
