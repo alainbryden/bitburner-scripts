@@ -25,5 +25,5 @@ export async function main(ns) {
     contractsDb.forEach(c => c.data = dictContractData[c.contract]);
 
     // Let this script die to free up ram, and start up a new script (after a delay) that will solve all these contracts using the minimum ram footprint of 11.6 GB
-    ns.run(getFilePath('/Tasks/run-with-delay.js'), 1, scriptSolver, 1, JSON.stringify(contractsDb));
+    ns.run(getFilePath('/Tasks/run-with-delay.js'), { temporary: true }, scriptSolver, 1, JSON.stringify(contractsDb));
 }

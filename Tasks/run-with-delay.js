@@ -9,7 +9,7 @@ export async function main(ns) {
     // Any additional args are forwarded to the script being run
     var forwardedArgs = ns.args.length > 2 ? ns.args.slice(2) : [];
     await ns.sleep(delay || 100);
-    var pid = ns.run(scriptpath, 1, ...forwardedArgs);
+    var pid = ns.run(scriptpath, { temporary: true }, ...forwardedArgs);
     if (!pid)
         ns.tprint(`Failed to spawn "${scriptpath}" with args: ${forwardedArgs} (bad file name or insufficient RAM?)`);
 }

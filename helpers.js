@@ -276,8 +276,9 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
             await autoRetry(ns, () => ns.read(fileName), c => c == script, () => `Temporary script ${fileName} is not available, ` +
                 `despite having written it. (Did a competing process delete or overwrite it?)`, maxRetries, retryDelayMs, undefined, verbose, verbose);
         }
+        // NEW! We can inject "RunOptions" as the middle arg (rather than an integer thread count)
         // Run the script, now that we're sure it is in place
-        return fnRun(fileName, 1 /* Always 1 thread */, ...args);
+        return fnRun(fileName, { temporary: true }, ...args);
     }, pid => pid !== 0,
         async () => {
             let reason = " (likely due to insufficient RAM)";

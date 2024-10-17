@@ -298,13 +298,15 @@ export async function main(ns) {
 
     await establishMultipliers(ns); // figure out the various bitNode and player multipliers
 
+    // ASYNCHRONOUS HELPERS
+    // Set up "asynchronous helpers" - standalone scripts to manage certain aspacts of the game. daemon.js launches each of these once when ready (but not again if they are shut down)
     const reqRam = (ram) => ns.getServerMaxRam("home") >= ram; // To avoid wasting precious RAM, many scripts don't launch unless we have more than a certain amount
     asynchronousHelpers = [
         { name: "stats.js", shouldRun: () => reqRam(64) }, // Adds stats not usually in the HUD
         { name: "stockmaster.js", shouldRun: () => reqRam(64), args: openTailWindows ? ["--show-market-summary"] : [], tail: openTailWindows }, // Start our stockmaster
-        { name: "hacknet-upgrade-manager.js", shouldRun: () => reqRam(64), args: ["-c", "--max-payoff-time", "1h"] }, // Kickstart hash income by buying everything with up to 1h payoff time immediately
+        { name: "hacknet-upgrade-manager.js", shouldRun: () => reqRam(64), args: ["-c", "--max-payoff-time", "1h"] }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
         { name: "spend-hacknet-hashes.js", args: [], shouldRun: () => reqRam(64) && 9 in dictSourceFiles }, // Always have this running to make sure hashes aren't wasted
-        { name: "sleeve.js", tail: openTailWindows, shouldRun: () => 10 in dictSourceFiles }, // Script to create manage our sleeves for us
+        { name: "sleeve.js", tail: openTailWindows, shouldRun: () => reqRam(64) && 10 in dictSourceFiles }, // Script to create manage our sleeves for us
         { name: "gangs.js", tail: openTailWindows, shouldRun: () => reqRam(64) && 2 in dictSourceFiles }, // Script to create manage our gang for us
         {
             name: "work-for-factions.js", args: ['--fast-crimes-only', '--no-coding-contracts'],  // Singularity script to manage how we use our "focus" work.
@@ -312,14 +314,18 @@ export async function main(ns) {
         },
         {   // Script to manage bladeburner for us. Run automatically if not disabled and bladeburner API is available
             name: "bladeburner.js", tail: openTailWindows,
-            shouldRun: () => !options['disable-script'].includes('bladeburner.js') && 7 in dictSourceFiles && !isInBn8
+            shouldRun: () => !options['disable-script'].includes('bladeburner.js') && reqRam(64) && 7 in dictSourceFiles && !isInBn8
         },
     ];
+    // Fix the file path for each tool if this script was cloned to a sub-directory
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
     // Add any additional scripts to be run provided by --run-script arguments
     options['run-script'].forEach(s => asynchronousHelpers.push({ name: s }));
+    // Set these helper functions to not be marked as "temporary" when they are run (save their execution state)
+    asynchronousHelpers.forEach(helper => helper.runOptions = { temporary: false });
     asynchronousHelpers.forEach(helper => helper.isLaunched = false);
-    asynchronousHelpers.forEach(helper => helper.requiredServer = "home"); // All helpers should be launched at home since they use tempory scripts, and we only reserve ram on home
+
+    // PERIODIC SCRIPTS
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
     let shouldUpgradeHacknet = async () => ((await whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)) === null) && reservedMoney(ns) < ns.getServerMoneyAvailable("home");
     // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
@@ -329,7 +335,7 @@ export async function main(ns) {
         // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
         { interval: 25000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !allHostNames.includes("darkweb") },
         { interval: 26000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && ownedCracks.length != 5 },
-        { interval: 27000, name: "/Tasks/contractor.js", requiredServer: "home" }, // Periodically look for coding contracts that need solving
+        { interval: 27000, name: "/Tasks/contractor.js" }, // Periodically look for coding contracts that need solving
         // Buy every hacknet upgrade with up to 4h payoff if it is less than 10% of our current money or 8h if it is less than 1% of our current money.
         { interval: 28000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "4h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.1] },
         { interval: 28500, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", ns.getServerMoneyAvailable("home") * 0.01] },
@@ -340,13 +346,13 @@ export async function main(ns) {
             shouldRun: () => 4 in dictSourceFiles && shouldImproveHacking() // Only trigger if hack income is important
         },
         {   // Periodically check for new faction invites and join if deemed useful to be in that faction. Also determines how many augs we could afford if we installed right now
-            interval: 31000, name: "faction-manager.js", requiredServer: "home", args: ['--verbose', 'false'],
+            interval: 31000, name: "faction-manager.js", args: ['--verbose', 'false'],
             // Don't start auto-joining factions until we're holding 1 billion (so coding contracts returning money is probably less critical) or we've joined one already
             shouldRun: () => 4 in dictSourceFiles && (_cachedPlayerInfo.factions.length > 0 || ns.getServerMoneyAvailable("home") > 1e9) &&
                 (ns.getServerMaxRam("home") >= 128 / (2 ** dictSourceFiles[4])) // Uses singularity functions, and higher SF4 levels result in lower RAM requirements
         },
         {   // Periodically look to purchase new servers, but note that these are often not a great use of our money (hack income isn't everything) so we may hold-back.
-            interval: 32000, name: "host-manager.js", requiredServer: "home",
+            interval: 32000, name: "host-manager.js",
             // Funky heuristic warning: I find that new players with fewer SF levels under their belt are obsessed with hack income from servers,
             // but established players end up finding auto-purchased hosts annoying - so now the % of money we spend shrinks as SF levels grow.
             args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
@@ -357,7 +363,7 @@ export async function main(ns) {
             }
         },
         // Check if any new servers can be backdoored. If there are many, this can eat up a lot of RAM, so make this the last script scheduled at startup.
-        { interval: 33000, name: "/Tasks/backdoor-all-servers.js", requiredServer: "home", shouldRun: () => 4 in dictSourceFiles },
+        { interval: 33000, name: "/Tasks/backdoor-all-servers.js", shouldRun: () => 4 in dictSourceFiles },
     ];
     periodicScripts.forEach(tool => tool.name = getFilePath(tool.name));
     hackTools = [
@@ -528,7 +534,7 @@ async function tryRunTool(ns, tool) {
         return true;
     }
     const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
-    const runResult = await arbitraryExecution(ns, tool, 1, args, tool.requiredServer || "home");
+    const runResult = await exec(ns, tool.name, daemonHost, tool.runOptions, ...args);
     if (runResult) {
         runningOnServer = await whichServerIsRunning(ns, tool.name, false);
         if (verbose) log(ns, `Ran tool: ${tool.name} ` + (args.length > 0 ? `with args ${JSON.stringify(args)} ` : '') + (runningOnServer ? `on server ${runningOnServer}.` : 'but it shut down right away.'));
@@ -545,23 +551,28 @@ async function tryRunTool(ns, tool) {
 
 /** Workaround a current bitburner bug by yeilding briefly to the game after executing something.
  * @param {NS} ns
- * @param {String} script - Filename of script to execute.
- * @param {int} host - Hostname of the target server on which to execute the script.
- * @param {int} numThreads - Optional thread count for new script. Set to 1 by default. Will be rounded to nearest integer.
- * @param args - Additional arguments to pass into the new script that is being run. Note that if any arguments are being passed into the new script, then the third argument numThreads must be filled in with a value.
+ * @param {string} script - Filename of script to execute.
+ * @param {string?} hostname - Hostname of the target server on which to execute the script.
+ * @param {number|RunOptions?} numThreadsOrOptions - Optional thread count or RunOptions. Default is { threads: 1, temporary: true }
+ * @param {any} args - Additional arguments to pass into the new script that is being run. Note that if any arguments are being passed into the new script, then the third argument numThreads must be filled in with a value.
  * @returns — Returns the PID of a successfully started script, and 0 otherwise.
  * Workaround a current bitburner bug by yeilding briefly to the game after executing something. **/
-async function exec(ns, script, host, numThreads, ...args) {
-    // Try to run the script with auto-retry if it fails to start
+async function exec(ns, script, hostname = null, numThreadsOrOptions = null, ...args) {
+    // Defaults
+    hostname ??= daemonHost;
+    numThreadsOrOptions = { threads: 1, temporary: true };
+    let fnRunScript = () => ns.exec(script, hostname, numThreadsOrOptions, ...args);
+    // Wrap the script execution in an auto-retry if it fails to start
     // It doesn't make sense to auto-retry hack tools, only add error handling to other scripts
     if (hackTools.some(h => h.name === script))
-        return ns.exec(script, host, numThreads, ...args);
+        return fnRunScript();
     // Otherwise, run with auto-retry to handle e.g. temporary ram issues
+    let p;
     const pid = await autoRetry(ns, async () => {
-        const p = ns.exec(script, host, numThreads, ...args)
+        p = fnRunScript();
         return p;
-    }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${host} with ${numThreads} threads. ` +
-        `This is likely due to having insufficient RAM. Args were: [${args}]`),
+    }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${hostname}. ` +
+        `This is likely due to having insufficient RAM.\nArgs were: [${args}]`),
         undefined, undefined, undefined, verbose, verbose);
     return pid; // Caller is responsible for handling errors if final pid returned is 0 (indicating failure)
 }
@@ -1453,7 +1464,8 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
             await getNsDataThroughFile(ns, `ns.scp(ns.args.slice(2), ns.args[0], ns.args[1])`, '/Temp/copy-scripts.txt', [targetServer.name, daemonHost, ...missing_scripts])
             //await ns.sleep(5); // Workaround for Bitburner bug https://github.com/danielyxie/bitburner/issues/1714 - newly created/copied files sometimes need a bit more time, even if awaited
         }
-        let pid = await exec(ns, tool.name, targetServer.name, maxThreadsHere, ...(args || []));
+        // All tools executed in this way will be marked as "temporary" (not to be included in the save file or recent scripts history)
+        let pid = await exec(ns, tool.name, targetServer.name, { threads: maxThreadsHere, temporary: true }, ...(args || []));
         if (pid == 0) {
             log(ns, `ERROR: Failed to exec ${tool.name} on server ${targetServer.name} with ${maxThreadsHere} threads`, false, 'error');
             return false;
@@ -1961,7 +1973,7 @@ async function establishMultipliers(ns) {
 }
 
 class Tool {
-    /** @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; tail: boolean; requiredServer: string; threadSpreadingAllowed: boolean; })} toolConfig
+    /** @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; tail: boolean; threadSpreadingAllowed: boolean; runOptions: RunOptions; })} toolConfig
      * @param {Number} toolCost **/
     constructor(toolConfig, toolCost) {
         this.name = toolConfig.name;
@@ -1969,10 +1981,11 @@ class Tool {
         this.tail = toolConfig.tail || false;
         this.args = toolConfig.args || [];
         this.shouldRun = toolConfig.shouldRun;
-        this.requiredServer = toolConfig.requiredServer;
         // Whether, in general, it's save to spread threads for this tool around to different servers (overridden in some cases)
         this.isThreadSpreadingAllowed = toolConfig.threadSpreadingAllowed === true;
         this.cost = toolCost;
+        // New option to control script RunOptions. By default, they are marked as temporary.
+        this.runOptions = toolConfig.runOptions ?? { temporary: true };
     }
     /** @param {Server} server
      * @returns {boolean} true if the server has this tool and enough ram to run it. */
@@ -2003,7 +2016,7 @@ class Tool {
 }
 
 /** @param {NS} ns
- * @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; tail: boolean; requiredServer: string; threadSpreadingAllowed: boolean; })[]} allTools **/
+ * @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; tail: boolean; threadSpreadingAllowed: boolean; runOptions: RunOptions; })[]} allTools **/
 async function buildToolkit(ns, allTools) {
     log(ns, "buildToolkit");
     let toolCosts = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(s => [s, ns.getScriptRam(s, 'home')]))`,
