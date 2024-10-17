@@ -417,7 +417,7 @@ async function checkOnRunningScripts(ns, player) {
         const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
         // When our hack level gets sufficiently high, hack/grow/weaken go so fast that spawning new scripts for each cycle becomes very
         // expensive / laggy. To help with this, daemon.js supports "looping mode", to just spawn one long-lived script that does H/G/W in a loop.
-        if (player.skills.hacking >= hackThreshold) {
+        if (false /* TODO: LOOPING MODE DISABLED UNTIL WORKING BETTER */ && player.skills.hacking >= hackThreshold) {
             daemonArgs = ["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share",
                 // Use recovery thread padding sparingly until our hack level is significantly higher (capped at 3x padding)
                 "--recovery-thread-padding", 1.0 + Math.max(2, (player.skills.hacking - hackThreshold) / 1000.0)];
