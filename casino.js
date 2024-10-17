@@ -160,12 +160,12 @@ export async function main(ns) {
             // Step 2.3: Navigate to the City Casino
             try { // Try to do this without SF4, because it's faster and doesn't require a temp script to be cleaned up below
                 // Click our way to the city casino
-                await click(ns, await findRequiredElement(ns, "//div[(@role = 'button') and (contains(., 'City'))]", 15
+                await click(ns, await findRequiredElement(ns, "//div[(@role = 'button') and (contains(., 'City'))]", 15,
                     `Couldn't find the "🏙 City" menu button. Is your \"World\" nav menu collapsed?`));
-                await click(ns, await findRequiredElement(ns, "//Button[contains(., 'Iker Molina Casino')]"));
-            } catch (err) { // Try to use SF4 as a fallback, it's more reliable.
+                await click(ns, await findRequiredElement(ns, "//span[@aria-label = 'Iker Molina Casino']"));
+            } catch (err) { // Try to use SF4 as a fallback (if available) - it's more reliable.
                 let success = false, err2;
-                try { success = await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', null, ["Iker Molina Casino"]); }
+                try { success = 4 in unlockedSFs ? await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', null, ["Iker Molina Casino"]) : false; }
                 catch (singErr) { err2 = singErr; }
                 if (!success)
                     throw new Error("Failed to travel to the casino both using UI navigation and using SF4 as a fall-back." +
