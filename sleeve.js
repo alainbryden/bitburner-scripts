@@ -166,7 +166,7 @@ async function mainLoop(ns) {
             'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionEstimatedSuccessChance("contract", c)[0]]))',
             '/Temp/sleeve-bladeburner-success-chances.txt', sleeveBbContractNames);
         bladeburnerContractCounts = await getNsDataThroughFile(ns,
-            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionCountRemaining("contract", c)[0]]))',
+            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionCountRemaining("contract", c)]))',
             '/Temp/sleeve-bladeburner-contract-counts.txt', sleeveBbContractNames);
     } else
         bladeburnerCityChaos = 0, bladeburnerContractChances = {}, bladeburnerContractCounts = {};
@@ -237,7 +237,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
     // Train if our sleeve's physical stats aren't where we want them
     if (canTrain) {
         const univClasses = {
-            "hacking":  ns.enums.UniversityClassType.algorithms,
+            "hacking": ns.enums.UniversityClassType.algorithms,
             "charisma": ns.enums.UniversityClassType.leadership
         };
         let untrainedStats = trainStats.filter(stat => sleeve.skills[stat] < options[`train-to-${stat}`]);
@@ -255,13 +255,13 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
             var gym = ns.enums.LocationName.Sector12PowerhouseGym;
             return [`train ${trainStat} (${gym})`, `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`, [i, gym, trainStat],
             /*   */ `training ${trainStat}... ${sleeve.skills[trainStat]}/${(options[`train-to-${trainStat}`])}`];
-        // if we're tough enough, flip over to studying to improve the mental stats
+            // if we're tough enough, flip over to studying to improve the mental stats
         } else if (untrainedSmarts.length > 0) {
-          if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
-              await promptForTrainingBudget(ns); // check we can go into training debt
+            if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
+                await promptForTrainingBudget(ns); // check we can go into training debt
             if (sleeve.city != ns.enums.CityName.Volhaven) {
-              log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Volhaven so that they can study at ZB Institute.`);
-              await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', null , [i, ns.enums.CityName.Volhaven]);
+                log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Volhaven so that they can study at ZB Institute.`);
+                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', null, [i, ns.enums.CityName.Volhaven]);
             }
             var trainSmart = untrainedSmarts.reduce((min, s) => sleeve.skills[s] < sleeve.skills[min] ? s : min, untrainedSmarts[0]);
             var univ = ns.enums.LocationName.VolhavenZBInstituteOfTechnology;
