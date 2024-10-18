@@ -265,7 +265,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
             let statText = includeHacknet ?
                 `${formatRam(tMax)} ${(100 * tUsed / tMax).toFixed(1)}%` :
                 `${formatRam(sMax)} ${(100 * sUsed / sMax).toFixed(1)}%`;
-            let toolTip = `Shows the sum-total RAM and utilization across all nRooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
+            let toolTip = `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                 (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
                 `\nUsing ${formatRam(tUsed, true)} of ${formatRam(tMax, true)} (${formatRam(tMax - tUsed, true)} free) across all servers`;
             if (hMax > 0) toolTip +=
