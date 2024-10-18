@@ -244,27 +244,35 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
         const val3 = ["All RAM"]
         if (!options['hide-RAM-utilization']) {
             const servers = await getAllServersInfo(ns);
-            const rooted = servers.filter(s => s.hasAdminRights).length;
-            const purchased = servers.filter(s => s.hostname != "home" && s.purchasedByPlayer).length; // "home" counts as purchased by the game
-            const likelyHacknet = servers.filter(s => s.hostname.startsWith("hacknet-server-") || s.hostname.startsWith("hacknet-node-"));
+            const hnServers = servers.filter(s => s.hostname.startsWith("hacknet-server-") || s.hostname.startsWith("hacknet-node-"));
+            const nRooted = servers.filter(s => s.hasAdminRights).length;
+            const nPurchased = servers.filter(s => s.hostname != "home" && s.purchasedByPlayer).length; // "home" counts as purchased by the game
             // Add Server count.
-            val1.push(true, `${servers.length}/${rooted}/${purchased}`, `The number of servers on the network (${servers.length}) / ` +
-                `number rooted (${rooted}) / number purchased ` + (likelyHacknet.length > 0 ?
-                    `(${purchased - likelyHacknet.length} servers + ${likelyHacknet.length} hacknet servers)` : `(${purchased})`));
+            val1.push(true, `${servers.length}/${nRooted}/${nPurchased}`, `The number of servers on the network (${servers.length}) / ` +
+                `number rooted (${nRooted}) / number purchased ` + (hnServers.length > 0 ?
+                    `(${nPurchased - hnServers.length} servers + ${hnServers.length} hacknet servers)` : `(${nPurchased})`));
             const home = servers.find(s => s.hostname == "home");
             // Add Home RAM and Utilization
             val2.push(true, `${formatRam(home.maxRam)} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
                 `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
                 `${formatRam(home.ramUsed, true)} of ${formatRam(home.maxRam, true)} (${formatRam(home.maxRam - home.ramUsed, true)} free)`);
-            // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
-            const includeHacknet = likelyHacknet.some(s => s.ramUsed > 0);
-            const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !(s.hostname.startsWith("hacknet-server-") || s.hostname.startsWith("hacknet-node-"))))
-                .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
+            // If the user has any scripts running on hacknet servers, assume they want them included in the main "total available RAM" stat
+            const includeHacknet = hnServers.some(s => s.ramUsed > 0);
+            const fileredServers = servers.filter(s => s.hasAdminRights && !hnServers.includes(s));
+            const [sMax, sUsed] = fileredServers.reduce(([tMax, tUsed], s) => [tMax + s.maxRam, tUsed + s.ramUsed], [0, 0]);
+            const [hMax, hUsed] = hnServers.reduce(([tMax, tUsed], s) => [tMax + s.maxRam, tUsed + s.ramUsed], [0, 0]);
+            const [tMax, tUsed] = [sMax + hMax, sUsed + hUsed];
+            let statText = includeHacknet ?
+                `${formatRam(tMax)} ${(100 * tUsed / tMax).toFixed(1)}%` :
+                `${formatRam(sMax)} ${(100 * sUsed / sMax).toFixed(1)}%`;
+            let toolTip = `Shows the sum-total RAM and utilization across all nRooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
+                (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
+                `\nUsing ${formatRam(tUsed, true)} of ${formatRam(tMax, true)} (${formatRam(tMax - tUsed, true)} free) across all servers`;
+            if (hMax > 0) toolTip +=
+                `\nUsing ${formatRam(sUsed, true)} of ${formatRam(sMax, true)} (${formatRam(sMax - sUsed, true)} free) excluding  hacknet` +
+                `\nUsing ${formatRam(hUsed, true)} of ${formatRam(hMax, true)} (${formatRam(hMax - hUsed, true)} free) of hacknet servers`;
             // Add Total Network RAM and Utilization
-            val3.push(true, `${formatRam(totalMax)} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
-                `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
-                    (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
-                `\nDetails: Using ${formatRam(totalUsed, true)} of ${formatRam(totalMax, true)} (${formatRam(totalMax - totalUsed, true)} free)`);
+            val3.push(true, statText, toolTip);
         } else {
             val1.push(false)
             val2.push(false)
