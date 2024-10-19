@@ -49,7 +49,7 @@ const memorySuffixes = ["GB", "TB", "PB", "EB"];
 
 /** Formats some RAM amount as a round number of GB/TB/PB/EB with thousands separators e.g. `1.028 TB` */
 export function formatRam(num, printGB) {
-    if(printGB) {
+    if (printGB) {
         return `${Math.round(num).toLocaleString('en')} GB`;
     }
     let idx = Math.floor(Math.log10(num) / 3) || 0;
@@ -223,7 +223,26 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
                             `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
         maxRetries, retryDelayMs, undefined, verbose, verbose, silent);
     if (verbose) log(ns, `Read the following data for command ${command}:\n${fileData}`);
-    return JSON.parse(fileData); // Deserialize it back into an object/array and return
+    return JSON.parse(fileData, jsonReviver); // Deserialize it back into an object/array and return
+}
+
+/** Allows us to serialize types not normally supported by JSON.serialize */
+export function jsonReplacer(key, value) {
+    if (typeof value === 'bigint') {
+        return {
+            type: 'bigint',
+            value: value.toString()
+        };
+    } else {
+        return value;
+    }
+}
+
+/** Allows us to deserialize special values created by the above jsonReplacer */
+export function jsonReviver(key, value) {
+    if (value && value.type == 'bigint')
+        return BigInt(value.value);
+    return value;
 }
 
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
@@ -268,8 +287,10 @@ export async function runCommand_Custom(ns, fnRun, command, fileName, args = [],
     if (!Array.isArray(args)) throw new Error(`args specified were a ${typeof args}, but an array is required.`);
     if (!verbose) disableLogs(ns, ['sleep']);
     // Auto-import any helpers that the temp script attempts to use
-    const required = getExports(ns).filter(e => command.includes(`${e}(`));
-    let script = (required.length > 0 ? `import { ${required.join(", ")} } from 'helpers.js'\n` : '') +
+    let importFunctions = getExports(ns).filter(e => command.includes(`${e}`)) // Check if the script includes the name of any functions
+        // To avoid false positives, narrow these to "whole word" matches (no alpha characters on either side)
+        .filter(e => new RegExp(`(^|[^\\w])${e}([^\\w]|\$)`).test(command));
+    let script = (importFunctions.length > 0 ? `import { ${importFunctions.join(", ")} } from 'helpers.js'\n` : '') +
         `export async function main(ns) { ${command} }`;
     fileName = fileName || getDefaultCommandFileName(command, '.js');
     if (verbose)
@@ -604,6 +625,7 @@ async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile) {
 }
 
 /** Returns the number of instances of the current script running on the specified host.
+ *  Uses ram-dodging (which costs 1GB for ns.run if you aren't already using it.
  * @param {NS} ns The nestcript instance passed to your script's main entry point
  * @param {string} onHost - The host to search for the script on
  * @param {boolean} warn - Whether to automatically log a warning when there are more than other running instances

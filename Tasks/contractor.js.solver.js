@@ -1,4 +1,7 @@
+import { jsonReviver } from '../helpers.js'
 const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
+
+let heartbeat = null;
 
 //Silly human, you can't import a typescript module into a javascript (wouldn't that be slick though?)
 //import { codingContractTypesMetadata } from 'https://raw.githubusercontent.com/danielyxie/bitburner/master/src/data/codingcontracttypes.ts'
@@ -9,75 +12,91 @@ const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persiste
 /** @param {NS} ns **/
 export async function main(ns) {
     if (ns.args.length < 1)
-        ns.tprint('Contractor solver was incorrectly invoked without arguments.')
-    let contractsDb = JSON.parse(ns.args[0]);
-    const fContents = ns.read(fUnsolvedContracts);
-    const notified = fContents ? JSON.parse(fContents) : [];
+        ns.tprint('Contractor solver was incorrectly invoked without arguments.');
 
-    // Don't spam toast notifications and console messages if there are more than 20 contracts to solve:
-    const quietSolve = contractsDb.length > 20;
-    let failureCount = 0;
-    if (quietSolve) {
-        const message = `Welcome back. There are ${contractsDb.length} to solve, so we won't generate a notification for each.`
-        ns.toast(message, 'success');
-        ns.tprint(message);
-    }
+    // Hack: Use global memory to avoid multiple instances running concurrently (without paying for ns.ps)
+    if (heartbeat != null) // If this variable is set, another instance is likely running!
+        if (performance.now() - heartbeat <= 1000 * 60) // If last start was more 1 minute ago, assume it blew up and isn't actually still running
+            return ns.print("WARNING: Another contractor appears to already be running. Ignoring request.");
+    heartbeat = performance.now();
 
-    for (const contractInfo of contractsDb) {
-        const answer = findAnswer(contractInfo)
-        let notice = null;
-        if (answer != null) {
-            let solvingResult = false;
-            try {
-                solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
-                if (solvingResult) {
-                    if (!quietSolve) {
-                        const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
-                        ns.toast(message, 'success');
-                        ns.tprint(message);
+    try {
+        let contractsDb = JSON.parse(ns.args[0]);
+        const fContents = ns.read(fUnsolvedContracts);
+        const notified = fContents ? JSON.parse(fContents) : [];
+
+        // Don't spam toast notifications and console messages if there are more than 20 contracts to solve:
+        const quietSolve = contractsDb.length > 20;
+        let failureCount = 0;
+        if (quietSolve) {
+            const message = `Welcome back. There are ${contractsDb.length} to solve, so we won't generate a notification for each.`
+            ns.toast(message, 'success');
+            ns.tprint(message);
+        }
+
+        for (const contractInfo of contractsDb) {
+            heartbeat = performance.now();
+            const answer = findAnswer(contractInfo)
+            let notice = null;
+            if (answer != null) {
+                let solvingResult = false;
+                try {
+                    solvingResult = ns.codingcontract.attempt(answer, contractInfo.contract, contractInfo.hostname, { returnReward: true })
+                    if (solvingResult) {
+                        if (!quietSolve) {
+                            const message = `Solved ${contractInfo.contract} on ${contractInfo.hostname} (${contractInfo.type}). Reward: ${solvingResult}`;
+                            ns.toast(message, 'success');
+                            ns.tprint(message);
+                        }
+                    } else {
+                        notice = `ERROR: Wrong answer for contract type "${contractInfo.type}" (${contractInfo.contract} on ${contractInfo.hostname}):` +
+                            `\nIncorrect Answer Given: ${JSON.stringify(answer)}`;
                     }
-                } else {
-                    notice = `ERROR: Wrong answer for contract type "${contractInfo.type}" (${contractInfo.contract} on ${contractInfo.hostname}):` +
-                        `\nIncorrect Answer Given: ${JSON.stringify(answer)}`;
+                } catch (err) {
+                    failureCount++;
+                    let errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
+                    if (err?.stack) errorMessage += '\n' + err.stack;
+                    notice = `ERROR: Attempt to solve contract raised an error. (Answer Given: ${JSON.stringify(answer)})\n"${errorMessage}"`;
+                    // Suppress errors about missing contracts. This can happen if this script gets while another instance is already running.
+                    if (errorMessage.indexOf("Cannot find contract") == -1) {
+                        ns.print(notice); // Still log it to the terminal in case we're debugging a fake contract.
+                        notice = null;
+                    }
                 }
-            } catch (err) {
-                failureCount++;
-                let errorMessage = typeof err === 'string' ? err : err.message || JSON.stringify(err);
-                if (err?.stack) errorMessage += '\n' + err.stack;
-                // Ignore errors about missing contracts. This can happen if this script gets while another instance is already running.
-                if (errorMessage.indexOf("Cannot find contract") == -1)
-                    notice = `ERROR: Attemt to solve contract raised an error. (Answer Given: ${JSON.stringify(answer)})\n"${errorMessage}"`;
+            } else {
+                notice = `WARNING: No solver available for contract type "${contractInfo.type}"`;
             }
-        } else {
-            notice = `WARNING: No solver available for contract type "${contractInfo.type}"`;
-        }
-        if (notice) {
-            if (!notified.includes(contractInfo.contract) && !quietSolve) {
-                ns.tprint(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`)
-                ns.toast(notice, 'warning');
-                notified.push(contractInfo.contract)
+            if (notice) {
+                if (!notified.includes(contractInfo.contract) && !quietSolve) {
+                    ns.tprint(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`)
+                    ns.toast(notice, 'warning');
+                    notified.push(contractInfo.contract)
+                }
+                // Always print errors to scripts own tail window
+                ns.print(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`);
             }
-            // Always print errors to scripts own tail window
-            ns.print(notice + `\nContract Info: ${JSON.stringify(contractInfo)}`);
+            await ns.sleep(10)
         }
-        await ns.sleep(10)
+        // Keep tabs of failed contracts
+        if (notified.length > 0)
+            await ns.write(fUnsolvedContracts, JSON.stringify(notified), "w");
+        // Let the user know when we're done solving a large number of contracts.
+        if (quietSolve) {
+            const message = `Done solving ${contractsDb.length}. ${contractsDb.length - failureCount} succeeded, and ${failureCount} failed. See tail logs for errors.`
+            if (failureCount > 0)
+                ns.tail();
+            ns.toast(message, 'success');
+            ns.tprint(message);
+        }
     }
-    // Keep tabs of failed contracts
-    if (notified.length > 0)
-        await ns.write(fUnsolvedContracts, JSON.stringify(notified), "w");
-    // Let the user know when we're done solving a large number of contracts.
-    if (quietSolve) {
-        const message = `Done solving ${contractsDb.length}. ${contractsDb.length - failureCount} succeeded, and ${failureCount} failed. See tail logs for errors.`
-        if (failureCount > 0)
-            ns.tail();
-        ns.toast(message, 'success');
-        ns.tprint(message);
+    finally {
+        heartbeat = null; // Signal that we're no longer running in case another contractor wants to start running.
     }
 }
 
 function findAnswer(contract) {
     const codingContractSolution = codingContractTypesMetadata.find((codingContractTypeMetadata) => codingContractTypeMetadata.name === contract.type)
-    return codingContractSolution ? codingContractSolution.solver(contract.data) : null;
+    return codingContractSolution ? codingContractSolution.solver(JSON.parse(contract.dataJson, jsonReviver)) : null;
 }
 
 function convert2DArrayToString(arr) {
@@ -879,7 +898,6 @@ const codingContractTypesMetadata = [{
         return cipher;
     }
 },
-
 {
     name: "Encryption II: Vigenère Cipher",
     solver: function (data) {
@@ -894,6 +912,33 @@ const codingContractTypesMetadata = [{
             .join("");
         return cipher;
     }
+},
+{
+    name: "Square Root",
+    /** Uses the Newton-Raphson method to iteratively improve the guess until the answer is found.
+     * @param {bigint} n */
+    solver: function (n) {
+        const two = BigInt(2);
+        if (n < two) return n; // Square root of 1 is 1, square root of 0 is 0
+        let root = n / two; // Initial guess
+        let x1 = (root + n / root) / two;
+        while (x1 < root) {
+            root = x1;
+            x1 = (root + n / root) / two;
+        }
+        // That's it, solved! At least, we've converged an an answer which should be as close as we can get (might be off by 1)
+        // We want the answer to the "nearest integer". Check the answer on either side of the one we converged on to see what's closest
+        const bigAbs = (x) => x < 0n ? -x : x; // There's no Math.abs where we're going...
+        let absDiff = bigAbs(root * root - n); // How far off we from the perfect square root
+        if (absDiff == 0n) return root; // Note that this coding contract doesn't guarantee there's an exact integer square root
+        else if (absDiff > bigAbs((root - 1n) * (root - 1n) - n)) root = root - 1n; // Do we get a better answer by subtracting 1?
+        else if (absDiff > bigAbs((root + 1n) * (root + 1n) - n)) root = root + 1n; // Do we get a better answer by adding 1?
+        // Sanity check: We should be able to tell if we got this right without wasting a guess. Adding/Subtracting 1 should now always be worse
+        absDiff = bigAbs(root * root - n);
+        if (absDiff > bigAbs((root - 1n) * (root - 1n) - n) ||
+            absDiff > bigAbs((root + 1n) * (root + 1n) - n))
+            throw new Error(`Square Root did not converge. Arrived at answer:\n${root} - which when squared, gives:\n${root * root} instead of\n${n}`);
+        return root.toString();
+    }
 }
-
 ]
