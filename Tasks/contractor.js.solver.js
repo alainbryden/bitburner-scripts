@@ -933,7 +933,7 @@ const codingContractTypesMetadata = [{
         if (absDiff == 0n) return root; // Note that this coding contract doesn't guarantee there's an exact integer square root
         else if (absDiff > bigAbs((root - 1n) * (root - 1n) - n)) root = root - 1n; // Do we get a better answer by subtracting 1?
         else if (absDiff > bigAbs((root + 1n) * (root + 1n) - n)) root = root + 1n; // Do we get a better answer by adding 1?
-        // Sanity check: We should be able to tell if we got this right without wasting a guess. Adding/Subtracting 1 should now always be worse
+        // Validation: We should be able to tell if we got this right without wasting a guess. Adding/Subtracting 1 should now always be worse
         absDiff = bigAbs(root * root - n);
         if (absDiff > bigAbs((root - 1n) * (root - 1n) - n) ||
             absDiff > bigAbs((root + 1n) * (root + 1n) - n))
