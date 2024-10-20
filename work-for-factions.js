@@ -82,7 +82,7 @@ const waitForFactionInviteTime = 30 * 1000; // The game will only issue one new 
 
 let shouldFocus; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
-let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
+let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner, wasGrafting;
 let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // Trick to get strong typing in mono
@@ -107,7 +107,7 @@ export async function main(ns) {
 
     // Reset globals whose value can persist between script restarts in weird situations
     lastTravel = crimeCount = 0;
-    notifiedAboutDaedalus = playerInBladeburner = false;
+    notifiedAboutDaedalus = playerInBladeburner = wasGrafting = false;
 
     // Process configuration options
     firstFactions = (options['first'] || []).map(f => f.replaceAll('_', ' ')); // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
@@ -139,7 +139,7 @@ export async function main(ns) {
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' +
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
-            await ns.sleep(5000);
+            await ns.sleep(loopSleepInterval);
         }
     }
 
@@ -151,7 +151,7 @@ export async function main(ns) {
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' +
                 (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
-            await ns.sleep(5000);
+            await ns.sleep(loopSleepInterval);
             scope--; // Cancel out work scope increasing on the next iteration.
         }
         await ns.sleep(1); // Infinite loop protection in case somehow we loop without doing any meaningful work
@@ -219,11 +219,16 @@ async function loadStartupData(ns) {
     fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
 }
 
+let lastMainLoopMessage = "";
+
 /** @param {NS} ns */
 async function mainLoop(ns) {
     if (!breakToMainLoop()) scope++; // Increase the scope of work if the last iteration completed early (i.e. due to all work within that scope being complete)
     mainLoopStart = Date.now();
-    ns.print(`INFO: Starting main work loop with scope: ${scope}...`);
+    // If changing our loop scope, log a message
+    const loopMessage = `INFO: Currently work scope is anything <= priority level: ${scope}`;
+    if (loopMessage != lastMainLoopMessage)
+        ns.print((lastMainLoopMessage = loopMessage));
 
     // Update information that may have changed since our last loop
     const player = await getPlayerInfo(ns);
@@ -255,18 +260,13 @@ async function mainLoop(ns) {
             }
         }
     }
-    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum decide, we may choose to we pause working.
-    if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
-        if (playerGang) { // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working in favour of bladeburner progress
-            // Check if the player has joined bladeburner (can stop checking once we see they are)
-            playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()');
-            if (playerInBladeburner) {
-                ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
-                await stop(ns); // stop working so bladeburner can run
-                await ns.sleep(checkForNewPrioritiesInterval);
-                return;
-            }
-        }
+    // If something outside of this script is stealing player focus, decide whether to allow it
+    if (await isValidInterruption(ns))
+        return (await ns.sleep(loopSleepInterval));
+    // If we recently grafted an augmentation, it might be one that changes our behaviour, so re-load startup data
+    if (wasGrafting) {
+        await loadStartupData(ns);
+        wasGrafting = false;
     }
 
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
@@ -573,8 +573,9 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let currentWork = await getCurrentWorkInfo(ns);
         let crimeType = currentWork.crimeType;
         if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
+            if (await isValidInterruption(ns, currentWork)) return;
             if (lastCrime) {
-                log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
+                log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType ?? currentWork.type}) Restarting...`, false, 'warning');
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
@@ -630,20 +631,14 @@ async function study(ns, focus, course, university = null) {
 }
 
 /** @param {NS} ns
- * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
-async function getCurrentWorkInfo(ns) {
-    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {};
-}
-
-/** @param {NS} ns
  * Helper to wait for studies to be complete */
 async function monitorStudies(ns, stat, requirement) {
     let lastStatusUpdateTime = 0;
     const initialWork = await getCurrentWorkInfo(ns);
     while (!breakToMainLoop()) {
         const currentWork = await getCurrentWorkInfo(ns);
-        if (!currentWork.classType || currentWork.classType != initialWork.classType) {
-            log(ns, `WARNING: Somebody interrupted our studies.` +
+        if (!(currentWork.classType) || currentWork.classType != initialWork.classType) {
+            log(ns, `WARNING: Something interrupted our studies.` +
                 `\nWAS: ${JSON.stringify(initialWork)}\nNOW: ${JSON.stringify(currentWork)}`, false, 'warning');
             return;
         }
@@ -713,6 +708,12 @@ async function getPlayerInfo(ns) {
 }
 
 /** @param {NS} ns
+ * @returns {Promise<Task>} The result of ns.singularity.getCurrentWork() */
+async function getCurrentWorkInfo(ns) {
+    return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {}; // Easier than null-coalescing everywhere
+}
+
+/** @param {NS} ns
  *  @returns {Promise<string[]>} List of new faction invites */
 async function checkFactionInvites(ns) {
     return await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()');
@@ -758,6 +759,52 @@ async function daedalusSpecialCheck(ns, favorRepRequired, currentReputation) {
         `unlock donations (needed ${formatNumberShort(favorRepRequired)}) with them on your next reset.`, !notifiedAboutDaedalus, "info");
     await ns.write("/Temp/Daedalus-donation-rep-attained.txt", "True", "w"); // HACK: To notify autopilot that we can reset for rep now.
     notifiedAboutDaedalus = true;
+}
+
+let lastInterruptionNotice = "";
+/** Checks whether the current work being perform qualifies as a valid interruption (true),
+ *  or whether we should go back to what we were doing before we were interrupted (false).
+ * @param {NS} ns
+ * @param {Task?} currentWork (optional) The work the player is currently doing, if already retrieved.
+ * @return {bool} true if we should stop what we're doing and let the interruption continue.
+ */
+async function isValidInterruption(ns, currentWork = null) {
+    let interruptionNotice = "";
+    currentWork ??= await getCurrentWorkInfo(ns); // Retrieve current work (unless it was passed in)    
+    // Never interrupt grafting
+    if (currentWork.type == "GRAFTING") {
+        interruptionNotice = "Grafting in progress. Pausing all activity to avoid interrupting...";
+        wasGrafting = true;
+    }
+    // If bladeburner is currently active, but we do not yet have The Blade's Simulacrum, we may choose to we pause working.
+    else if (7 in dictSourceFiles && !hasSimulacrum && !options['no-bladeburner-check']) {
+        // Heuristic: If we're in a gang, its rep will give us access to most augs, we can take a break from working in favour of bladeburner progress
+        //       Also, if we're done all "priority" work (scope >= 2), consider letting Bladeburner take over
+        // TODO: Are there other situations we want to prioritize bladeburner over normal work? Perhaps if we're in a Bladeburner BN? (6 or 7)
+        if (playerGang || scope >= 2) {
+            // Check if the player has joined bladeburner (can stop checking once we see they are)
+            playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()');
+            if (playerInBladeburner) {
+                if (playerGang)
+                    interruptionNotice = `Gang will give us most augs, so pausing work to allow Bladeburner to operate.`;
+                else
+                    interruptionNotice = `Decided that doing Bladeburner is more important that working right now.`;
+                if (currentWork.type)
+                    await stop(ns); // Stop working so bladeburner can run (bladeburner won't interrupt work for us)
+            }
+        }
+    }
+
+    // If we decided to pause focus-work, display a message and return true
+    if (interruptionNotice != "") {
+        if (lastInterruptionNotice != interruptionNotice) { // If we haven't already notified that we're pausing activity, do this now
+            log(ns, `INFO: ${interruptionNotice}`, false, 'info');
+            lastInterruptionNotice = interruptionNotice;
+        }
+        mainLoopStart = 0; // Ensure that any check for "break to main loop"
+        return true;
+    }
+    return false;
 }
 
 let lastFactionWorkStatus = "";
@@ -812,6 +859,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         let factionJob = currentWork.factionWorkType;
         // Detect if faction work was interrupted and log a warning
         if (workAssigned && currentWork.factionName != factionName) {
+            if (await isValidInterruption(ns, currentWork)) return;
             log(ns, `Work for faction ${factionName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
             workAssigned = false;
             ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
@@ -1050,6 +1098,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             // TODO: See if we can re-use the function "monitorStudies" here instead of duplicating a lot of the same code.
             let classType = currentWork.classType;
             if (isStudying && !(classType && classType.toLowerCase().includes('leadership'))) {
+                if (await isValidInterruption(ns, currentWork)) return;
                 log(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, false, 'warning');
                 isStudying = false; // If something external has interrupted our studies, take note
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
