@@ -1665,7 +1665,7 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
     const activeCycleTimeLeft = (eta || 0) - Date.now();
     if (activeCycleTimeLeft > 1000) return activeCycleTimeLeft; // If we're more than 1s away from the expected fire time, just wait for the next loop, don't even check for early completion
     if (farmXpReentryLock[server.name] == true) return; // Ensure more than one concurrent callback isn't trying to schedule this server's faming cycle
-    const [logPrefix, toastLevel] = options['silent-misfires'] ? ['WARNING:', 'warning'] : ['INFO:', undefined];
+    const [logPrefix, toastLevel] = options['silent-misfires'] ? ['INFO:', undefined] : ['WARNING:', 'warning'];
     try {
         farmXpReentryLock[server.name] = true;
         let expTool; // The tool we will use to farm XP (can be hack, grow, or weaken depending on the situation)
