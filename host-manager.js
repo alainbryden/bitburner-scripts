@@ -1,4 +1,4 @@
-import { log, getConfiguration, instanceCount, getNsDataThroughFile, scanAllServers, formatMoney, formatRam } from './helpers.js'
+import { log, getConfiguration, instanceCount, getNsDataThroughFile, formatMoney, formatRam } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -34,7 +34,9 @@ export function autocomplete(data, _) {
     return [];
 }
 
-/** @param {NS} ns **/
+/** Note: In addition to this script's RAM footprint (2.7 GB last this was updated)
+ *        This script requires 3.85 GB of DYNAMIC RAM (2.25 GB (for purchaseServer) + 1.6 GB Base Cost) used by getNsDataThroughFile)
+ * @param {NS} ns **/
 export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
@@ -99,11 +101,13 @@ function setStatus(ns, logMessage) {
 /** @param {NS} ns
   * Attempts to buy a server at or better than your home machine. **/
 async function tryToBuyBestServerPossible(ns) {
-    // Gether the list of all purchased servers.
-    const purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()');
     // Scan the set of all servers on the network that we own (or rooted) to get a sense of current RAM utilization
     let rootedServers = await getNsDataThroughFile(ns, 'scanAllServers(ns).filter(s => ns.hasRootAccess(s))', '/Temp/rooted-servers.txt');
-
+    // Gether the list of all purchased servers.
+    let purchasedServers = null;
+    try { purchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServers()', null, null, null, 3, 5, /* silent errors */ true); } catch { /* Ignore */ }
+    if (purchasedServers == null) // Early game, if we have insufficient RAM (2.25 GB getPurchasedServers + 1.6 base cost), we can fall-back to guessing based on their name
+        purchasedServers = rootedServers.filter(s => s.startsWith(purchasedServerName));
     // If some of the servers are hacknet servers, and they aren't being used for scripts, ignore the RAM they have available
     // with the assumption that these are reserved for generating hashes
     const likelyHacknet = rootedServers.filter(s => s.startsWith("hacknet-node-") || s.startsWith('hacknet-server-'));
