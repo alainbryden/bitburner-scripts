@@ -1,6 +1,6 @@
 import {
     instanceCount, getConfiguration, getNsDataThroughFile, getFilePath, getActiveSourceFiles, tryGetBitNodeMultipliers,
-    formatDuration, formatMoney, formatNumberShort, disableLogs, log
+    formatDuration, formatMoney, formatNumberShort, disableLogs, log, getErrorInfo
 } from './helpers.js'
 
 let options;
@@ -137,8 +137,7 @@ export async function main(ns) {
             await loadStartupData(ns);
             loadingComplete = true;
         } catch (err) {
-            log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+            log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' + getErrorInfo(err), false, 'warning');
             await ns.sleep(loopSleepInterval);
         }
     }
@@ -149,8 +148,7 @@ export async function main(ns) {
         try {
             await mainLoop(ns);
         } catch (err) {
-            log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+            log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' + getErrorInfo(err), false, 'warning');
             await ns.sleep(loopSleepInterval);
             scope--; // Cancel out work scope increasing on the next iteration.
         }
@@ -363,6 +361,19 @@ const requiredKarmaByFaction = { "Slum Snakes": 9, "Tetrads": 18, "Silhouette": 
 const requiredKillsByFaction = { "Speakers for the Dead": 30, "The Dark Army": 5 };
 const reqHackingOrCombat = ["Daedalus"]; // Special case factions that require only hacking or combat stats, not both
 
+// Establish some helper functions used to determine how fast we can train a stat
+const title = s => s && s[0].toUpperCase() + s.slice(1); // Annoyingly bitnode multis capitalize the first letter physical stat name
+/** Return the product of all multipliers affecting training the specified stat.
+ * @param {Player} player @param {string} stat @param {number} trainingBitnodeMult */
+function heuristic(player, stat, trainingBitnodeMult) {
+    return Math.sqrt(player.mults[stat] * bitNodeMults[`${title(stat)}LevelMultiplier`] *
+        /* */ player.mults[`${stat}_exp`] * trainingBitnodeMult);
+}
+/** A heuristic for how long it'll take to train the specified stat via Crime. @param {Player} player @param {string} stat @param */
+const crimeHeuristic = (player, stat) => heuristic(player, stat, bitNodeMults.CrimeExpGain); // When training with crime
+/** A heuristic for how long it'll take to train the specified stat via Class or Gym. @param {Player} player @param {string} stat @param */
+const classHeuristic = (player, stat) => heuristic(player, stat, bitNodeMults.ClassGymExpGain); // When training in university
+
 /** @param {NS} ns */
 async function earnFactionInvite(ns, factionName) {
     let player = await getPlayerInfo(ns);
@@ -394,35 +405,31 @@ async function earnFactionInvite(ns, factionName) {
     }
     // Check on physical stat requirements
     const physicalStats = ["strength", "defense", "dexterity", "agility"];
-    // Establish some helper functions used to determine how fast we can train a stat
-    const title = s => s && s[0].toUpperCase() + s.slice(1); // Annoyingly bitnode multis capitalize the first letter physical stat name
-    const heuristic = (stat, trainingBitnodeMult) =>
-        Math.sqrt(player.mults[stat] * bitNodeMults[`${title(stat)}LevelMultiplier`] *
-            /* */ player.mults[`${stat}_exp`] * trainingBitnodeMult);
-    const crimeHeuristic = (stat) => heuristic(stat, bitNodeMults.CrimeExpGain); // When training with crime
-    const classHeuristic = (stat) => heuristic(stat, bitNodeMults.ClassGymExpGain); // When training in university
     // Check which stats need to be trained up
     requirement = requiredCombatByFaction[factionName];
     let deficientStats = !requirement ? [] : physicalStats.map(stat => ({ stat, value: player.skills[stat] })).filter(stat => stat.value < requirement);
+    const hackHeuristic = classHeuristic(player, 'hacking');
+    const crimeHeuristics = Object.fromEntries(physicalStats.map(s => [s, crimeHeuristic(player, s)]));
     // Hash for special-case factions (just 'Daedalus' for now) requiring *either* hacking *or* combat
     if (reqHackingOrCombat.includes(factionName) && deficientStats.length > 0 && (
         // Compare roughly how long it will take to train up our hacking stat
-        (requiredHackByFaction[factionName] - player.skills.hacking) / classHeuristic('hacking') <
+        (requiredHackByFaction[factionName] - player.skills.hacking) / hackHeuristic <
         // To the slowest time it will take to train up our deficient physical stats
-        Math.min(...deficientStats.map(s => (requiredCombatByFaction[factionName] - s.value) / crimeHeuristic(s.stat)))))
+        Math.min(...deficientStats.map(s => (requiredCombatByFaction[factionName] - s.value) / crimeHeuristics[s.stat]))))
         ns.print(`Ignoring combat requirement for ${factionName} as we are more likely to unlock them via hacking stats.`);
     else if (deficientStats.length > 0) {
         ns.print(`${reasonPrefix} you have insufficient combat stats. Need: ${requirement} of each, Have ` +
             physicalStats.map(s => `${s.slice(0, 3)}: ${player.skills[s]}`).join(", "));
         const em = requirement / options['training-stat-per-multi-threshold'];
-        // Hack: Create a rough heuristic suggesting how much multi we need to train physical stats in a reasonable amount of time. TODO: Be smarter
-        if (deficientStats.map(s => s.stat).some(s => crimeHeuristic(s) < em))
+        // Hack: Create a rough heuristic suggesting how much multi we need to train physical stats in a reasonable amount of time.
+        // TODO: Be smarter (time-based decision), and also consider whether training physical stats via GYM might be faster
+        if (deficientStats.some(s => crimeHeuristics[s.stat] < em))
             return ns.print("Some mults * exp_mults * bitnode mults appear to be too low to increase stats in a reasonable amount of time. " +
                 `You can control this with --training-stat-per-multi-threshold. Current sqrt(mult*exp_mult*bn_mult*bn_exp_mult) ` +
                 `should be ~${formatNumberShort(em, 2)}, have ` + deficientStats.map(s => s.stat).map(s => `${s.slice(0, 3)}: sqrt(` +
                     `${formatNumberShort(player.mults[s])}*${formatNumberShort(player.mults[`${s}_exp`])}*` +
                     `${formatNumberShort(bitNodeMults[`${title(s)}LevelMultiplier`])}*` +
-                    `${formatNumberShort(bitNodeMults.CrimeExpGain)})=${formatNumberShort(crimeHeuristic(s))}`).join(", "));
+                    `${formatNumberShort(bitNodeMults.CrimeExpGain)})=${formatNumberShort(crimeHeuristics[s])}`).join(", "));
         doCrime = true; // TODO: There could be more efficient ways to gain combat stats than homicide, although at least this serves future crime factions
     }
     if (doCrime && options['no-crime'])
@@ -447,12 +454,12 @@ async function earnFactionInvite(ns, factionName) {
         const em = requirement / options['training-stat-per-multi-threshold'];
         if (options['no-studying'])
             return ns.print(`--no-studying is set, nothing we can do to improve hack level.`);
-        else if (classHeuristic('hacking') < em)
+        if (hackHeuristic < em)
             return ns.print(`Your combination of Hacking mult (${formatNumberShort(player.mults.hacking)}), exp_mult ` +
                 `(${formatNumberShort(player.mults.hacking_exp)}), and bitnode hacking / study exp mults ` +
                 `(${formatNumberShort(bitNodeMults.HackingLevelMultiplier)}) / (${formatNumberShort(bitNodeMults.ClassGymExpGain)}) ` +
                 `are probably too low to increase hack from ${player.skills.hacking} to ${requirement} in a reasonable amount of time ` +
-                `(${formatNumberShort(classHeuristic('hacking'))} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
+                `(${hackHeuristic} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
         let studying = false;
         if (player.money > options['pay-for-studies-threshold']) { // If we have sufficient money, pay for the best studies
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
@@ -929,6 +936,7 @@ async function startWorkForFaction(ns, factionName, work, focus) {
 }
 
 /** Measure our rep gain rate (per second)
+ * TODO: Move this to helpers.js, measure all rep gain rates over a parameterizable number of game ticks (default 1) and return them all.
  * @param {NS} ns
  * @param {() => Promise<number>} fnSampleReputation - An async function that samples the reputation at a current point in time */
 async function measureRepGainRate(ns, fnSampleReputation) {
@@ -1060,7 +1068,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatus = "", lastStatusUpdateTime = 0;
-    let isStudying = false, isWorking = false;
+    let isStudying = false, isWorking = false, decidedNotToStudy = false;
     let backdoored = await checkForBackdoor(ns, companyName);
     let repRequiredForFaction = (companyConfig?.repRequiredForFaction || 400_000) - (backdoored ? 100_000 : 0);
     while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
@@ -1094,24 +1102,40 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // We should only study at university if every other requirement is met but Charisma
         // (assume daemon is grinding hack XP as fast as it can, so no point in studying for that)
         if (currentReputation >= requiredRep && player.skills.hacking >= requiredHack && player.skills.charisma < requiredCha && !options['no-studying']) {
-            status = `Studying at ZB university until Cha reaches ${requiredCha}...\n` + status;
-            // TODO: See if we can re-use the function "monitorStudies" here instead of duplicating a lot of the same code.
-            let classType = currentWork.classType;
-            if (isStudying && !(classType && classType.toLowerCase().includes('leadership'))) {
-                if (await isValidInterruption(ns, currentWork)) return;
-                log(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, false, 'warning');
-                isStudying = false; // If something external has interrupted our studies, take note
-                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
-            }
-            if (!isStudying) { // Study at ZB university if CHA is the limiter.
-                if (await studyForCharisma(ns, shouldFocus))
-                    [isWorking, isStudying] = [false, true];
-            }
-            if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
-                let spentHashes = await trySpendHashes(ns, "Improve Studying");
-                if (spentHashes > 0) {
-                    log(ns, 'Bought a "Improve Studying" upgrade.', false, 'success');
-                    await studyForCharisma(ns, shouldFocus); // We must restart studying for the upgrade to take effect.
+            // Check whether we can train stats in a "reasonable amount of time"
+            const em = requiredCha / options['training-stat-per-multi-threshold'];
+            const chaHeuristic = classHeuristic(player, 'charisma');
+            if (chaHeuristic < em) {
+                if (!decidedNotToStudy) // Only generate the log below once
+                    log(ns, `INFO: You are only lacking in Charisma to get our next promotion. Need: ${requiredCha}, Have: ${player.skills.charisma}` +
+                        `\nUnfortunately, your combination of Charisma mult (${formatNumberShort(player.mults.charisma)}), ` +
+                        `exp_mult (${formatNumberShort(player.mults.charisma_exp)}), and bitnode charisma / study exp mults ` +
+                        `(${formatNumberShort(bitNodeMults.CharismaLevelMultiplier)}) / (${formatNumberShort(bitNodeMults.ClassGymExpGain)}) ` +
+                        `are probably too low to increase charisma from ${player.skills.charisma} to ${requiredCha} in a reasonable amount of time ` +
+                        `(${formatNumberShort(chaHeuristic)} < ${formatNumberShort(em, 2)} - configure with --training-stat-per-multi-threshold)`);
+                decidedNotToStudy = true;
+            } else // On any loop, we can change our mind and decide studying is worthwhile
+                decidedNotToStudy = false;
+            if (!decidedNotToStudy) {
+                status = `Studying at ZB university until Cha reaches ${requiredCha}...\n` + status;
+                // TODO: See if we can re-use the function "monitorStudies" here instead of duplicating a lot of the same code.
+                let classType = currentWork.classType;
+                if (isStudying && !(classType && classType.toLowerCase().includes('leadership'))) {
+                    if (await isValidInterruption(ns, currentWork)) return;
+                    log(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, false, 'warning');
+                    isStudying = false; // If something external has interrupted our studies, take note
+                    ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
+                }
+                if (!isStudying) { // Study at ZB university if CHA is the limiter.
+                    if (await studyForCharisma(ns, shouldFocus))
+                        [isWorking, isStudying] = [false, true];
+                }
+                if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
+                    let spentHashes = await trySpendHashes(ns, "Improve Studying");
+                    if (spentHashes > 0) {
+                        log(ns, 'Bought a "Improve Studying" upgrade.', false, 'success');
+                        await studyForCharisma(ns, shouldFocus); // We must restart studying for the upgrade to take effect.
+                    }
                 }
             }
         } else if (isStudying) { // If we no longer need to study and we currently are, turn off study mode and get back to work!
