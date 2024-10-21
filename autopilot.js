@@ -221,7 +221,11 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
     if (player.skills.hacking < 2500) {
         // If we happen to already have enough money for daedalus and are only waiting on hack-level,
         // set a flag to switch daemon.js into --xp-only mode, to prioritize earning hack exp over money
-        if (totalWorth >= moneyReq) prioritizeHackForDaedalus = true;
+        // HEURISTIC (i.e. Hack): Only do this if we naturally get within 90% of the hack stat requirement,
+        //    otherwise, assume our hack gain rate is too low in this reset to make it all the way to 2500.
+        if (totalWorth >= moneyReq && player.skills.hacking >= (2500 * 0.90))
+            prioritizeHackForDaedalus = true;
+        log(ns, `total worth: ${formatMoney(totalWorth)} moneyReq: ${formatMoney(moneyReq)} prioritizeHackForDaedalus: ${prioritizeHackForDaedalus}`)
         return reservingMoneyForDaedalus = false; // Don't reserve money until hack level suffices
     }
     // If we have sufficient augs and hacking, the only requirement left is the money (100b)
