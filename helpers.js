@@ -58,7 +58,10 @@ export function formatRam(num, printGB) {
     } else if (idx < 0) {
         idx = 0;
     }
-    return (num / 1000 ** idx).toFixed(3).toLocaleString('en') + " " + memorySuffixes[idx];
+    const scaled = num / 1000 ** idx; // Scale the number to the order of magnitude chosen
+    // Only display decimal places if there are any
+    const formatted = scaled - Math.round(scaled) == 0 ? Math.round(scaled) : formatNumber(num / 1000 ** idx);
+    return formatted.toLocaleString('en') + " " + memorySuffixes[idx];
 }
 
 /** Return a datatime in ISO format */
