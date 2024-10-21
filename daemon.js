@@ -1485,14 +1485,14 @@ export async function arbitraryExecution(ns, tool, threads, args, preferredServe
         remainingThreads -= maxThreadsHere;
         if (remainingThreads > 0) {
             if (!(allowThreadSplitting || tool.isThreadSpreadingAllowed)) break;
-            // No need to warn if it's allowed? log(ns, `WARNING: Had to split ${threads} ${tool.name} threads across multiple servers. ${maxThreadsHere} on ${targetServer.name}`);
+            if (verbose) log(ns, `INFO: Had to split ${threads} ${tool.name} threads across multiple servers. ${maxThreadsHere} on ${targetServer.name}`);
             splitThreads = true;
         }
     }
     // The run failed if there were threads left to schedule after we exhausted our pool of servers
     if (remainingThreads > 0 && threads < Number.MAX_SAFE_INTEGER)
         log(ns, `ERROR: Ran out of RAM to run ${tool.name} on ${splitThreads ? 'all servers (split)' : `${targetServer?.name} `}- ` +
-            `${threads - remainingThreads} of ${threads} threads were spawned.`, false, 'error');
+            `${threads - remainingThreads} of ${threads} threads were spawned.`, false, options['silent-misfires'] ? undefined : 'error');
     if (splitThreads && !tool.isThreadSpreadingAllowed)
         return false;
     return remainingThreads == 0;
@@ -1665,6 +1665,7 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
     const activeCycleTimeLeft = (eta || 0) - Date.now();
     if (activeCycleTimeLeft > 1000) return activeCycleTimeLeft; // If we're more than 1s away from the expected fire time, just wait for the next loop, don't even check for early completion
     if (farmXpReentryLock[server.name] == true) return; // Ensure more than one concurrent callback isn't trying to schedule this server's faming cycle
+    const [logPrefix, toastLevel] = options['silent-misfires'] ? ['WARNING:', 'warning'] : ['INFO:', undefined];
     try {
         farmXpReentryLock[server.name] = true;
         let expTool; // The tool we will use to farm XP (can be hack, grow, or weaken depending on the situation)
@@ -1685,14 +1686,14 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
         if (!loopRunning) {
             if (await server.isXpFarming()) {
                 if (verbose && activeCycleTimeLeft < -50) // Warn about big misfires (sign of lag)
-                    log(ns, `WARNING: ${server.name} FarmXP process is ` + (eta ? `more than ${formatDuration(-activeCycleTimeLeft)} overdue...` :
-                        `still in progress from a prior run. ETA unknown, assuming '${expTool.name}' time: ${formatDuration(expTime)}`));
+                    log(ns, `${logPrefix} ${server.name} FarmXP process is ` + (eta ? `more than ${formatDuration(-activeCycleTimeLeft)} overdue...` :
+                        `still in progress from a prior run. ETA unknown, assuming '${expTool.name}' time: ${formatDuration(expTime)}`), false, toastLevel);
                 return eta ? (activeCycleTimeLeft > 0 ? activeCycleTimeLeft : 10 /* If we're overdue, sleep only 10 ms before checking again */) : expTime /* Have no ETA, sleep for expTime */;
             }
             threads = Math.floor(((allocatedServer == null ? expTool.getMaxThreads() : allocatedServer.ramAvailable() / expTool.cost) * percentOfFreeRamToConsume).toPrecision(14));
             if (threads == 0)
-                return log(ns, `WARNING: Cannot farm XP from ${server.name}, threads == 0 for allocated server ` + (allocatedServer == null ? '(any server)' :
-                    `${allocatedServer.name} with ${formatRam(allocatedServer.ramAvailable())} free RAM`), false, 'warning');
+                return log(ns, `${logPrefix} Cannot farm XP from ${server.name}, threads == 0 for allocated server ` + (allocatedServer == null ? '(any server)' :
+                    `${allocatedServer.name} with ${formatRam(allocatedServer.ramAvailable())} free RAM`), false, toastLevel);
         }
 
         if (advancedMode) { // Need to keep server money above zero, and security at minimum to farm xp from hack();
@@ -1710,8 +1711,8 @@ async function scheduleHackExpCycle(ns, server, percentOfFreeRamToConsume, verbo
             if (singleServer) // If set to only use a single server, free up the hack threads to make room for recovery threads
                 threads = Math.max(0, threads - Math.ceil((growThreadsNeeded + weakenThreadsNeeded) * 1.75 / expTool.cost)); // Make room for recovery threads
             if (threads == 0)
-                return log(ns, `Cannot farm XP from ${server.name} on ` + (allocatedServer == null ? '(any server)' : `${allocatedServer.name} with ${formatRam(allocatedServer.ramAvailable())} free RAM`) +
-                    `: hack threads == 0 after releasing for ${growThreadsNeeded} grow threads and ${weakenThreadsNeeded} weaken threads for ${effectiveHackThreads} effective hack threads.`);
+                return log(ns, `${logPrefix} Cannot farm XP from ${server.name} on ` + (allocatedServer == null ? '(any server)' : `${allocatedServer.name} with ${formatRam(allocatedServer.ramAvailable())} free RAM`) +
+                    `: hack threads == 0 after releasing for ${growThreadsNeeded} grow threads and ${weakenThreadsNeeded} weaken threads for ${effectiveHackThreads} effective hack threads.`, false, toastLevel);
         }
 
         let scheduleDelay = 10; // Assume it will take this long a script fired immediately to start running
