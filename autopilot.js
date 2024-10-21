@@ -31,8 +31,8 @@ const argsSchema = [ // The set of all command line arguments
     ['disable-go', false], // Set to true to disable the Go script
     ['on-completion-script', null], // Spawn this script when we defeat the bitnode
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
-    ['xp-mode-interval-minutes', 60], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
-    ['xp-mode-duration-minutes', 10], // The number of minutes to keep daemon.js in --xp-only mode before switching back to normal money-earning mode.
+    ['xp-mode-interval-minutes', 55], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
+    ['xp-mode-duration-minutes', 5], // The number of minutes to keep daemon.js in --xp-only mode before switching back to normal money-earning mode.
 ];
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -434,11 +434,10 @@ async function checkOnRunningScripts(ns, player) {
                     `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
                     `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.`;
         } else { // Otherwise, respect the configured interval / duration
-            const xpInterval = options['xp-mode-interval-minutes'];
-            const xpDuration = options['xp-mode-duration-minutes'];
-            const minutesInBn = getTimeInBitnode() / 60.0 / 1000.0;
-            if (xpInterval > 0 && xpDuration > 0 && minutesInBn > xpInterval &&
-                ((minutesInBn + xpDuration) % (xpInterval + xpDuration)) <= xpDuration) {
+            const xpInterval = Number(options['xp-mode-interval-minutes']);
+            const xpDuration = Number(options['xp-mode-duration-minutes']);
+            const minutesInAug = getTimeInAug() / 60.0 / 1000.0;
+            if (xpInterval > 0 && xpDuration > 0 && (minutesInAug % (xpInterval + xpDuration)) <= xpDuration) {
                 daemonArgs.push("--xp-only", "--silent-misfires", "--no-share")
                 if (!existingDaemon?.args.includes("--xp-only"))
                     daemonRelaunchMessage = `Relaunching daemon.js to focus on earning Hack Experience for ${xpDuration} minutes (--xp-mode-duration-minutes)`;
