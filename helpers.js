@@ -147,6 +147,7 @@ export function getFnIsAliveViaNsPs(ns) {
  * @param {string?} fName (default "/Temp/{command-name}.txt") The name of the file to which data will be written to disk by a temporary process
  * @param {any[]?} args args to be passed in as arguments to command being run as a new script.
  * @param {boolean?} verbose (default false) If set to true, pid and result of command are logged.
+ * TODO: Switch to an args object, this is getting ridiculous
  **/
 export async function getNsDataThroughFile(ns, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
@@ -183,7 +184,7 @@ function getDefaultCommandFileName(command, ext = '.txt') {
 export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     // If any args were skipped by passing null or undefined, set them to the default
-    if (verbose == null) verbose = false; if (maxRetries = null) maxRetries = 5; if (retryDelayMs = null) retryDelayMs = 50; if (silent == null) silent = false;
+    if (args == null) args = []; if (verbose == null) verbose = false; if (maxRetries = null) maxRetries = 5; if (retryDelayMs = null) retryDelayMs = 50; if (silent == null) silent = false;
     if (!verbose) disableLogs(ns, ['read']);
     fName = fName || getDefaultCommandFileName(command);
     const fNameCommand = fName + '.js'
@@ -528,7 +529,7 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
         dictSourceFiles = await fnGetNsDataThroughFile(ns,
             `Object.fromEntries(ns.singularity.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`,
             '/Temp/owned-source-files.txt', null, null, null, null, silent);
-    } catch { dictSourceFiles = {}; } // If this fails (e.g. low RAM), return an empty dictionary
+    } catch { dictSourceFiles = {}; } // If this fails (e.g. presumably due to low RAM or no singularity access), return an empty dictionary
     // If the user is currently in a given bitnode, they will have its features unlocked
     // TODO: This is true of BN4, but not BN14.2, Check them all!
     if (includeLevelsFromCurrentBitnode) {
