@@ -326,10 +326,19 @@ async function checkIfBnIsComplete(ns, player) {
     if (resetInfo.currentNode == 10) { // Suggest the user doesn't reset until they buy all sleeves and max memory
         const shouldHaveSleeveCount = Math.min(8, 6 + (dictOwnedSourceFiles[10] || 0));
         const numSleeves = await getNsDataThroughFile(ns, `ns.sleeve.getNumSleeves()`);
-        if (numSleeves < shouldHaveSleeveCount) {
-            log(ns, `WARNING: Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.` +
-                `\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
-                `\nNOTE: You can ONLY buy sleeves/memory from The Covenant in BN10, which is why it's important to do this before you leave.`, true);
+        let reasonToStay = null;
+        if (numSleeves < shouldHaveSleeveCount)
+            reasonToStay = `Detected that you only have ${numSleeves} sleeves, but you could have ${shouldHaveSleeveCount}.`;
+        else {
+            let sleeveInfo = (/** @returns {SleevePerson[]} */() => [])();
+            await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.getSleeve(i))`, '/Temp/sleeve-getSleeve-all.txt', [...Array(numSleeves).keys()]);
+            if (sleeveInfo.some(s => s.memory < 100))
+                reasonToStay = `Detected that you have ${numSleeves}/${shouldHaveSleeveCount} sleeves, but they do not all have the maximum memory of 100:\n  ` +
+                    sleeveInfo.map((s, i) => `- Sleeve ${i} has ${s.memory}/100 memory`).join('\n  ');
+        }
+        if (reasonToStay) {
+            log(ns, `WARNING: ${reasonToStay}\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
+                `\nNOTE: You can ONLY buy sleeves & memory from The Covenant in BN10, which is why it's important to do this before you leave.`, true);
             return bnCompletionSuppressed = true;
         }
     }
