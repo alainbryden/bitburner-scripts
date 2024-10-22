@@ -13,7 +13,7 @@ let options;
 const argsSchema = [
     ['save-sleep-time', 10], // Time to sleep in milliseconds before and after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
     ['click-sleep-time', 5], // Time to sleep in milliseconds before and after clicking any button (or setting text). Increase if clicks don't appear to be "taking effect".
-    ['find-sleep-time', 5], // Time to sleep in milliseconds before (but not after) trying to find any element on screen. Increase if you are frequently getting errors detecting elements that should be on screen.
+    ['find-sleep-time', 0], // Time to sleep in milliseconds before (but not after) trying to find any element on screen. Increase if you are frequently getting errors detecting elements that should be on screen.
     ['use-basic-strategy', false], // Set to true to use the basic strategy (Stay on 17+)
     ['enable-logging', false], // Set to true to pop up a tail window and generate logs.
     ['kill-all-scripts', false], // Set to true to kill all running scripts before running.
@@ -121,8 +121,12 @@ export async function main(ns) {
     }
     let inputWager, btnStartGame;
 
+    // Note, we deliberately DO NOT pre-emptively check our active source files, or do any kind of RAM dodging
+    // const unlockedSFs = await getActiveSourceFiles(ns, true); // See if we have SF4 to travel automatically
+    // Why? Because this creates "Temp files", and we want to keep the safe file as small as possible for fast saves and reloads.
+    //      We use an empty temp folder as a sign that we previously ran and killed all scripts and can safely proceed.
+
     // Step 2: Try to navigate to the blackjack game (with retries in case of transient errors)
-    const unlockedSFs = await getActiveSourceFiles(ns, true); // See if we have SF4 to travel automatically
     let priorAttempts = 0;
     while (true) {
         if (priorAttempts > 0)
@@ -137,15 +141,11 @@ export async function main(ns) {
                 if (ns.getPlayer().money < 200000)
                     throw new Error("Sorry, you need at least 200k to travel to the casino.");
                 let travelled = false;
-                if (4 in unlockedSFs) { // With SF4, we can travel automatically
-                    try {
-                        travelled = await getNsDataThroughFile(ns, 'ns.singularity.travelToCity(ns.args[0])', null, ["Aevum"]);
-                    } catch { }
-                    if (!travelled)
-                        log(ns, "WARN: Failed to travel to Aevum automatically (perhaps RAM / SF4 level is too low?). " +
-                            "We will try to go there manually for now.", true, 'warning');
-                } else
-                    log(ns, `INFO: We must "manually" travel to Aevum since we don't have SF4`, true);
+                try {
+                    travelled = await getNsDataThroughFile(ns, 'ns.singularity.travelToCity(ns.args[0])', null, ["Aevum"]);
+                } catch { }
+                if (!travelled) // Note: While it would be nice to confirm whether we have SF4 for the message, it's not worth the cost.
+                    log(ns, "INFO: Canot use singularity travel to Aevum via singularity. We will try to go there manually for now.", true);
                 // If automatic travel failed or couldn't be attempted, try clicking our way there!
                 if (!travelled) {
                     await click(ns, await findRequiredElement(ns, "//div[@role='button' and ./div/p/text()='Travel']"));
@@ -165,13 +165,12 @@ export async function main(ns) {
                 await click(ns, await findRequiredElement(ns, "//span[@aria-label = 'Iker Molina Casino']"));
             } catch (err) { // Try to use SF4 as a fallback (if available) - it's more reliable.
                 let success = false, err2;
-                try { success = 4 in unlockedSFs ? await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', null, ["Iker Molina Casino"]) : false; }
+                try { success = await getNsDataThroughFile(ns, 'ns.singularity.goToLocation(ns.args[0])', null, ["Iker Molina Casino"]); }
                 catch (singErr) { err2 = singErr; }
                 if (!success)
                     throw new Error("Failed to travel to the casino both using UI navigation and using SF4 as a fall-back." +
                         `\nUI navigation error was: ${getErrorInfo(err)}\n` + (err2 ? `Singularity error was: ${getErrorInfo(err2)}` :
-                            (4 in unlockedSFs) ? '`ns.singularity.goToLocation("Iker Molina Casino")` returned false, but no error...' :
-                                "And we don't have SF4 so couldn't travel with singularity."));
+                            '`ns.singularity.goToLocation("Iker Molina Casino")` returned false, but no error...'));
             }
 
             // Step 2.4: Try to start the blackjack game
@@ -238,56 +237,58 @@ export async function main(ns) {
                #5 (even more annoying) The "click" event didn't "take effect" and we should retry it
             The seemingly-excessive logic below tries to distinguish between those cases and handle them appropriately */
             await click(ns, btnStartGame);
+            let winLoseTie = null; // For storing a string indicating the game state after each card is dealt
 
-            // Step 4.3: Look for the hit and stay buttons.
+            // Step 4.3: Look for the "hit" and "stay" buttons, or alternatively the "start" button
             let btnHit, btnStay;
-            while (true) {
-                btnHit = await tryfindElement(ns, "//button[text() = 'Hit']", 10); // Use more retries than usual, because in most cases they should be there.
-                btnStay = await tryfindElement(ns, "//button[text() = 'Stay']", 10);
-                // If we detected both buttons, the game is on. If we detected neither, the game is over (or never started)
-                if ((btnHit && btnStay) || (!btnHit && !btnStay))
+            let retries = 0;
+            while (retries++ < 10) { // Quickly distinguish between outcomes #1 and #2. Start retrying only if we can't find any expected buttons
+                if (await tryfindElement(ns, "//button[text() = 'Start']", retries))
+                    break; // If the start button is present, Outcome #2 or #5 has occurred. (typically #2)
+                // Otherwise, expect to find the hit and stay buttons
+                btnHit = await tryfindElement(ns, "//button[text() = 'Hit']", retries);
+                btnStay = await tryfindElement(ns, "//button[text() = 'Stay']", retries);
+                // If we detected both buttons, the game is on.
+                if ((btnHit && btnStay))
                     break;
-                // If we only detected one button, but not the other, this is surely a UI-lag issue. Try again.
+                // If we only detected one of hit/stay buttons, or no buttons this is surely a UI-lag issue. Try again.
             }
-            const gameStarted = btnHit && btnStay;
+            const gameStarted = btnHit && btnStay; // Outcome #1: Game Started
 
-            // Step 4.4: Detect whether we've left the casino (only possible if hit/stay buttons are missing)
-            if (!btnHit && !btnStay) {
-                // Detect outcome #3 (kicked out of casino)
-                if (await checkForKickedOut()) // Were we kicked out of the casino?
-                    return await onCompletion(ns); // This is a good thing!
-                // Detect outcome #4 (something stole focus). We can't recover because we're out of the "navigate to casino" loop.
-                await checkStillAtCasino(); // Throws an error if not. User must stop whatever is stealing focus.
-            } // Note: Outcomes #1 (if gameStarted) or #2 or #5 (if !gameStarted) are still possible below.
+            // Step 4.4: If this round of blackjack did not start (or ended immediately), figure out why
+            if (!gameStarted) {
+                // Step 4.4.1: Detect Outcome #2 - Whether we instantly won/lost/tied via blackjack (21)
+                winLoseTie = await getWinLoseOrTie(ns);
+                if (winLoseTie == null) { // Handle Outcomes #3-5 (atypical of normal casino gameplay)
+                    // Step 4.4.2: Detect Outcome #3 (kicked out of casino)
+                    if (await checkForKickedOut()) // Were we kicked out of the casino?
+                        return await onCompletion(ns); // This is a good thing!
 
-            // Step 4.5: Playing blackjack until the game is over
-            // Step 4.5.1: Check if we've won, lost, or tied
-            let winLoseTie = await getWinLoseOrTie(ns);
+                    // Step 4.4.3: Detect Outcome #4 (something stole focus). We can't recover because we're out of the "navigate to casino" loop.
+                    await checkStillAtCasino(); // Throws an error if not. User must stop whatever is stealing focus.
 
-            // Step 4.5.2: Detect Outcome #5 (The "click" event didn't "take effect" - game never started)
-            // If there's no game-over text, no Hit/Stay buttons, and we've ruled out #3 and #4 already, click must have failed.
-            if (!gameStarted && winLoseTie == null) {
-                const errMessage = 'Clicking the start button appears to have done nothing: ' +
-                    'Cannot find the Hit/Stay buttons, but there is no game-over text (win/lose/tie) either.';
-                if (startGameRetries++ >= 5) // Retry up to 5 times before giving up and crashing out.
-                    throw new Error(errMessage + ` Gave up after 5 retry attempts.\n${supportMsg}`);
-                ns.tail(); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
-                verbose = true; // Switch on verbose logs
-                log(ns, `WARNING: ${errMessage} Trying again...`, false, 'warning');
-                continue; // Back to 4.1 (Place bet, and try to start a new game)
+                    // Step 4.5.2: Detect Outcome #5 (The "click" event didn't "take effect" - game never started)
+                    // If there's no game-over text, no Hit/Stay buttons, and we've ruled out #3 and #4 already, click must have failed.
+                    const errMessage = 'Clicking the start button appears to have done nothing: ' +
+                        'Cannot find the Hit/Stay buttons, but there is no game-over text (win/lose/tie) either.';
+                    if (startGameRetries++ >= 5) // Retry up to 5 times before giving up and crashing out.
+                        throw new Error(errMessage + ` Gave up after 5 retry attempts.\n${supportMsg}`);
+                    ns.tail(); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
+                    verbose = true; // Switch on verbose logs
+                    log(ns, `WARNING: ${errMessage} Trying again...`, false, 'warning');
+                    continue; // Back to 4.1 (Place bet, and try to start a new game)
+                }
             }
-            // Note: Now the only possible outcomes remaining are #1 (normal game) and #2 (game ended immediately)
-            // If we enter the while loop below (winLoseTie == null), it's #1, else it's #2 and we skip over it.
 
-            // Step 4.5.3: Keep playing until the game is over
+            // Step 4.5: Play blackjack until the game is over
             while (winLoseTie == null) {
                 let midGameRetries = 0;
                 try {
-                    // Step 4.5.3.1: Get the current card count
+                    // Step 4.5.1: Get the current card count
                     const txtCount = await findRequiredElement(ns, "//p[contains(text(), 'Count:')]");
                     const allCounts = txtCount.querySelectorAll('span'); // The text might contain multiple counts (if there is an Ace)
 
-                    // Step 4.5.3.2: Decide to hit or stay
+                    // Step 4.5.2: Decide to hit or stay
                     let shouldHit;
                     if (options['use-basic-strategy']) { // Basic strategy just looks at our count
                         const highCount = Number(allCounts[allCounts.length - 1].innerText); // The larger value (with Ace=11) - used in basic-strategy mode
@@ -296,11 +297,11 @@ export async function main(ns) {
                     } else // Advanced strategy will also look at the dealer card
                         shouldHit = await shouldHitAdvanced(ns, txtCount);
 
-                    // Step 4.5.3.3: Click either the hit or stay button
+                    // Step 4.5.3: Click either the hit or stay button
                     await click(ns, shouldHit ? btnHit : btnStay);
                     await ns.sleep(1); // Yield for an instant so the game can update and process events (e.g. deal the next card)
 
-                    // Step 4.5.3.4: A new card should have been dealt, check if the game is over
+                    // Step 4.5.4: A new card should have been dealt, check if the game is over
                     winLoseTie = await getWinLoseOrTie(ns);
                 }
                 catch (err) {
@@ -317,7 +318,7 @@ export async function main(ns) {
                 }
             } // Once the above loop is over winLoseTie is guaranteed be set to some non-null value
 
-            // Step 4.5.4: Take action depending on whether we won, lost, or tied 
+            // Step 4.6: Take action depending on whether we won, lost, or tied 
             switch (winLoseTie) {
                 case "tie": // Nothing gained or lost, we can immediately start a new game.
                     continue;
@@ -353,6 +354,8 @@ async function getWinLoseOrTie(ns) {
     // 1+2+3+4+5=15 total retries, but all with small ms wait times (<20ms), so should still only take a second
     let retries = 0;
     while (retries++ < 5) {
+        if (await tryfindElement(ns, "//button[text() = 'Hit']", retries))
+            return null; // Game is not over yet, we can still hit
         if (await tryfindElement(ns, "//p[contains(text(), 'lost')]", retries))
             return "lose";
         // Annoyingly, when we win with blackjack, "Won" is Title-Case, but normal wins is just "won".
