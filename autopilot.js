@@ -23,7 +23,6 @@ const argsSchema = [ // The set of all command line arguments
     ['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
     ['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
     ['disable-casino', false], // Set to true to disable running the casino.js script automatically
-    ['disable-go', false], // Set to true to disable the Go script
     ['on-completion-script', null], // Spawn this script when we defeat the bitnode
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
     ['xp-mode-interval-minutes', 55], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
@@ -105,7 +104,7 @@ export async function main(ns) {
 
     log(ns, "INFO: Auto-pilot engaged...", true, 'info');
     // The game does not allow boolean flags to be turned "off" via command line, only on. Since this gets saved, notify the user about how they can turn it off.
-    const flagsSet = ['disable-auto-destroy-bn', 'disable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs', 'disable-go'].filter(f => options[f]);
+    const flagsSet = ['disable-auto-destroy-bn', 'disable-bladeburner', 'disable-wait-for-4s', 'disable-rush-gangs'].filter(f => options[f]);
     for (const flag of flagsSet)
         log(ns, `WARNING: You have previously enabled the flag "--${flag}". Because of the way this script saves its run settings, the ` +
             `only way to now turn this back off will be to manually edit or delete the file ${ns.getScriptName()}.config.txt`, true);
@@ -562,11 +561,6 @@ async function checkOnRunningScripts(ns, player) {
         // If we're trying to rush gangs, run in such a way that we will spend most of our time doing crime, reducing Karma (also okay early income)
         // NOTE: Default work-for-factions behaviour is to spend hashes on coding contracts, which suits us fine
         launchScriptHelper(ns, 'work-for-factions.js', rushGang ? rushGangsArgs : workForFactionsArgs);
-    }
-
-    // Launch go.js. If we have SF14.2 or higher, we can use the cheats API
-    if (!options['disable-go'] && !findScript('go.js') && homeRam >= 64) {
-        launchScriptHelper(ns, 'go.js', ['--silent']);
     }
 }
 

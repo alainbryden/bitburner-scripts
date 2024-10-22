@@ -323,9 +323,10 @@ async function startup(ns) {
     // Set up "asynchronous helpers" - standalone scripts to manage certain aspacts of the game. daemon.js launches each of these once when ready (but not again if they are shut down)
     const reqRam = (ram) => homeServer.totalRam(/*ignoreReservedRam:*/true) >= ram; // To avoid wasting precious RAM, many scripts don't launch unless we have more than a certain amount
     asynchronousHelpers = [
-        { name: "stats.js", shouldRun: () => reqRam(64) }, // Adds stats not usually in the HUD
+        { name: "stats.js", shouldRun: () => reqRam(64) }, // Adds stats not usually in the HUD (nice to have)
+        { name: "go.js", shouldRun: () => reqRam(32), minRamReq: 20.2, args: openTailWindows ? [] : ['--silent'] }, // Play go.js (various multipliers, but large dynamic ram requirements)
         { name: "stockmaster.js", shouldRun: () => reqRam(64), args: openTailWindows ? ["--show-market-summary"] : [], tail: openTailWindows }, // Start our stockmaster
-        { name: "hacknet-upgrade-manager.js", shouldRun: () => reqRam(64), args: ["-c", "--max-payoff-time", "1h"] }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
+        { name: "hacknet-upgrade-manager.js", shouldRun: () => reqRam(32), args: ["-c", "--max-payoff-time", "1h"] }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
         { name: "spend-hacknet-hashes.js", args: [], shouldRun: () => reqRam(64) && 9 in dictSourceFiles }, // Always have this running to make sure hashes aren't wasted
         { name: "sleeve.js", tail: openTailWindows, shouldRun: () => reqRam(64) && 10 in dictSourceFiles }, // Script to create manage our sleeves for us
         { name: "gangs.js", tail: openTailWindows, shouldRun: () => reqRam(64) && 2 in dictSourceFiles }, // Script to create manage our gang for us
@@ -338,6 +339,7 @@ async function startup(ns) {
             shouldRun: () => !options['disable-script'].includes('bladeburner.js') && reqRam(64) && 7 in dictSourceFiles && !isInBn8
         },
     ];
+
     // Fix the file path for each tool if this script was cloned to a sub-directory
     asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
     // Add any additional scripts to be run provided by --run-script arguments
@@ -418,11 +420,6 @@ async function startup(ns) {
         await runPeriodicScripts(ns);
         await kickstartHackXp(ns);
     }
-
-    // For early players, provide a hint to buy more home RAM asap:
-    if (!(4 in dictSourceFiles) && !reqRam(64))
-        log(ns, `HINT: Daemon.js can do more if you have more Home Ram. ` +
-            `Head to [alpha ent.] and purchase at 64 GB as soon as possible!`, true, 'info');
 
     // Start the main targetting loop
     await doTargetingLoop(ns);
@@ -541,6 +538,11 @@ async function runPeriodicScripts(ns) {
             await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`, '/Temp/sell-hashes-for-money.js');
         }
     }
+    // For early players, provide a hint to buy more home RAM asap:
+    if (!(4 in dictSourceFiles) && !homeServer.totalRam(true) < 64)
+        log(ns, `INFO: Reminder: Daemon.js can do a lot more if you have more Home RAM. Right now, you must buy this yourself.` +
+            `\nHead to the "City", visit [alpha ent.] (or other Tech store), and purchase at least 64 GB as soon as possible!` +
+            `\nAlso be sure to purchase TOR and run "buy -a" from the terminal until you own all hack tools.`, true, 'info');
 }
 
 // Helper that gets the either invokes a function that returns a value, or returns the value as-is if it is not a function.
