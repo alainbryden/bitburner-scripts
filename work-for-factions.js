@@ -230,6 +230,7 @@ async function mainLoop(ns) {
 
     // Update information that may have changed since our last loop
     const player = await getPlayerInfo(ns);
+    const resetInfo = await getResetInfoRd(ns);
     if (player.factions.length > numJoinedFactions) { // If we've recently joined a new faction, reset our work scope
         scope = 1; // Back to basics until we've satisfied all highest-priority work
         numJoinedFactions = player.factions.length;
@@ -270,9 +271,17 @@ async function mainLoop(ns) {
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
     let priorityFactions = options['crime-focus'] ? preferredCrimeFactionOrder.slice() : preferredEarlyFactionOrder.slice();
     if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
-        priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
-        ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
+        const fulcrumIdx = priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies")
+        if (fulcrumIdx !== -1) {
+            priorityFactions.splice(fulcrumIdx, 1);
+            ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
+        }
     } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
+    // If we're in BN 10, we can purchase special Sleeve-related things from the Covenant, so we should always try join it
+    if (resetInfo.currentNode == 10 && !priorityFactions.includes("The Covenant")) {
+        priorityFactions.push("The Covenant");
+        ns.print(`We're in BN10, which means we should add The Covenant to our priority faction list, so you can purchase sleeves and sleeve memory.`);
+    }
 
     // Strategy 1: Tackle a consolidated list of desired faction order, interleaving simple factions and megacorporations
     const factionWorkOrder = firstFactions.concat(priorityFactions.filter(f => // Remove factions from our initial "work order" if we've bought all desired augmentations.
@@ -715,6 +724,12 @@ async function getPlayerInfo(ns) {
 }
 
 /** @param {NS} ns
+ * @returns {Promise<ResetInfo>} the result of ns.getResetInfo() */
+async function getResetInfoRd(ns) {
+    return await getNsDataThroughFile(ns, `ns.getResetInfo()`);
+}
+
+/** @param {NS} ns
  * @returns {Promise<Task>} The result of ns.singularity.getCurrentWork() */
 async function getCurrentWorkInfo(ns) {
     return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {}; // Easier than null-coalescing everywhere
@@ -777,7 +792,7 @@ let lastInterruptionNotice = "";
  */
 async function isValidInterruption(ns, currentWork = null) {
     let interruptionNotice = "";
-    currentWork ??= await getCurrentWorkInfo(ns); // Retrieve current work (unless it was passed in)    
+    currentWork ??= await getCurrentWorkInfo(ns); // Retrieve current work (unless it was passed in)
     // Never interrupt grafting
     if (currentWork.type == "GRAFTING") {
         interruptionNotice = "Grafting in progress. Pausing all activity to avoid interrupting...";
