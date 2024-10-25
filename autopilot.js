@@ -9,7 +9,7 @@ const argsSchema = [ // The set of all command line arguments
     ['next-bn', 0], // If we destroy the current BN, the next BN to start
     ['disable-auto-destroy-bn', false], // Set to true if you do not want to auto destroy this BN when done
     ['install-at-aug-count', 11], // Automatically install when we can afford this many new augmentations (with NF only counting as 1)
-    ['install-at-aug-plus-nf-count', 14], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
+    ['install-at-aug-plus-nf-count', 15], // or... automatically install when we can afford this many augmentations including additional levels of Neuroflux
     ['install-for-augs', ["The Red Pill"]], // or... automatically install as soon as we can afford one of these augmentations
     ['install-countdown', 5 * 60 * 1000], // If we're ready to install, wait this long first to see if more augs come online (we might just be gaining momentum)
     ['time-before-boosting-best-hack-server', 15 * 60 * 1000], // Wait this long before picking our best hack-income server and spending hashes on boosting it
@@ -609,10 +609,12 @@ async function maybeDoCasino(ns, player) {
     }
 }
 
-/** Retrieves the last faction manager output file, parses, and types it.
- * @param {NS} ns
- * @returns {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }}
- */
+/** Retrieves the last faction manager output file, parses, and provides type-hints for it.
+ * @returns {{ installed_augs: string[], installed_count: number, installed_count_nf: number, installed_count_ex_nf: number,
+ *             owned_augs: string[], owned_count: number, owned_count_nf: number, owned_count_ex_nf: number,
+ *             awaiting_install_augs: string[], awaiting_install_count: number, awaiting_install_count_nf: number, awaiting_install_count_ex_nf: number,
+ *             affordable_augs: string[], affordable_count: number, affordable_count_nf: number, affordable_count_ex_nf: number,
+ *             total_rep_cost: number, total_aug_cost: number, unowned_count: number }} */
 function getFactionManagerOutput(ns) {
     const facmanOutput = ns.read(factionManagerOutputFile)
     return !facmanOutput ? null : JSON.parse(facmanOutput)
@@ -640,21 +642,33 @@ async function maybeInstallAugmentations(ns, player) {
         setStatus(ns, `Faction manager output not available. Will try again later.`);
         return reservedPurchase = 0;
     }
-    const affordableAugCount = facman.affordable_augs.length;
-    playerInstalledAugCount = facman.owned_count;
+    playerInstalledAugCount = facman.installed_count; // Augmentations bought *and installed* by the player (used for Daedalus requirement)
 
-    // Determine whether we can afford enough augmentations to merit a reset
+    // Collect information about how many augmentations we need before it's worth resetting, based on the current configuration
     const reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * getTimeInAug() / 3.6E6);
     const augsNeeded = Math.max(1, options['install-at-aug-count'] - reducedAugReq);
     const augsNeededInclNf = Math.max(1, options['install-at-aug-plus-nf-count'] - reducedAugReq);
-    const uniqueAugCount = affordableAugCount - Math.sign(facman.affordable_nf_count); // Don't count NF if included
+
+    // Get a count of pending augmentations (augs we plan to buy, plus any we've bought but not yet installed)
+    const pendingAugCount = facman.affordable_count_ex_nf + facman.awaiting_install_count_ex_nf; // Excludes neuroflux levels
+    const pendingNfCount = facman.affordable_count_nf + facman.awaiting_install_count_nf; // Only neuroflux levels
+    const pendingAugInclNfCount = pendingAugCount + pendingNfCount; // Includes neuroflux levels
+    // Create a list of augmentations pending install or pending puchase to display. Group all nf augs into one.
+    const strNF = "NeuroFlux Governor"
+    let augsToInstall = facman.awaiting_install_augs.filter(aug => aug != strNF)
+        .concat(...facman.affordable_augs.filter(aug => aug != strNF));
+    if (pendingNfCount > 0)
+        augsToInstall.push(`${strNF} (x${pendingNfCount})`)
+
+    // Determine whether we can afford enough augmentations to merit a reset
     let totalCost = facman.total_rep_cost + facman.total_aug_cost;
-    const augSummary = `${uniqueAugCount} of ${facman.unowned_count - 1} remaining augmentations` +
-        (facman.affordable_nf_count > 0 ? ` + ${facman.affordable_nf_count} levels of NeuroFlux.` : '.') +
-        (uniqueAugCount > 0 ? `\n  Augs: [\"${facman.affordable_augs.join("\", \"")}\"]` : '');
+    const augSummary = `${pendingAugCount} of ${facman.unowned_count - 1} remaining augmentations` + // Unowned - 1 because we can always buy more Neuroflux
+        (pendingNfCount > 0 ? ` + ${pendingNfCount} levels of NeuroFlux.` : '.') +
+        (pendingAugCount > 0 ? `\n  Augs: [\"${augsToInstall.join("\", \"")}\"]` : '');
     let resetStatus = `Reserving ${formatMoney(totalCost)} to install ${augSummary}`
     let shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
-        affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;
+        pendingAugCount >= augsNeeded || pendingAugInclNfCount >= augsNeededInclNf;
+
     // If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
     // but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
     if (player.factions.includes("Daedalus") && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
@@ -662,6 +676,8 @@ async function maybeInstallAugmentations(ns, player) {
         resetStatus = `We have enough reputation with Daedalus to unlock donations on our next reset.\n${resetStatus}`;
         if (totalCost == 0) totalCost = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
     }
+
+    // TODO: If we are in BN8, we get a big cash influx on each reset and it may be worth doing an immediate install or 2 to purchse upgrades, then get more free cash.
 
     // If not ready to reset, set a status with our progress and return
     if (!shouldReset) {
@@ -699,7 +715,7 @@ async function maybeInstallAugmentations(ns, player) {
     // Kick off ascend.js
     let errLog;
     const ascendArgs = ['--install-augmentations', true, '--on-reset-script', ns.getScriptName()]
-    if (affordableAugCount == 0) // If we know we have 0 augs, but still wish to reset, we must enable soft resetting
+    if (pendingAugInclNfCount == 0) // If we know we would install 0 augs, but still wish to reset, we must enable soft resetting
         ascendArgs.push("--allow-soft-reset")
     let pid = launchScriptHelper(ns, 'ascend.js', ascendArgs);
     if (pid) {
@@ -715,9 +731,16 @@ async function maybeInstallAugmentations(ns, player) {
 /** Logic to detect if we are close to a milestone and should postpone installing augmentations until it is hit
  * @param {NS} ns
  * @param {Player} player
- * @param {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }} facmanOutput
+ * @param {{ installed_augs: string[], installed_count: number, installed_count_nf: number, installed_count_ex_nf: number,
+ *           owned_augs: string[], owned_count: number, owned_count_nf: number, owned_count_ex_nf: number,
+ *           awaiting_install_augs: string[], awaiting_install_count: number, awaiting_install_count_nf: number, awaiting_install_count_ex_nf: number,
+ *           affordable_augs: string[], affordable_count: number, affordable_count_nf: number, affordable_count_ex_nf: number,
+ *           total_rep_cost: number, total_aug_cost: number, unowned_count: number }} facmanOutput
 */
 async function shouldDelayInstall(ns, player, facmanOutput) {
+    // Don't install if we're currently grafting an augmentation
+    if (await checkIfGrafting(ns))
+        return true;
     // Are we close to being able to afford 4S TIX data?
     if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`))) {
         const totalWorth = player.money + await getStocksValue(ns);
@@ -737,9 +760,7 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
     // In BN8, money is hard to come by, so if we're in Daedalus, but can't access TRP rep yet, wait until we have
     // enough rep, or enough money to donate for rep to buy TRP (Reminder: donations always unlocked in BN8)
     if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && (wdHack || 0) == 0) {
-        // Ensure the player hasn't manually purchased (but not yet installed) TRP
-        const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
-        if (!facmanOutput.affordable_augs.includes("The Red Pill") && !ownedAugmentations.includes("The Red Pill")) {
+        if (!facmanOutput.affordable_augs.includes("The Red Pill") && !facmanOutput.awaiting_install_augs.includes("The Red Pill")) {
             setStatus(ns, `Not installing until we have enough Daedalus rep to install TRP on our next reset.`)
             return true;
         }
