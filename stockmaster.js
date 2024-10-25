@@ -115,11 +115,12 @@ export async function main(ns) {
             return log(ns, "ERROR: You do not have stock market API access, and --disable-purchase-tix-api is set.", true);
         let success = false;
         log(ns, `INFO: You are missing stock market API access. (NOTE: This is granted for free once you have SF8). ` +
-            `Waiting until we can have the 5b needed to buy it. (Run with --disable-purchase-tix-api to disable this feature.)`, true);
+            `Waiting until we have the 5b needed to buy it. (Run with --disable-purchase-tix-api to disable this feature.)`, true);
         do {
             await ns.sleep(sleepInterval);
             try {
                 const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
+                player = await getPlayerInfo(ns);
                 success = await tryGetStockMarketAccess(ns, player.money - reserve);
             } catch (err) {
                 log(ns, `WARNING: stockmaster.js Caught (and suppressed) an unexpected error while waiting to buy stock market access:\n` +
