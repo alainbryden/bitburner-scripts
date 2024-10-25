@@ -770,6 +770,24 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
     return false;
 }
 
+let wasGrafting = false;
+
+/** Checks if we are current grafting. If so, certain actions should not be taken.
+ * @param {NS} ns
+ * @returns {bool} true if the player is grafting, false otherwise. */
+async function checkIfGrafting(ns) {
+    let currentWork = (/**@returns{Task|null}*/() => null)();
+    currentWork = await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()');
+    // Never interrupt grafting
+    if (currentWork?.type == "GRAFTING") {
+        if (!wasGrafting) // Only log the first time we detect we've started grafting
+            log(ns, "Grafting in progress. autopilot.js will make sure to not install augmentations or otherwise interrupt it.");
+        wasGrafting = true;
+    }
+    else
+        wasGrafting = false
+}
+
 /** Consolidated logic for all the times we want to reserve money
  * @param {NS} ns
  * @param {Player} player */
