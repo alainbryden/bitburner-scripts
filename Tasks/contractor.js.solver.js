@@ -29,7 +29,7 @@ export async function main(ns) {
         const quietSolve = contractsDb.length > 20;
         let failureCount = 0;
         if (quietSolve) {
-            const message = `Welcome back. There are ${contractsDb.length} to solve, so we won't generate a notification for each.`
+            const message = `Welcome back. There are ${contractsDb.length} contracts to solve, so we won't generate a notification for each.`
             ns.toast(message, 'success');
             ns.tprint(message);
         }
