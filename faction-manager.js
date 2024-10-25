@@ -19,12 +19,12 @@ const staneksGift = "Stanek's Gift - Genesis";
 const factionsWithoutDonation = ["Bladeburners", "Church of the Machine God", "Shadows of Anarchy"]; // Not allowed to donate to these factions for rep
 
 // Factors used in calculations
-const nfCountMult = 1.14; // Factors that control how neuroflux prices scale
+const nfCountMult = 1.14; // Factors that control how NeuroFlux prices scale
 let augCountMult = 1.9; // The multiplier for the cost increase of augmentations (changes based on SF11 level)
 let favorToDonate = 0; // Based on the current BitNode Multipliers, the favour required to donate to factions for reputation.
 // Various globals because this script does not do modularity well. Assigned values are all ignored, just used to get type hints
 let playerData = (/**@returns{Player}*/() => null)(), bitNode = 0, gangFaction = "";
-let numAugsAwaitingInstall = 0, startingPlayerMoney = 0, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
+let numAugsAwaitingInstall = 0, nfLevelPurchased = 0, startingPlayerMoney = 0, stockValue = 0; // If the player holds stocks, their liquidation value will be determined
 let factionNames = [""], joinedFactions = [""], desiredAugs = [""], desiredStatsFilters = [""], purchaseFactionDonations = [];
 let ownedAugmentations = [""], simulatedOwnedAugmentations = [""], allAugStats = [""], priorityAugs = [""];
 let effectiveSourceFiles = (/**@returns {{[bitNode: number]: number}}*/() => ({}))();
@@ -101,7 +101,7 @@ export async function main(ns) {
     _ns = ns;
 
     // Ensure all globals are reset before we proceed with the script, in case we've done things out of order
-    augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;
+    augCountMult = favorToDonate = playerData = gangFaction = nfLevelPurchased = startingPlayerMoney = stockValue = null;
     factionNames = [], joinedFactions = [], desiredAugs = [], desiredStatsFilters = [], purchaseFactionDonations = [];
     ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = {}, allAugStats = [], priorityAugs = [], purchaseableAugs = [];
     factionData = {}, augmentationData = {}, bitNodeMults = {};
@@ -208,31 +208,34 @@ export async function main(ns) {
         ns.write(output_file, "", "w"); // Clear the file so it isn't misinterpreted on next reset.
     } else if (!ignorePlayerData) { // Don't do this next part if we were "mocking" the player for this run
         // Write a file that summarizes what augs we could afford if we could ascend right now. (used by autopilot.js)
+        const augsAwaitingInstall = ownedAugmentations.slice(installedAugmentations.length); // Assumes augs are returned in purchased order
+        // Infer the number of nf we have installed based on the current nf purchase level, minus the pending nf installs
+        const nfInstalled = nfLevelPurchased - augsAwaitingInstall.filter(a => a == strNF).length;
         ns.write(output_file, JSON.stringify({
             // Augs we already have installed
-            installed_augs: installedAugmentations, // Names of augs we've installed (which may include duplicates of neuroflux)
-            installed_count: installedAugmentations.length, // Number of augs we've installed
-            installed_count_nf: installedAugmentations.filter(a => a.name == strNF).length, // Count of neuroflux levels we have installed
-            installed_count_ex_nf: installedAugmentations.filter(a => a.name != strNF).length, // Count of non-neuroflux augs installed
+            installed_augs: installedAugmentations, // Names of augs we've installed (Note: NeuroFlux will only appears once)
+            installed_count: installedAugmentations.length, // Number of augs we've installed (Note: multiple NeuroFlux levels only counts as one)
+            installed_count_nf: nfInstalled, // Count of NeuroFlux levels we have installed
+            installed_count_ex_nf: installedAugmentations.filter(a => a != strNF).length, // Count of non-NeuroFlux augs installed
             // Augs we have purchased, but perhaps not installed
-            owned_augs: ownedAugmentations, // Names of augs we've installed (which may include duplicates of neuroflux)
-            owned_count: ownedAugmentations.length, // Total number of augs we've purchased (some of which may not be installed)
-            owned_count_nf: ownedAugmentations.filter(a => a.name == strNF).length, // Count of neuroflux levels we have purchased (some of which may not be installed)
-            owned_count_ex_nf: ownedAugmentations.filter(a => a.name != strNF).length, // Count augmentations we have purchased (some of which may not be installed)
+            purchased_augs: ownedAugmentations, // Names of augs we've purchased (which may include duplicates of NeuroFlux)
+            purchased_count: ownedAugmentations.length, // Total number of augs we've purchased (some of which may not be installed)
+            purchased_count_nf: nfLevelPurchased, // Count of NeuroFlux levels we have purchased (some of which may not be installed)
+            purchased_count_ex_nf: ownedAugmentations.filter(a => a != strNF).length, // Count augmentations we have purchased (some of which may not be installed)
             // Augs awaiting installation (to be explicit about what's installed vs purchased)
-            awaiting_install_augs: ownedAugmentations.slice(installedAugmentations.length), // Assumes augs are returned in purchased order
+            awaiting_install_augs: augsAwaitingInstall, // Names of augmentations purchased but not yet installed
             awaiting_install_count: numAugsAwaitingInstall, // Number of augmentations awaiting installation
-            awaiting_install_count_nf: ownedAugmentations.filter(a => a.name == strNF).length, // Count of neuroflux levels purchased
-            awaiting_install_count_ex_nf: ownedAugmentations.filter(a => a.name != strNF).length, // Count of non-neuroflux augs purchased
+            awaiting_install_count_nf: augsAwaitingInstall.filter(a => a == strNF).length, // Count of NeuroFlux levels awaiting installation
+            awaiting_install_count_ex_nf: augsAwaitingInstall.filter(a => a != strNF).length, // Count of non-NeuroFlux awaiting installation
             // Augs we want to purchase
             affordable_augs: purchaseableAugs.map(a => a.name), // List of aug names we can currently afford to buy
             affordable_count: purchaseableAugs.length, // Count of augmentations we can currently install
-            affordable_count_nf: purchaseableAugs.filter(a => a.name == strNF).length, // Count of neuroflux levels we can currently afford to buy
-            affordable_count_ex_nf: purchaseableAugs.filter(a => a.name != strNF).length, // Count of unique augs we can currently afford to buy, ignoring neuroflux
+            affordable_count_nf: purchaseableAugs.filter(a => a.name == strNF).length, // Count of NeuroFlux levels we can currently afford to buy
+            affordable_count_ex_nf: purchaseableAugs.filter(a => a.name != strNF).length, // Count of unique augs we can currently afford to buy, ignoring NeuroFlux
             total_rep_cost: Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0), // Total money needed to buy the reputation needed for all affordable augs
             total_aug_cost: getTotalCost(purchaseableAugs), // Total money needed to buy all affordable augs (excludes the rep cost above)
             // Unpurchased augs
-            unowned_count: Object.values(augmentationData).filter(a => !a.owned).length, // Number of augs are we have not yet purchased (note: depending on config, may not include all augs in the game)
+            unpurchased_count: Object.values(augmentationData).filter(a => !a.owned).length, // Number of augs are we have not yet purchased (note: depending on config, may not include all augs in the game)
         }, undefined, 2), "w");
     }
 }
@@ -336,7 +339,7 @@ class FactionData {
             ![gangFaction, ...factionsWithoutDonation].includes(faction);
         this.augmentations = augmentationNames;
     }
-    /** @param {boolean} includeNf Whether to include neuroflux (generally offered by all factions) in the list of augmentations offered.
+    /** @param {boolean} includeNf Whether to include NeuroFlux (generally offered by all factions) in the list of augmentations offered.
      * @returns {string[]} A list of augmentations we don't own that are offered by this faction */
     unownedAugmentations(includeNf = false) {
         return this.augmentations.filter(aug => !simulatedOwnedAugmentations.includes(aug) && (aug != strNF || includeNf))
@@ -487,7 +490,7 @@ async function joinFactions(ns, forceJoinFactions) {
         let unownedAugs = faction.unownedAugmentations(true); // Filter out augmentations we've already purchased
         let newAugs = unownedAugs.filter(aug => !accessibleAugmentations.has(aug)); //  Filter out augmentations we can purchase from another faction we've already joined
         let desiredAugs = newAugs.filter(aug => augmentationData[aug].desired); //  Filter out augmentations we have no interest in
-        log(ns, `${faction.name} has ${faction.augmentations.length} augs, ${unownedAugs.length} unowned, ${newAugs.length} not offered by joined factions, ` +
+        log(ns, `${faction.name} has ${faction.augmentations.length} augs, ${unownedAugs.length} unpurchased, ${newAugs.length} not offered by joined factions, ` +
             `${desiredAugs.length} with desirable stats` + (desiredAugs.length == 0 ? ' (not joining)' : `: ${JSON.stringify(desiredAugs)}`));
         if (desiredAugs.length == 0 && !forceJoinFactions.includes(faction.name)) continue;
         if (manualJoin.includes(faction.name) && !forceJoinFactions.includes(faction.name))
@@ -718,7 +721,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         }
     } while (restart);
 
-    // Display unique affordable augs, but only show the full list if we aren't adding neuroflux levels below
+    // Display unique affordable augs, but only show the full list if we aren't adding NeuroFlux levels below
     manageFilteredSubset(ns, outputRows, 'Unique Affordable', purchaseableAugs, options['neuroflux-disabled']);
 
     // The the user know about some of the next upcoming augs / import augs that had to be dropped
@@ -737,8 +740,9 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // NEXT STEP: Add as many NeuroFlux levels to our purchase as we can (unless disabled)
     if (options['neuroflux-disabled']) return;
     const augNf = augmentationData[strNF];
-    // We can reverse-engineer our current neuroflux level by looking at its current price, and knowing its cost scales at x1.14 per level.
+    // We can reverse-engineer our current NeuroFlux level by looking at its current price, and knowing its cost scales at x1.14 per level.
     let nfLevel = Math.round(Math.log(augNf.price / (augCountMult ** numAugsAwaitingInstall) / 750000) / Math.log(1.14));
+    nfLevelPurchased = nfLevel;
     let getFrom = augNf.getFromJoined();
     // If No currently joined factions can provide us with the next level of Neuroflux, look for the best joined **or unjoined** faction to get NF from.
     if (!augNf.canAfford() && !augNf.canAffordWithDonation()) {
@@ -785,7 +789,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     const cheapAugs = purchaseableAugs.filter(a => a.price == 0);
     purchaseableAugs = purchaseableAugs.filter(a => a.price > 0);
     const augsCheaperThanNF = purchaseableAugs.filter(a => a.price < augNf.price).length;
-    // Start adding as many neuroflux levels as we can afford
+    // Start adding as many NeuroFlux levels as we can afford
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
     const augNfFaction = factionData[augNf.getFromJoined()];
     if (augNfFaction && (augNf.canAfford() || augNf.canAffordWithDonation()))

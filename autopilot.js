@@ -662,7 +662,7 @@ async function maybeInstallAugmentations(ns, player) {
 
     // Determine whether we can afford enough augmentations to merit a reset
     let totalCost = facman.total_rep_cost + facman.total_aug_cost;
-    const augSummary = `${pendingAugCount} of ${facman.unowned_count - 1} remaining augmentations` + // Unowned - 1 because we can always buy more Neuroflux
+    const augSummary = `${pendingAugCount} of ${facman.unpurchased_count - 1} remaining augmentations` + // Unowned - 1 because we can always buy more Neuroflux
         (pendingNfCount > 0 ? ` + ${pendingNfCount} levels of NeuroFlux.` : '.') +
         (pendingAugCount > 0 ? `\n  Augs: [\"${augsToInstall.join("\", \"")}\"]` : '');
     let resetStatus = `Reserving ${formatMoney(totalCost)} to install ${augSummary}`
@@ -683,8 +683,8 @@ async function maybeInstallAugmentations(ns, player) {
     if (!shouldReset) {
         setStatus(ns, `Currently at ${formatDuration(getTimeInAug())} since last aug. ` +
             `Waiting for ${augsNeeded} new augs (or ${augsNeededInclNf} including NeuroFlux levels) before installing.` +
-            `\nCan currently get: ${augSummary}` +
-            `\n  Total Cost: ${formatMoney(totalCost)} (\`run faction-manager.js\` for details)`, augSummary);
+            `\nCan currently get: ${augSummary}` + (pendingAugCount == 0 ? '' : `\n  Total Cost: ${formatMoney(totalCost)}`) +
+            ` (\`run faction-manager.js\` for details)`, augSummary);
         return reservedPurchase = 0; // If we were previously reserving money for a purchase, reset that flag now
     }
     // If we want to reset, but there is a reason to delay, don't reset
