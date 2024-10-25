@@ -42,7 +42,7 @@ export function parseShortNumber(text = "0") {
  * @param {number=} minDecimalPlaces - (default: 3) The minimum decimal places you wish to see, regardless of significant figures. (e.g. 12.3, 1.2, 0.1 all have 1 decimal)
  **/
 export function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 1) {
-    return num == 0.0 ? num : num.toFixed(Math.max(minDecimalPlaces, Math.max(0, minSignificantFigures - Math.ceil(Math.log10(num)))));
+    return num == 0.0 ? "0" : num.toFixed(Math.max(minDecimalPlaces, Math.max(0, minSignificantFigures - Math.ceil(Math.log10(num)))));
 }
 
 const memorySuffixes = ["GB", "TB", "PB", "EB"];
