@@ -10,7 +10,7 @@
  * - Insight (alainbryden)
  */
 
-import { getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile } from "./helpers";
+import { getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile, tail } from "./helpers";
 
 const argsSchema = [
     ['cheats', true], // (Now true by default - but still an option for backwards compatibility) This is only possible if you have BN14.2
@@ -26,7 +26,7 @@ export function autocomplete(data, args) {
 }
 
 /** Main script entrypoint.
- * Note that to protect against "shared global memory", the entire script is wrapped in the body of the main function. 
+ * Note that to protect against "shared global memory", the entire script is wrapped in the body of the main function.
  * @param {NS} ns */
 export async function main(ns) {
     let cheats = false;
@@ -97,7 +97,7 @@ export async function main(ns) {
         const sourceFiles = await getActiveSourceFiles(ns, true);
         // Enable cheats if we have SF14.2 or higher (unless the user disabled cheats).
         cheats = !runOptions['disable-cheats'] && (sourceFiles[14] ?? 0) >= 2;
-        if (!silent) { ns.tail() }
+        if (!silent) { tail(); }
 
         ns.disableLog("go.makeMove")
 
@@ -110,7 +110,7 @@ export async function main(ns) {
             catch (err) {
                 log(ns, `WARNING: go.js Caught (and suppressed) an unexpected error:\n${getErrorInfo(err)}`, false, 'warning');
                 log(ns, `INFO: Will sleep for 10 seconds than try playing again.`, false);
-                ns.tail();
+                tail(ns);
                 await ns.sleep(10 * 1000);
             }
         }

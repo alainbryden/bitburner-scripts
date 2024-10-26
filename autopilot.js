@@ -1,7 +1,7 @@
 import {
     log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-    formatMoney, formatDuration, getErrorInfo
+    formatMoney, formatDuration, getErrorInfo, tail
 } from './helpers.js'
 
 let options; // The options used at construction time
@@ -225,7 +225,7 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
     // See if we've already joined this faction
     if (player.factions.includes("Daedalus")) {
         alreadyJoinedDaedalus = true;
-        // If we previously took any action to "rush" Daedalus, keep the momentum going by restarting work-for-factions.js 
+        // If we previously took any action to "rush" Daedalus, keep the momentum going by restarting work-for-factions.js
         // so that it immediately re-assesses priorities and sees there's a new priority faction to earn reputation for.
         if (prioritizeHackForDaedalus || reservingMoneyForDaedalus) {
             let reason;
@@ -824,7 +824,7 @@ function manageReservedMoney(ns, player, stocksValue) {
 /** Helper to launch a script and log whether if it succeeded or failed
  * @param {NS} ns */
 function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
-    ns.tail(); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
+    tail(ns); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
     let pid, err;
     try { pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args); }
     catch (e) { err = e; }

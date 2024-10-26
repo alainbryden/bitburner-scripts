@@ -1,6 +1,6 @@
 import {
     instanceCount, getConfiguration, getNsDataThroughFile, getFilePath, getActiveSourceFiles, tryGetBitNodeMultipliers,
-    formatDuration, formatMoney, formatNumberShort, disableLogs, log, getErrorInfo
+    formatDuration, formatMoney, formatNumberShort, disableLogs, log, getErrorInfo, tail
 } from './helpers.js'
 
 let options;
@@ -592,11 +592,11 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
             if (await isValidInterruption(ns, currentWork)) return;
             if (lastCrime) {
                 log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType ?? currentWork.type}) Restarting...`, false, 'warning');
-                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
+                tail(ns); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
             crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', null, [crime, focusArg])
-            if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
+            if (shouldFocus) tail(ns); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
         }
         // Periodic status update with progress
         if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
@@ -884,7 +884,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             if (await isValidInterruption(ns, currentWork)) return;
             log(ns, `Work for faction ${factionName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
             workAssigned = false;
-            ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
+            tail(ns); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
         }
         // Periodically check again what the best faction work is (may change with stats over time)
         if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval)
@@ -901,7 +901,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         if (!workAssigned) {
             if (await startWorkForFaction(ns, factionName, bestFactionJob, shouldFocus)) {
                 workAssigned = true;
-                if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
+                if (shouldFocus) tail(ns); // Keep a tail window open if we're stealing focus
             } else {
                 log(ns, `ERROR: Something went wrong, failed to start "${bestFactionJob}" work for faction "${factionName}" (Is gang faction, or not joined?)`, false, 'error');
                 break;
@@ -1139,7 +1139,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                     if (await isValidInterruption(ns, currentWork)) return;
                     log(ns, `Leadership studies were interrupted. classType="${classType}" Restarting...`, false, 'warning');
                     isStudying = false; // If something external has interrupted our studies, take note
-                    ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
+                    tail(ns); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep studying
                 }
                 if (!isStudying) { // Study at ZB university if CHA is the limiter.
                     if (await studyForCharisma(ns, shouldFocus))
@@ -1170,11 +1170,11 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
                 log(ns, `Work for company ${companyName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
                 isWorking = false;
-                ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
+                tail(ns); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
             }
             if (await getNsDataThroughFile(ns, `ns.singularity.workForCompany(ns.args[0], ns.args[1])`, null, [companyName, shouldFocus])) {
                 isWorking = true;
-                if (shouldFocus) ns.tail(); // Keep a tail window open if we're stealing focus
+                if (shouldFocus) tail(ns); // Keep a tail window open if we're stealing focus
             } else {
                 log(ns, `Something went wrong, failed to start working for company "${companyName}".`, false, 'error');
                 break;

@@ -1,4 +1,4 @@
-import { jsonReviver } from '../helpers.js'
+import { jsonReviver, tail } from '../helpers.js'
 const fUnsolvedContracts = '/Temp/unsolved-contracts.txt'; // A global, persistent array of contracts we couldn't solve, so we don't repeatedly log about them.
 
 let heartbeat = null;
@@ -84,7 +84,7 @@ export async function main(ns) {
         if (quietSolve) {
             const message = `Done solving ${contractsDb.length}. ${contractsDb.length - failureCount} succeeded, and ${failureCount} failed. See tail logs for errors.`
             if (failureCount > 0)
-                ns.tail();
+                tail(ns);
             ns.toast(message, 'success');
             ns.tprint(message);
         }
