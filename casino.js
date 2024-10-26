@@ -1,6 +1,6 @@
 import {
     log, getConfiguration, getFilePath, waitForProcessToComplete,
-    runCommand, getNsDataThroughFile, getActiveSourceFiles, getErrorInfo
+    runCommand, getNsDataThroughFile, getActiveSourceFiles, getErrorInfo, tail
 } from './helpers.js'
 
 // Note to self: This script doesn't use ram-dodging in the inner loop, because we want to
@@ -37,7 +37,7 @@ export async function main(ns) {
     const saveSleepTime = options['save-sleep-time'];
     verbose = options['enable-logging'];
     if (verbose)
-        ns.tail()
+        tail(ns)
     else
         ns.disableLog("ALL");
 
@@ -48,7 +48,7 @@ export async function main(ns) {
      * @param {silent} (default false) Set to true to suppress the warning popup if throwError is false and something has focus.
      * @returns {Promise<boolean>} false if focus was not stolen, true if it was and `throwErrorIfNot` is false. */
     async function checkForStolenFocus(throwError = true, retries = 0, silent = false) {
-        // See if we are on the "focus" (work/study/training) screen 
+        // See if we are on the "focus" (work/study/training) screen
         const btnUnfocus = await tryfindElement(ns, "//button[text()='Do something else simultaneously']");
         if (!btnUnfocus) return false; // All good, we aren't focus-working on anything
         let baseMessage = "It looks like something stole focus while casino.js was trying to automate the casino.";
@@ -57,7 +57,7 @@ export async function main(ns) {
         // Otherwise, log a warning, and return true (focus was stolen)
         log(ns, (silent ? `INFO` : `WARNING`) + `: ${baseMessage}\nTrying to un-focus it so we can keep going...`, false, (silent ? undefined : `WARNING`));
         await click(ns, btnUnfocus); // Click the button that should let us take back focus and return to the casino
-        // Now we should confirm that we're no longer doing focus work (that the click above worked) by recursing.        
+        // Now we should confirm that we're no longer doing focus work (that the click above worked) by recursing.
         retries--; // Decrement "retries" each time we discover we're still on the focus screen.
         return await checkStillAtCasino(retries <= 0, retries); // If out of retries, throw error on next failure
     }
@@ -72,7 +72,7 @@ export async function main(ns) {
         // Check whether we're still on the casino page
         let stillAtCasino = await tryfindElement(ns, "//h4[text()='Iker Molina Casino']", silent ? 3 : 10);
         if (stillAtCasino) return true; // All seems good, nothing is stealing focus
-        // If we're not still at the casino, see if we are on the "focus" (work/study/training) screen 
+        // If we're not still at the casino, see if we are on the "focus" (work/study/training) screen
         const focusWasStolen = await checkForStolenFocus(throwError, silent ? 3 : 1);
         // If we aren't meant to log a warning, or focus was stolen (which has now been deal with) we can return
         if (focusWasStolen || silent)
@@ -204,7 +204,7 @@ export async function main(ns) {
         } catch (err) {
             // The first 5 errors that occur, we will start over and retry
             if (++priorAttempts < 5) {
-                ns.tail(); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
+                tail(ns); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
                 verbose = true; // Switch on verbose logs
                 log(ns, `WARNING: casino.js Caught (and suppressed) an unexpected error while navigating to blackjack. ` +
                     `Error was:\n${getErrorInfo(err)}\nWill try again (attempt ${priorAttempts} of 5)...`, false, 'warning');
@@ -273,7 +273,7 @@ export async function main(ns) {
                         'Cannot find the Hit/Stay buttons, but there is no game-over text (win/lose/tie) either.';
                     if (startGameRetries++ >= 5) // Retry up to 5 times before giving up and crashing out.
                         throw new Error(errMessage + ` Gave up after 5 retry attempts.\n${supportMsg}`);
-                    ns.tail(); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
+                    tail(ns); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
                     verbose = true; // Switch on verbose logs
                     log(ns, `WARNING: ${errMessage} Trying again...`, false, 'warning');
                     continue; // Back to 4.1 (Place bet, and try to start a new game)
@@ -311,14 +311,14 @@ export async function main(ns) {
                     const errMessage = `an unexpected error in the middle of a game of blackjack:\n${getErrorInfo(err)}`;
                     if (midGameRetries++ >= 5)  // Retry up to 5 times before giving up and crashing out.
                         throw new Error(`After ${priorAttempts} attempts, casino.js continues to catch ${errMessage}`);
-                    ns.tail(); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
+                    tail(ns); // Since we're having difficulty, pop open a tail window so the user is aware and can monitor.
                     verbose = true; // Switch on verbose logs
                     log(ns, `WARNING: casino.js Caught (and suppressed) ${errMessage}\n` +
                         `Will try again (attempt ${midGameRetries} of 5)...`, false, 'warning');
                 }
             } // Once the above loop is over winLoseTie is guaranteed be set to some non-null value
 
-            // Step 4.6: Take action depending on whether we won, lost, or tied 
+            // Step 4.6: Take action depending on whether we won, lost, or tied
             switch (winLoseTie) {
                 case "tie": // Nothing gained or lost, we can immediately start a new game.
                     continue;
@@ -340,12 +340,12 @@ export async function main(ns) {
         }
     }
     catch (err) {
-        ns.tail(); // Display the tail log if anything goes wrong so the user can review the logs
+        tail(ns); // Display the tail log if anything goes wrong so the user can review the logs
         log(ns, `ERROR: casino.js Caught a fatal error while playing blackjack:\n${getErrorInfo(err)}\n${supportMsg}`, true, 'error');
     }
 }
 
-/** This helper function will help us detect if we lost, won or tied. 
+/** This helper function will help us detect if we lost, won or tied.
  * @param {NS} ns
  * @returns {Promise<null|"win"|"lose"|"tie">} null indicates no outcome could be detected (game either not over or still in progres) */
 async function getWinLoseOrTie(ns) {

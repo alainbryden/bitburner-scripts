@@ -802,3 +802,14 @@ export function unEscapeArrayArgs(args) {
     const escapeChars = ['"', "'", "`"];
     return args.map(arg => escapeChars.some(c => arg.startsWith(c) && arg.endsWith(c)) ? arg.slice(1, -1) : arg);
 }
+
+/**
+ * Custom tail function which also applies default resizes and tail window placement.
+ * This algorithm is not perfect but for the most part should not generate overlaps of the window's title bar.
+ * @param {NS} ns The nestcript instance passed to your script's main entry point
+ */
+export function tail(ns) {
+    ns.tail();
+    ns.resizeTail(ns.ui.windowSize()[0] * 0.75, ns.ui.windowSize()[1] * 0.25, ns.pid);
+    ns.moveTail(250, (ns.pid % 13) * 35, ns.pid);
+}

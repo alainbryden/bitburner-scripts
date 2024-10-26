@@ -1,6 +1,7 @@
 import {
     log, disableLogs, getFilePath, getConfiguration, formatNumberShort, formatRam,
-    getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, instanceCount, unEscapeArrayArgs
+    getNsDataThroughFile, waitForProcessToComplete, getActiveSourceFiles, instanceCount, unEscapeArrayArgs,
+    tail
 } from './helpers.js'
 
 // Default sripts called at startup and shutdown of stanek
@@ -109,7 +110,7 @@ export async function main(ns) {
         await ns.sleep(lastLoopSuccessful ? 10 : 1000); // Only sleep a short while between charges if things are going well
         lastLoopSuccessful = false;
         try {
-            if (!options['no-tail']) ns.tail(); // Keep a tail window open unless otherwise configured
+            if (!options['no-tail']) tail(ns); // Keep a tail window open unless otherwise configured
             await checkOnChargeScript();
             const fragmentsToCharge = await getFragmentsToCharge(ns);
             if (fragmentsToCharge === undefined) continue;
