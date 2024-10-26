@@ -97,7 +97,7 @@ export async function main(ns) {
         const sourceFiles = await getActiveSourceFiles(ns, true);
         // Enable cheats if we have SF14.2 or higher (unless the user disabled cheats).
         cheats = !runOptions['disable-cheats'] && (sourceFiles[14] ?? 0) >= 2;
-        if (!silent) { tail(); }
+        if (!silent) { tail(ns); }
 
         ns.disableLog("go.makeMove")
 
