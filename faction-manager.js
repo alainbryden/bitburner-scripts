@@ -119,7 +119,7 @@ export async function main(ns) {
     desiredAugs = priorityAugs.concat(desiredAugs);
 
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    playerData = await getPlayerInfo(ns);
     bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`)).currentNode;
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
@@ -238,6 +238,13 @@ export async function main(ns) {
             unpurchased_count: Object.values(augmentationData).filter(a => !a.owned).length, // Number of augs are we have not yet purchased (note: depending on config, may not include all augs in the game)
         }, undefined, 2), "w");
     }
+}
+
+/** Ram-dodge getting updated player info.
+ * @param {NS} ns
+ * @returns {Promise<Player>} */
+async function getPlayerInfo(ns) {
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`);
 }
 
 /** @param {NS} ns
@@ -687,7 +694,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
  * Note: Stores this info in global properties `purchaseableAugs` and `purchaseFactionDonations` so that a final action in the main method will do the purchase. */
 async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // Refresh player data to get an accurate read of current money
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    playerData = await getPlayerInfo(ns);
     const budget = playerData.money + stockValue;
     let totalRepCost, totalAugCost, dropped, restart;
     // We will make every effort to keep "priority" augs in the purchase order, but start dropping them if we find we cannot afford them all
@@ -872,7 +879,7 @@ async function purchaseDesiredAugs(ns) {
     let totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
     let totalAugCost = getTotalCost(purchaseableAugs);
     // Refresh player data to get an accurate read of current money
-    playerData = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    playerData = await getPlayerInfo(ns);
     if (stockValue > 0)
         return log(ns, `ERROR: For your own protection, --purchase will not run while you are holding stocks (current stock value: ${formatMoney(stockValue)}). ` +
             `Liquidate your shares before running (run stockmaster.js --liquidate) or run this script with --ignore-stocks to override this.`, printToTerminal, 'error')
@@ -902,7 +909,7 @@ async function purchaseDesiredAugs(ns) {
     else
         log(ns, `ERROR: We were only able to purchase ${purchased} of our ${purchaseableAugs.length} augmentations. ` +
             `Expected cost was ${getCostString(totalAugCost, totalRepCost)}. Player money was ${formatMoney(playerData.money)} right before purchase, ` +
-            `is now ${formatMoney(await getNsDataThroughFile(ns, 'ns.getPlayer().money'))}`, printToTerminal, 'error');
+            `is now ${formatMoney((await getPlayerInfo(ns)).money)}`, printToTerminal, 'error');
 }
 
 /** @param {NS} ns **/

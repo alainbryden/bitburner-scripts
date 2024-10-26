@@ -184,7 +184,8 @@ function getDefaultCommandFileName(command, ext = '.txt') {
 export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     // If any args were skipped by passing null or undefined, set them to the default
-    if (args == null) args = []; if (verbose == null) verbose = false; if (maxRetries = null) maxRetries = 5; if (retryDelayMs = null) retryDelayMs = 50; if (silent == null) silent = false;
+    if (args == null) args = []; if (verbose == null) verbose = false;
+    if (maxRetries == null) maxRetries = 5; if (retryDelayMs == null) retryDelayMs = 50; if (silent == null) silent = false;
     if (!verbose) disableLogs(ns, ['read']);
     fName = fName || getDefaultCommandFileName(command);
     const fNameCommand = fName + '.js'
@@ -395,6 +396,10 @@ function asError(error) {
  * @param {NS} ns The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
     maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true, silent = false) {
+    // If any args were skipped by passing null or undefined, set them to the default
+    if (errorContext == null) errorContext = "Success condition not met";
+    if (maxRetries == null) maxRetries = 5; if (initialRetryDelayMs == null) initialRetryDelayMs = 50; if (backoffRate == null) backoffRate = 3;
+    if (verbose == null) verbose = false; if (tprintFatalErrors == null) tprintFatalErrors = true; if (silent == null) silent = false;
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs, attempts = 0;
     let sucessConditionMet;
@@ -643,16 +648,27 @@ async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile) {
 export async function instanceCount(ns, onHost = "home", warn = true, tailOtherInstances = true) {
     checkNsInstance(ns, '"alreadyRunning"');
     const scriptName = ns.getScriptName();
-    const others = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0]).filter(p => p.filename == ns.args[1]).map(p => p.pid)',
-        '/Temp/ps-other-instances.txt', [onHost, scriptName]);
-    if (others.length >= 2) {
+    let otherInstances = (/**@returns{ProcessInfo[]}*/() => [])();
+    try {
+        otherInstances = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0]).filter(p => p.filename == ns.args[1]).map(p => p.pid)',
+            '/Temp/ps-other-instances.txt', [onHost, scriptName]);
+    } catch (err) {
+        if (err.message?.includes("insufficient RAM") ?? false) {
+            log(ns, `ERROR: Not enough free RAM on ${onHost} to run ${scriptName}.` +
+                `\nBuy more RAM or kill some other scripts first.` +
+                `\nYou can run the 'top' command from the terminal to see what scripts are using RAM.`, true, 'error');
+            return 2;
+        }
+        else throw err;
+    }
+    if (otherInstances.length >= 2) {
         if (warn)
             log(ns, `WARNING: You cannot start multiple versions of this script (${scriptName}). Please shut down the other instance first.` +
                 (tailOtherInstances ? ' (To help with this, a tail window for the other instance will be opened)' : ''), true, 'warning');
         if (tailOtherInstances) // Tail all but the last pid, since it will belong to the current instance (which will be shut down)
-            others.slice(0, others.length - 1).forEach(pid => ns.tail(pid));
+            otherInstances.slice(0, otherInstances.length - 1).forEach(pid => ns.tail(pid));
     }
-    return others.length;
+    return otherInstances.length;
 }
 
 /** Helper function to get all stock symbols, or null if you do not have TIX api access.

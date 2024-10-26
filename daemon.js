@@ -77,7 +77,7 @@ const maxGrowthRate = 1.0035;
 // The name given to purchased servers (should match what's in host-manager.js)
 const purchasedServersName = "daemon";
 // The name of the server to try running scripts on if home RAM is <= 16GB (early BN1)
-const backupServerName = 'harakiri-sushi';
+const backupServerName = 'harakiri-sushi'; // Somewhat arbitrarily chosen. It's one of several servers with 16GB which requires no open ports to crack.
 
 // The maximum current total RAM utilization before we stop attempting to schedule work for the next less profitable server. Can be used to reserve capacity.
 const maxUtilization = 0.95;
@@ -141,8 +141,7 @@ let highUtilizationIterations = 0;
 let lastShareTime = 0; // Tracks when share was last invoked so we can respect the configured share-cooldown
 let allTargetsPrepped = false;
 
-/** Ram-dodge getting updated player info. Note that this is the only async routine called in the main loop.
- * If latency or ram instability is an issue, you may wish to try uncommenting the direct request.
+/** Ram-dodge getting updated player info.
  * @param {NS} ns
  * @returns {Promise<Player>} */
 async function getPlayerInfo(ns) {
@@ -216,10 +215,19 @@ function reservedMoney(ns) {
 // script entry point
 /** @param {NS} ns **/
 export async function main(ns) {
-    try {
-        await startup(ns);
-    } catch (err) {
-        log(ns, `ERROR: daemon.js Caught a fatal error during startup: ${getErrorInfo(err)}`, true, 'error');
+    let startupAttempts = 0;
+    while (startupAttempts++ <= 5) {
+        try {
+            await startup(ns);
+        } catch (err) {
+            if (startupAttempts == 5)
+                log(ns, `ERROR: daemon.js Keeps catching a fatal error during startup: ${getErrorInfo(err)}`, true, 'error');
+            else {
+                log(ns, `WARN: daemon.js Caught an error during startup: ${getErrorInfo(err)}` +
+                    `\nWill try again (attempt ${startupAttempts} of 5)`, false, 'warning');
+                await ns.sleep(5000);
+            }
+        }
     }
 }
 
@@ -409,10 +417,16 @@ async function startup(ns) {
     await getStaticServerData(ns, allServers); // Gather information about servers that will never change
     await buildServerList(ns, false, allServers); // create the exhaustive server list
 
+
     // If we ascended less than 10 minutes ago, start with some study and/or XP cycles to quickly restore hack XP
     const timeSinceLastAug = Date.now() - resetInfo.lastAugReset;
     const shouldKickstartHackXp = (playerHackSkill() < 500 && timeSinceLastAug < 600000 && reqRam(16)); // RamReq ensures we don't attempt this in BN1.1
     studying = shouldKickstartHackXp ? true : false; // Flag will be used to prevent focus-stealing scripts from running until we're done studying.
+
+    // Immediately crack all servers we can to maximize RAM available on the first loop
+    for (const server of getAllServers())
+        if (!server.hasRoot() && server.canCrack())
+            await doRoot(ns, server);
 
     if (shouldKickstartHackXp) {
         // Start helper scripts and run periodic scripts for the first time to e.g. buy tor and any hack tools available to us (we will continue studying briefly while this happens)
@@ -538,11 +552,6 @@ async function runPeriodicScripts(ns) {
             await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`, '/Temp/sell-hashes-for-money.js');
         }
     }
-    // For early players, provide a hint to buy more home RAM asap:
-    if (!(4 in dictSourceFiles) && !homeServer.totalRam(true) < 64)
-        log(ns, `INFO: Reminder: Daemon.js can do a lot more if you have more Home RAM. Right now, you must buy this yourself.` +
-            `\nHead to the "City", visit [alpha ent.] (or other Tech store), and purchase at least 64 GB as soon as possible!` +
-            `\nAlso be sure to purchase TOR and run "buy -a" from the terminal until you own all hack tools.`, true, 'info');
 }
 
 // Helper that gets the either invokes a function that returns a value, or returns the value as-is if it is not a function.
@@ -567,7 +576,8 @@ async function tryRunTool(ns, tool) {
     }
     const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
     const lowHomeRam = homeServer.totalRam(true) < 32; // Special-case. In early BN1.1, when home RAM is <32 GB, allow certain scripts to be run on any host
-    const runResult = lowHomeRam ? await arbitraryExecution(ns, tool, 1, args, backupServerName) :
+    const runResult = lowHomeRam ?
+        await arbitraryExecution(ns, tool, 1, args, getServerByName(backupServerName).hasRoot() ? backupServerName : daemonHost) :
         await exec(ns, tool.name, daemonHost, tool.runOptions, ...args);
     if (runResult) {
         runningOnServer = await whichServerIsRunning(ns, tool.name, false);
@@ -639,12 +649,26 @@ async function doTargetingLoop(ns) {
             let start = Date.now();
             psCache = []; // Clear the cache of the process list we update once per loop
             await buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process
+            await updateCachedServerData(ns, allHostNames); // Update server data that only needs to be refreshed once per loop
             await updatePortCrackers(ns); // Check if any new port crackers have been purchased
             await getPlayerInfo(ns); // Force an update of _cachedPlayerInfo
             // Run some auxilliary processes that ease the ram burden of this daemon and add additional functionality (like managing hacknet or buying servers)
             await runPeriodicScripts(ns);
             if (stockMode) await updateStockPositions(ns); // In stock market manipulation mode, get our current position in all stocks, as it affects targetting order
-            let targetingOrder = await getAllServersByTargetOrder(); // Sort the targets in the order we should prioritize spending RAM on them
+            // For early players, change behaviour slightly
+            const homeRam = homeServer.totalRam(true);
+            let targetingOrder = await getAllServersByTargetOrder(homeRam); // Sort the targets in the order we should prioritize spending RAM on them
+
+            if (!(4 in dictSourceFiles) && homeRam < 64) {
+                // Until the user buys the first home RAM upgrade, prioritize just one target, so that we see fast results.
+                if (homeRam == 8) // Note: getAllServersByTargetOrder should be sorting by 
+                    maxTargets = maxPreppingAtMaxTargets = 1;
+                // Periodically provide a hint to buy more home RAM asap
+                if (loops % 600 == 0)
+                    log(ns, `Reminder: Daemon.js can do a lot more if you have more Home RAM. Right now, you must buy this yourself.` +
+                        `\n  Head to the "City", visit [alpha ent.] (or other Tech store), and purchase at least 64 GB as soon as possible!` +
+                        `\n  Also be sure to purchase TOR and run "buy -a" from the terminal until you own all hack tools.`, true, 'info');
+            }
 
             if (loops % 60 == 0) { // For more expensive updates, only do these every so often
                 // If we have not yet launched all helpers (e.g. awaiting more home ram, or TIX API to be purchased) see if any are now ready to be run
@@ -802,8 +826,10 @@ async function doTargetingLoop(ns) {
                 log(ns, `Increased max targets to ${maxTargets} since utilization (${formatNumber(utilizationPercent * 100, 3)}%) has been quite low for ${lowUtilizationIterations} iterations.`);
                 lowUtilizationIterations = 0; // Reset the counter of low-utilization iterations
             } else if (highUtilizationIterations > 60) { // Decrease max-targets by 1 ram utilization is too high (prevents scheduling efficient cycles)
-                maxTargets -= 1;
-                log(ns, `Decreased max targets to ${maxTargets} since utilization has been > ${formatNumber(maxUtilization * 100, 3)}% for 60 iterations and scheduling failed.`);
+                if (maxTargets > 1) {
+                    maxTargets -= 1;
+                    log(ns, `Decreased max targets to ${maxTargets} since utilization has been > ${formatNumber(maxUtilization * 100, 3)}% for 60 iterations and scheduling failed.`);
+                }
                 highUtilizationIterations = 0; // Reset the counter of high-utilization iterations
             }
             maxTargets = Math.max(maxTargets, targeting.length - 1, 1); // Ensure that after a restart, maxTargets start off with no less than 1 fewer max targets
@@ -891,7 +917,7 @@ async function getServersDict(ns, command, serverNames) {
         `/Temp/${command}-all.txt`, serverNames);
 }
 
-let dictInitialServerInfos = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
+let dictInitialServerInfos = (/**@returns{{[serverName: string]: globalThis.Server;}}*/() => undefined)();
 let dictServerRequiredHackinglevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerNumPortsRequired = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 let dictServerMinSecurityLevels = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
@@ -901,28 +927,37 @@ let dictServerProfitInfo = (/**@returns{{[serverName: string]: {gainRate: number
 let dictServerGrowths = (/**@returns{{[serverName: string]: number;}}*/() => undefined)();
 
 /** Gathers up arrays of server data via external request to have the data written to disk.
- * @param {NS} ns */
+ * This data should only need to be gathered once per run, as it never changes
+ * @param {NS} ns
+ * @param {string[]} serverNames The names of all servers we wish to gather information about. */
 async function getStaticServerData(ns, serverNames) {
     if (verbose) log(ns, "getStaticServerData");
     dictServerRequiredHackinglevels = await getServersDict(ns, 'getServerRequiredHackingLevel', serverNames);
     dictServerNumPortsRequired = await getServersDict(ns, 'getServerNumPortsRequired', serverNames);
     dictServerGrowths = await getServersDict(ns, 'getServerGrowth', serverNames);
-    // The "GetServer" object result is now required to use the formulas API (due to type checking that the parameter is a valid "server" instance)
-    // TODO: See if in the future they add a "ns.formulas.standInServer()" function or similar, then we no longer need this.
-    // TODO: Iff this becomes permanent, might as well get other static server data from the resulting server objects
+    // The "GetServer" object result is used with the formulas API (due to type checking that the parameter is a valid "server" instance)
+    // TODO: There is now a "ns.formulas.mockServer()" function that we can switch to
     dictInitialServerInfos = await getServersDict(ns, 'getServer', serverNames);
+    // Also immediately retrieve the data which is occasionally updated
+    await updateCachedServerData(ns, serverNames)
     await refreshDynamicServerData(ns, serverNames);
 }
 
-/** Refresh data that might change over time, but for which having precice up-to-date information isn't critical.
- * @param {NS} ns **/
+/** Refresh information about servers that should be updated once per loop, but doesn't need to be up-to-the-second.
+ * @param {NS} ns
+ * @param {string[]} serverNames The names of all servers we wish to gather information about. */
+async function updateCachedServerData(ns, serverNames) {
+    dictServerMaxRam = await getServersDict(ns, 'getServerMaxRam', serverNames);
+}
+
+/** Refresh data that might change rarely over time, but for which having precice up-to-the-minute information isn't critical.
+ * @param {NS} ns
+ * @param {string[]} serverNames The names of all servers we wish to gather information about. */
 async function refreshDynamicServerData(ns, serverNames) {
     if (verbose) log(ns, "refreshDynamicServerData");
     // Min Security / Max Money can be affected by Hashnet purchases, so we should update this occasionally
     dictServerMinSecurityLevels = await getServersDict(ns, 'getServerMinSecurityLevel', serverNames);
     dictServerMaxMoney = await getServersDict(ns, 'getServerMaxMoney', serverNames);
-    // Max ram is mostly static, but can grow upon purchases, so update this only occasionally
-    dictServerMaxRam = await getServersDict(ns, 'getServerMaxRam', serverNames);
     // Get the information about the relative profitability of each server (affects targetting order)
     const pid = await exec(ns, getFilePath('analyze-hack.js'), null, null, '--all', '--silent');
     await waitForProcessToComplete_Custom(ns, getHomeProcIsAlive(ns), pid);
@@ -1573,7 +1608,7 @@ async function prepServer(ns, currentTarget) {
     let weakenThreadsScheduled = Math.min(weakenThreadsAllowable, weakenThreadsNeeded);
     if (weakenThreadsScheduled) {
         if (weakenThreadsScheduled < weakenThreadsNeeded)
-            log(ns, `At this time, we only have enough RAM to schedule ${weakenThreadsScheduled} of the ${weakenThreadsNeeded} ` +
+            log(ns, `INFO: At this time, we only have enough RAM to schedule ${weakenThreadsScheduled} of the ${weakenThreadsNeeded} ` +
                 `prep weaken threads needed to lower the target from current security (${formatNumber(currentTarget.getSecurity())}) ` +
                 `to min security (${formatNumber(currentTarget.getMinSecurity())}) (${currentTarget.name})`);
         prepSucceeding = await arbitraryExecution(ns, weakenTool, weakenThreadsScheduled,
@@ -1980,8 +2015,9 @@ function sortServerTieBreaker(a, b) {
         a.name.localeCompare(b.name); // Other servers, basic sort by name
 }
 
-/** @returns {Promise<Server[]>} Sorted in the order we should prioritize spending ram on targeting them (for hacking) */
-async function getAllServersByTargetOrder() {
+/** @param {number} homeRam Current ram on the home server (if low, priorities change slightly)
+ * @returns {Promise<Server[]>} Sorted in the order we should prioritize spending ram on targeting them (for hacking) */
+async function getAllServersByTargetOrder(homeRam) {
     _serverListByTargetOrder ??= getAllServers().slice(); // Take a fresh copy if not already cached
     // The check for whether a server is being targetted is async, so we must collect this info upfront before using in a sort function
     const dictIsTargeting = {};
@@ -2009,6 +2045,11 @@ async function getAllServersByTargetOrder() {
         if (aIsPrepped != bIsPrepped) return aIsPrepped ? -1 : 1;
         if (!a.canHack()) return a.requiredHackLevel - b.requiredHackLevel; // Not-yet-hackable servers are sorted by lowest hack requirement (earliest unlock)
         //if (!a.isPrepped()) return a.timeToWeaken() - b.timeToWeaken(); // Unprepped servers are sorted by lowest time to weaken
+        // To speed things along for new players starting BN 1.1, select targetes by lowest security
+        if (homeRam == 8) {
+            let lowestSec = a.getSecurity() - b.getSecurity();
+            if (lowestSec != 0) return lowestSec;
+        }
         // For ready-to-hack servers, the sort order is based on money, RAM cost, and cycle time
         let bestGains = b.getMoneyPerRamSecond() - a.getMoneyPerRamSecond(); // Groups of prepped and un-prepped servers are sorted by most money/ram.second
         if (bestGains != 0) return bestGains;

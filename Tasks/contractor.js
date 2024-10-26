@@ -1,4 +1,4 @@
-import { instanceCount, getFilePath, getNsDataThroughFile, disableLogs } from '../helpers.js'
+import { instanceCount, getFilePath, getNsDataThroughFile, disableLogs, log } from '../helpers.js'
 const scriptSolver = getFilePath("/Tasks/contractor.js.solver.js");
 
 /** @param {NS} ns **/
