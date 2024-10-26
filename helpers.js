@@ -643,16 +643,27 @@ async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile) {
 export async function instanceCount(ns, onHost = "home", warn = true, tailOtherInstances = true) {
     checkNsInstance(ns, '"alreadyRunning"');
     const scriptName = ns.getScriptName();
-    const others = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0]).filter(p => p.filename == ns.args[1]).map(p => p.pid)',
-        '/Temp/ps-other-instances.txt', [onHost, scriptName]);
-    if (others.length >= 2) {
+    let otherInstances = (/**@returns{ProcessInfo[]}*/() => [])();
+    try {
+        otherInstances = await getNsDataThroughFile(ns, 'ns.ps(ns.args[0]).filter(p => p.filename == ns.args[1]).map(p => p.pid)',
+            '/Temp/ps-other-instances.txt', [onHost, scriptName]);
+    } catch (err) {
+        if (err.message?.includes("insufficient RAM") ?? false) {
+            log(ns, `ERROR: Not enough free RAM on ${onHost} to run ${scriptName}.` +
+                `\nBuy more RAM or kill some other scripts first.` +
+                `\nYou can run the 'top' command from the terminal to see what scripts are using RAM.`, true, 'error');
+            return 2;
+        }
+        else throw err;
+    }
+    if (otherInstances.length >= 2) {
         if (warn)
             log(ns, `WARNING: You cannot start multiple versions of this script (${scriptName}). Please shut down the other instance first.` +
                 (tailOtherInstances ? ' (To help with this, a tail window for the other instance will be opened)' : ''), true, 'warning');
         if (tailOtherInstances) // Tail all but the last pid, since it will belong to the current instance (which will be shut down)
-            others.slice(0, others.length - 1).forEach(pid => ns.tail(pid));
+            otherInstances.slice(0, others.length - 1).forEach(pid => ns.tail(pid));
     }
-    return others.length;
+    return otherInstances.length;
 }
 
 /** Helper function to get all stock symbols, or null if you do not have TIX api access.

@@ -83,6 +83,7 @@ let ranCasino = false; // Flag to indicate whether we've stolen 10b from the cas
 let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
 let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false, prioritizeHackForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
 let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
+let homeRam = 0; // Amount of RAM on the home server, last we checked
 let killScripts = []; // A list of scripts flagged to be restarted due to changes in priority
 let dictOwnedSourceFiles = [], unlockedSFs = [], nextBn = 0; // Info for the current bitnode
 let installedAugmentations = [], playerInstalledAugCount = 0, stanekLaunched = false; // Info for the current ascend
@@ -109,17 +110,18 @@ export async function main(ns) {
         log(ns, `WARNING: You have previously enabled the flag "--${flag}". Because of the way this script saves its run settings, the ` +
             `only way to now turn this back off will be to manually edit or delete the file ${ns.getScriptName()}.config.txt`, true);
 
-    let startUpRan = false;
-    while (true) {
+    let startUpRan = false, keepRunning = true;
+    while (keepRunning) {
         try {
             // Start-up actions, wrapped in error handling in case of temporary failures
             if (!startUpRan) startUpRan = await startUp(ns);
             // Main loop: Monitor progress in the current BN and automatically reset when we can afford TRP, or N augs.
-            await mainLoop(ns);
+            keepRunning = await mainLoop(ns);
         }
         catch (err) {
             log(ns, `WARNING: autopilot.js Caught (and suppressed) an unexpected error:` +
                 `\n${getErrorInfo(err)}`, false, 'warning');
+            keepRunning = shouldWeKeepRunning(ns);
         }
         await ns.sleep(options['interval']);
     }
@@ -134,7 +136,7 @@ async function startUp(ns) {
         alreadyJoinedDaedalus = autoJoinDaedalusUnavailable = reservingMoneyForDaedalus = prioritizeHackForDaedalus =
         bnCompletionSuppressed = stanekLaunched = false;
     playerInstalledAugCount = wdHack = null;
-    installCountdown = daemonStartTime = lastScriptsCheck = reservedPurchase = 0;
+    installCountdown = daemonStartTime = lastScriptsCheck = homeRam = reservedPurchase = 0;
     lastStatusLog = "";
     installedAugmentations = killScripts = [];
 
@@ -143,6 +145,7 @@ async function startUp(ns) {
     bitNodeMults = await tryGetBitNodeMultipliers(ns);
     dictOwnedSourceFiles = await getActiveSourceFiles(ns, false);
     unlockedSFs = await getActiveSourceFiles(ns, true);
+    homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
     try {
         installedAugmentations = !(4 in unlockedSFs) ? [] :
             await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
@@ -193,13 +196,12 @@ async function persistConfigChanges(ns) {
  * @param {NS} ns */
 async function initializeNewBitnode(ns) {
     // Nothing to do here (yet)
-    //const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
 }
 
 /** Logic run periodically throughout the BN
  * @param {NS} ns */
 async function mainLoop(ns) {
-    const player = await getNsDataThroughFile(ns, 'ns.getPlayer()');
+    const player = await getPlayerInfo(ns);
     let stocksValue = 0;
     try { stocksValue = await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
     manageReservedMoney(ns, player, stocksValue);
@@ -208,6 +210,14 @@ async function mainLoop(ns) {
     await checkOnRunningScripts(ns, player);
     await maybeDoCasino(ns, player);
     await maybeInstallAugmentations(ns, player);
+    return shouldWeKeepRunning(ns); // Return false to shut down autopilot.js if we installed augs, or don't have enough home RAM
+}
+
+/** Ram-dodge getting player info.
+ * @param {NS} ns
+ * @returns {Promise<Player>} */
+async function getPlayerInfo(ns) {
+    return await getNsDataThroughFile(ns, `ns.getPlayer()`);
 }
 
 /** Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite
@@ -412,8 +422,8 @@ async function checkOnRunningScripts(ns, player) {
     while (killScripts.length > 0)
         await killScript(ns, killScripts.pop(), runningScripts);
 
-    // Hold back on launching certain scripts if we are low on home RAM
-    const homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
+    // See if home ram has improved. We hold back on launching certain scripts if we are low on home RAM
+    homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
 
     // Launch stock-master in a way that emphasizes it as our main source of income early-on
     if (!findScript('stockmaster.js') && !reservingMoneyForDaedalus && homeRam >= 32)
@@ -501,6 +511,9 @@ async function checkOnRunningScripts(ns, player) {
         // If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
         if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
             daemonArgs.push('--reserved-ram', 32 * ((unlockedSFs[4] ?? 0) == 2 ? 4 : 16));
+        // Open the tail window if it's the start of a new BN. Especially useful to new players.
+        if(getTimeInBit)
+        daemonArgs.push('--tail');
     }
 
     // Once stanek's gift is accepted, launch it once per reset before we launch daemon (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
@@ -624,10 +637,9 @@ function getFactionManagerOutput(ns) {
  * @param {NS} ns
  * @param {Player} player */
 async function maybeInstallAugmentations(ns, player) {
-    if (!(4 in unlockedSFs)) {
-        setStatus(ns, `No singularity access, so you're on your own. You should manually work for factions and install augmentations!`);
-        return false; // Cannot automate augmentations or installs without singularity
-    }
+    if (!(4 in unlockedSFs))  // Cannot automate augmentations or installs without singularity
+        return setStatus(ns, `No singularity access, so you're on your own. You should manually work for factions and install augmentations!`);
+
     // If we previously attempted to reserve money for an augmentation purchase order, do a fresh facman run to ensure it's still available
     if (reservedPurchase && installCountdown <= Date.now()) {
         log(ns, "INFO: Manually running faction-manager.js to ensure previously reserved purchase is still obtainable.");
@@ -819,6 +831,28 @@ function manageReservedMoney(ns, player, stocksValue) {
     if(moneyReserved) ns.write("reserve.txt", 0, "w"); // Remove the casino reserve we would have placed
     return moneyReserved = false;
     */
+}
+
+/** Logic to determine whether we should keep running, or shut down autopilot.js for some reason.
+ * @param {NS} ns
+ * @returns {boolean} true if we should keep running. False if we should shut down this script. */
+function shouldWeKeepRunning(ns) {
+    if (4 in unlockedSFs)
+        return true; // If we have SF4 - run always
+    if (homeRam == 8) {
+        log(ns, `WARN: (not an actual warning, just trying to make this message stand out.)` +
+            `\n` + '-'.repeat(100) +
+            `\n\n  Welcome to bitburner and thanks for using my scripts!` +
+            `\n\n  Currently, your available RAM on home (8 GB) is too small to keep autopilot.js running.` +
+            `\n  The priority should just be to run "daemon.js" for a while until you have enough money to` +
+            `\n  purchase some home RAM (which you must do manually at a store like [alpha ent.] in the city),` +
+            `\n\n  Once you have more home ram, feel free to 'run ${ns.getScriptName()}' again!` +
+            `\n\n` + '-'.repeat(100), true);
+        ns.tail(getFilePath('daemon.js'));
+        return false; // Daemon.js needs more room to breath
+    }
+    // Otherwise, keep running
+    return true;
 }
 
 /** Helper to launch a script and log whether if it succeeded or failed
