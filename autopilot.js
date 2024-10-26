@@ -269,7 +269,7 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
         //    otherwise, assume our hack gain rate is too low in this reset to make it all the way to 2500.
         if (totalWorth >= moneyReq && player.skills.hacking >= (2500 * 0.90))
             prioritizeHackForDaedalus = true;
-        log(ns, `total worth: ${formatMoney(totalWorth)} moneyReq: ${formatMoney(moneyReq)} prioritizeHackForDaedalus: ${prioritizeHackForDaedalus}`)
+        //log(ns, `total worth: ${formatMoney(totalWorth)} moneyReq: ${formatMoney(moneyReq)} prioritizeHackForDaedalus: ${prioritizeHackForDaedalus}`)
         return reservingMoneyForDaedalus = false; // Don't reserve money until hack level suffices
     }
     // If we have sufficient augs and hacking, the only requirement left is the money (100b)
