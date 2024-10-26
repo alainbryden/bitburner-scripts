@@ -184,7 +184,8 @@ function getDefaultCommandFileName(command, ext = '.txt') {
 export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = null, args = [], verbose = false, maxRetries = 5, retryDelayMs = 50, silent = false) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     // If any args were skipped by passing null or undefined, set them to the default
-    if (args == null) args = []; if (verbose == null) verbose = false; if (maxRetries = null) maxRetries = 5; if (retryDelayMs = null) retryDelayMs = 50; if (silent == null) silent = false;
+    if (args == null) args = []; if (verbose == null) verbose = false;
+    if (maxRetries == null) maxRetries = 5; if (retryDelayMs == null) retryDelayMs = 50; if (silent == null) silent = false;
     if (!verbose) disableLogs(ns, ['read']);
     fName = fName || getDefaultCommandFileName(command);
     const fNameCommand = fName + '.js'
@@ -395,6 +396,10 @@ function asError(error) {
  * @param {NS} ns The nestcript instance passed to your script's main entry point */
 export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, errorContext = "Success condition not met",
     maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true, silent = false) {
+    // If any args were skipped by passing null or undefined, set them to the default
+    if (errorContext == null) errorContext = "Success condition not met";
+    if (maxRetries == null) maxRetries = 5; if (initialRetryDelayMs == null) initialRetryDelayMs = 50; if (backoffRate == null) backoffRate = 3;
+    if (verbose == null) verbose = false; if (tprintFatalErrors == null) tprintFatalErrors = true; if (silent == null) silent = false;
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs, attempts = 0;
     let sucessConditionMet;
