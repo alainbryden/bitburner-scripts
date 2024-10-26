@@ -481,25 +481,30 @@ async function checkOnRunningScripts(ns, player) {
             // Log a special notice if we're going to be relaunching daemon.js for this reason
             if (!existingDaemon || !(existingDaemon.args.includes("--looping-mode")))
                 daemonRelaunchMessage = `Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`;
-        }
-        // Periodically try to push higher hack levels by running daemon.js in "xp-focus" mode, where it prioritizes earning hack exp rather than money
-        // Once we decide to put daemon.js in --looping mode though, we should no longer do this, since TODO: currently it does not kill it's loops on shutdown, so they'll be stuck in --xp-only mode
-        else if (prioritizeHackForDaedalus || bitNodeMults.ScriptHackMoney == 0) { // In BNs that give no money for hacking, always start daemon.js in --xp-only mode
-            daemonArgs.push("--xp-only", "--silent-misfires", "--no-share");
-            if (!existingDaemon?.args.includes("--xp-only"))
-                daemonRelaunchMessage = prioritizeHackForDaedalus ?
-                    `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
-                    `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.`;
-        } else { // Otherwise, respect the configured interval / duration
-            const xpInterval = Number(options['xp-mode-interval-minutes']);
-            const xpDuration = Number(options['xp-mode-duration-minutes']);
-            const minutesInAug = getTimeInAug() / 60.0 / 1000.0;
-            if (xpInterval > 0 && xpDuration > 0 && (minutesInAug % (xpInterval + xpDuration)) <= xpDuration) {
-                daemonArgs.push("--xp-only", "--silent-misfires", "--no-share")
+        } else if (homeRam < 32) { // If we're in early BN 1.1 (i.e. with < 32GB home RAM), avoid squandering RAM
+            daemonArgs.push("--no-share", "--initial-max-targets", 1);
+        } else { // XP-ONLY MODE: We can shift daemon.js to this when we want to prioritize earning hack exp rather than money
+            // Only do this if we aren't in --looping mode because TODO: currently it does not kill it's loops on shutdown, so they'd be stuck in hack exp mode
+            // In BNs that give no money for hacking, always start daemon.js in this mode.
+            let useXpOnlyMode = prioritizeHackForDaedalus || bitNodeMults.ScriptHackMoney == 0;
+            if (!useXpOnlyMode) { // Otherwise, respect the configured interval / duration
+                const xpInterval = Number(options['xp-mode-interval-minutes']);
+                const xpDuration = Number(options['xp-mode-duration-minutes']);
+                const minutesInAug = getTimeInAug() / 60.0 / 1000.0;
+                if (xpInterval > 0 && xpDuration > 0 && (minutesInAug % (xpInterval + xpDuration)) <= xpDuration)
+                    useXpOnlyMode = true; // We're in the time window where we should focus hack exp
+                // If daemon.js was previously running in hack exp mode, prepare a message indicating that we 're switching back
+                else if (existingDaemon?.args.includes("--xp-only"))
+                    daemonRelaunchMessage = `Time is up for "xp-mode", Relaunching daemon.js normally to focus on earning money for ${xpInterval} minutes (--xp-mode-interval-minutes)`;
+            }
+            if (useXpOnlyMode) {
+                daemonArgs.push("--xp-only", "--silent-misfires", "--no-share");
+                // If daemon.js isn't already running in hack exp mode, prepare a message to communicate the change
                 if (!existingDaemon?.args.includes("--xp-only"))
-                    daemonRelaunchMessage = `Relaunching daemon.js to focus on earning Hack Experience for ${xpDuration} minutes (--xp-mode-duration-minutes)`;
-            } else if (existingDaemon?.args.includes("--xp-only")) {
-                daemonRelaunchMessage = `Time is up for "xp-mode", Relaunching daemon.js normally to focus on earning money for ${xpInterval} minutes (--xp-mode-interval-minutes)`;
+                    daemonRelaunchMessage = prioritizeHackForDaedalus ?
+                        `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
+                        bitNodeMults.ScriptHackMoney == 0 ? `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.` :
+                            `Relaunching daemon.js to focus on earning Hack Experience for ${xpDuration} minutes (--xp-mode-duration-minutes)`;
             }
         }
         // Prevent daemon from starting "work-for-faction.js" since we now manage that script
@@ -535,7 +540,7 @@ async function checkOnRunningScripts(ns, player) {
         let daemonPid = launchScriptHelper(ns, 'daemon.js', daemonArgs);
         daemonStartTime = Date.now();
         // Open the tail window if it's the start of a new BN. Especially useful to new players.
-        if (getTimeInBitnode() < 1000 * 60 * 5 || homeRam == 8) // First 5 minutes, or BN1.1
+        if (getTimeInBitnode() < 1000 * 60 * 5 || homeRam == 8) // First 5 minutes, or BN1.1 where we have 8GB ram
             ns.tail(daemonPid);
     }
 
