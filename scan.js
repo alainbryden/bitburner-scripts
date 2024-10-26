@@ -19,15 +19,16 @@ export function main(ns) {
     const factionServers = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n", "fulcrumassets"];
     const css = `    <style id="scanCSS">
         .serverscan {white-space:pre; color:#ccc; font:14px consolas,monospace; line-height: 16px; }
-        .serverscan .server {color:#080;cursor:pointer;text-decoration:underline}
-        .serverscan .faction {color:#088}
-        .serverscan .rooted {color:#6f3}
-        .serverscan .rooted.faction {color:#0ff}
-        .serverscan .rooted::before {color:#6f3}
+        .serverscan .server {color:#080; cursor:pointer; text-decoration:underline;}
+        .serverscan .faction {color:#088;}
+        .serverscan .rooted {color:#6f3;}
+        .serverscan .rooted.faction {color:#0ff;}
+        .serverscan .rooted::before {color:#6f3;}
         .serverscan .hack {display:inline-block;}
         .serverscan .red {color:red;}
         .serverscan .green {color:green;}
         .serverscan .backdoor {color:#6f3;}
+        .serverscan .backdoor.faction {color:#0ff;}
         .serverscan .backdoor > a {cursor:pointer; text-decoration:underline;}
         .serverscan .cct {color:#0ff;}
         .serverscan .serverStats {color:#8AA;}
@@ -73,7 +74,7 @@ export function main(ns) {
             + `<a class="server${factionServers.includes(serverName) ? " faction" : ""}`
             + `${rooted ? " rooted" : ""}">${serverName}</a>`
             + (server.purchasedByPlayer ? '' : ` <span class="hack ${(canHack ? 'green' : 'red')}">(${requiredHackLevel})</span>`)
-            + `${(shouldBackdoor ? ` <span class="backdoor${factionServers.includes(serverName) ? " faction" : ""}">[<a>backdoor</a>]</span>` : '')}`
+            + `${(shouldBackdoor ? ` <span class="${factionServers.includes(serverName) ? "faction " : ""}backdoor">[<a>backdoor</a>]</span>` : '')}`
             + ` ${contracts.map(c => `<span class="cct" title="${c}">@</span>`).join('')}`
             + (showStats ? ` <span class="serverStats">... ` +
                 `Money: ` + ((server.moneyMax ?? 0 > 0 ? `${formatMoney(server.moneyAvailable ?? 0, 4, 1).padStart(7)} / ` : '') +
