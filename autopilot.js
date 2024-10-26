@@ -504,7 +504,7 @@ async function checkOnRunningScripts(ns, player) {
                     daemonRelaunchMessage = prioritizeHackForDaedalus ?
                         `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
                         bitNodeMults.ScriptHackMoney == 0 ? `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.` :
-                            `Relaunching daemon.js to focus on earning Hack Experience for ${xpDuration} minutes (--xp-mode-duration-minutes)`;
+                            `Relaunching daemon.js to focus on earning Hack Experience for ${options['xp-mode-duration-minutes']} minutes (--xp-mode-duration-minutes)`;
             }
         }
         // Prevent daemon from starting "work-for-faction.js" since we now manage that script
