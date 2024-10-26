@@ -570,7 +570,8 @@ async function tryRunTool(ns, tool) {
     }
     const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
     const lowHomeRam = homeServer.totalRam(true) < 32; // Special-case. In early BN1.1, when home RAM is <32 GB, allow certain scripts to be run on any host
-    const runResult = lowHomeRam ? await arbitraryExecution(ns, tool, 1, args, backupServerName) :
+    const runResult = lowHomeRam ?
+        await arbitraryExecution(ns, tool, 1, args, allHostNames.includes(backupServerName) ? backupServerName : daemonHost) :
         await exec(ns, tool.name, daemonHost, tool.runOptions, ...args);
     if (runResult) {
         runningOnServer = await whichServerIsRunning(ns, tool.name, false);

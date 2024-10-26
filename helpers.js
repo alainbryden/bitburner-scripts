@@ -661,7 +661,7 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
             log(ns, `WARNING: You cannot start multiple versions of this script (${scriptName}). Please shut down the other instance first.` +
                 (tailOtherInstances ? ' (To help with this, a tail window for the other instance will be opened)' : ''), true, 'warning');
         if (tailOtherInstances) // Tail all but the last pid, since it will belong to the current instance (which will be shut down)
-            otherInstances.slice(0, others.length - 1).forEach(pid => ns.tail(pid));
+            otherInstances.slice(0, otherInstances.length - 1).forEach(pid => ns.tail(pid));
     }
     return otherInstances.length;
 }

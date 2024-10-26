@@ -511,9 +511,6 @@ async function checkOnRunningScripts(ns, player) {
         // If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
         if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
             daemonArgs.push('--reserved-ram', 32 * ((unlockedSFs[4] ?? 0) == 2 ? 4 : 16));
-        // Open the tail window if it's the start of a new BN. Especially useful to new players.
-        if(getTimeInBit)
-        daemonArgs.push('--tail');
     }
 
     // Once stanek's gift is accepted, launch it once per reset before we launch daemon (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
@@ -535,8 +532,11 @@ async function checkOnRunningScripts(ns, player) {
             daemonRelaunchMessage ??= `Relaunching daemon.js with new arguments since the current instance doesn't include all the args we want.`;
             log(ns, daemonRelaunchMessage);
         }
-        launchScriptHelper(ns, 'daemon.js', daemonArgs);
+        let daemonPid = launchScriptHelper(ns, 'daemon.js', daemonArgs);
         daemonStartTime = Date.now();
+        // Open the tail window if it's the start of a new BN. Especially useful to new players.
+        if (getTimeInBitnode() < 1000 * 60 * 5 || homeRam == 8) // First 5 minutes, or BN1.1
+            ns.tail(daemonPid);
     }
 
     // Default work for faction args we think are ideal for speed-running BNs
@@ -839,7 +839,8 @@ function manageReservedMoney(ns, player, stocksValue) {
 function shouldWeKeepRunning(ns) {
     if (4 in unlockedSFs)
         return true; // If we have SF4 - run always
-    if (homeRam == 8) {
+    // If we've gotten daemon.js launched, but only have 8GB ram, we must shut down for now
+    if (homeRam == 8 && daemonStartTime > 0) {
         log(ns, `WARN: (not an actual warning, just trying to make this message stand out.)` +
             `\n` + '-'.repeat(100) +
             `\n\n  Welcome to bitburner and thanks for using my scripts!` +
@@ -848,7 +849,6 @@ function shouldWeKeepRunning(ns) {
             `\n  purchase some home RAM (which you must do manually at a store like [alpha ent.] in the city),` +
             `\n\n  Once you have more home ram, feel free to 'run ${ns.getScriptName()}' again!` +
             `\n\n` + '-'.repeat(100), true);
-        ns.tail(getFilePath('daemon.js'));
         return false; // Daemon.js needs more room to breath
     }
     // Otherwise, keep running
