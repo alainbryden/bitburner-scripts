@@ -811,5 +811,5 @@ export function unEscapeArrayArgs(args) {
 export function tail(ns) {
     ns.tail();
     ns.resizeTail(ns.ui.windowSize()[0] * 0.75, ns.ui.windowSize()[1] * 0.25, ns.pid);
-    ns.moveTail(250, (ns.pid % 10) * 25, ns.pid);
+    ns.moveTail(250, (ns.pid % 10) * 35, ns.pid);
 }
