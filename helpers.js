@@ -666,7 +666,7 @@ export async function instanceCount(ns, onHost = "home", warn = true, tailOtherI
             log(ns, `WARNING: You cannot start multiple versions of this script (${scriptName}). Please shut down the other instance first.` +
                 (tailOtherInstances ? ' (To help with this, a tail window for the other instance will be opened)' : ''), true, 'warning');
         if (tailOtherInstances) // Tail all but the last pid, since it will belong to the current instance (which will be shut down)
-            otherInstances.slice(0, otherInstances.length - 1).forEach(pid => ns.tail(pid));
+            otherInstances.slice(0, otherInstances.length - 1).forEach(pid => tail(ns, pid));
     }
     return otherInstances.length;
 }
@@ -807,9 +807,16 @@ export function unEscapeArrayArgs(args) {
  * Custom tail function which also applies default resizes and tail window placement.
  * This algorithm is not perfect but for the most part should not generate overlaps of the window's title bar.
  * @param {NS} ns The nestcript instance passed to your script's main entry point
+ * @param {number|undefined} processId The id of the process to tail, or null to use the current process id
  */
-export function tail(ns) {
-    ns.tail();
-    ns.resizeTail(ns.ui.windowSize()[0] * 0.75, ns.ui.windowSize()[1] * 0.25, ns.pid);
-    ns.moveTail(250, (ns.pid % 13) * 35, ns.pid);
+export function tail(ns, processId = undefined) {
+    processId ??= ns.pid
+    ns.tail(processId);
+    // By default, make all tail windows take up 75% of the width, 25% of the height available
+    const [width, height] = ns.ui.windowSize();
+    ns.resizeTail(width * 0.75, height * 0.25, processId);
+    // Cascade windows: After each tail, shift the window slightly down and over so that they don't overlap
+    let offsetPct = ((((tailCounter++ % 30.0) / 30.0) + tailCounter) % 6.0) / 6.0;
+    ns.moveTail(offsetPct * (width * 0.25 - 300) + 250, offsetPct * (height * 0.75 - 100) + 50, processId);
 }
+let tailCounter = -1;

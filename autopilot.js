@@ -541,7 +541,7 @@ async function checkOnRunningScripts(ns, player) {
         daemonStartTime = Date.now();
         // Open the tail window if it's the start of a new BN. Especially useful to new players.
         if (getTimeInBitnode() < 1000 * 60 * 5 || homeRam == 8) // First 5 minutes, or BN1.1 where we have 8GB ram
-            ns.tail(daemonPid);
+            tail(ns, daemonPid);
     }
 
     // Default work for faction args we think are ideal for speed-running BNs

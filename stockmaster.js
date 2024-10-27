@@ -436,7 +436,7 @@ let launchSummaryTail = async ns => {
     if (await getNsDataThroughFile(ns, `ns.scriptRunning('${summaryTailScript}', ns.getHostname())`, '/Temp/stockmarket-summary-is-running.txt'))
         return;
     //await getNsDataThroughFile(ns, `ns.scriptKill('${summaryTailScript}', ns.getHostname())`, summaryTailScript.replace('.js', '-kill.js')); // Only needed if we're changing the script below
-    await runCommand(ns, `ns.disableLog('sleep'); ns.tail(); let lastRead = '';
+    await runCommand(ns, `ns.disableLog('sleep'); tail(ns); let lastRead = '';
         while (true) {
             let read = ns.read('${summaryFile}');
             if (lastRead != read) ns.print(lastRead = read);

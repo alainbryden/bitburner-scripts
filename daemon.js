@@ -359,7 +359,7 @@ async function startup(ns) {
 
     // PERIODIC SCRIPTS
     // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-    let shouldUpgradeHacknet = async () => ((await whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)) === null) && reservedMoney(ns) < getPlayerMoney(ns);
+    let shouldUpgradeHacknet = () => (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)[0] === null) && reservedMoney(ns) < getPlayerMoney(ns);
     // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
     let shouldImproveHacking = () => bitNodeMults.ScriptHackMoneyGain != 0 && !isInBn8 || getPlayerMoney(ns) > 1e12;
     // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
@@ -508,12 +508,14 @@ async function kickstartHackXp(ns) {
 
 /** Check running status of scripts on servers
  * @param {NS} ns
- * @returns {Promise<string>} */
-async function whichServerIsRunning(ns, scriptName, canUseCache = true) {
-    for (const server of getAllServers())
-        if (processList(ns, server.name, canUseCache).some(process => process.filename === scriptName))
-            return server.name;
-    return null;
+ * @returns {[string, pid]} */
+function whichServerIsRunning(ns, scriptName, canUseCache = true) {
+    for (const server of getAllServers()) {
+        const matches = processList(ns, server.name, canUseCache).filter(process => process.filename === scriptName);
+        if (matches.length > 1)
+            return [server.name, matches[0].pid];
+    }
+    return [null, null];
 }
 
 /** Helper to kick off external scripts
@@ -569,9 +571,9 @@ async function tryRunTool(ns, tool) {
         log(ns, `ERROR: Tool ${tool.name} was not found on ${daemonHost}`, true, 'error');
         return false;
     }
-    let runningOnServer = await whichServerIsRunning(ns, tool.name);
+    let [runningOnServer, runningPid] = whichServerIsRunning(ns, tool.name);
     if (runningOnServer != null) {
-        if (verbose) log(ns, `INFO: Tool ${tool.name} is already running on server ${runningOnServer}.`);
+        if (verbose) log(ns, `INFO: Tool ${tool.name} is already running on server ${runningOnServer} as pid ${runningPid}.`);
         return true;
     }
     const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
@@ -580,13 +582,13 @@ async function tryRunTool(ns, tool) {
         await arbitraryExecution(ns, tool, 1, args, getServerByName(backupServerName).hasRoot() ? backupServerName : daemonHost) :
         await exec(ns, tool.name, daemonHost, tool.runOptions, ...args);
     if (runResult) {
-        runningOnServer = await whichServerIsRunning(ns, tool.name, false);
+        [runningOnServer, runningPid] = whichServerIsRunning(ns, tool.name, false);
         if (verbose)
             log(ns, `Ran tool: ${tool.name} ` + (args.length > 0 ? `with args ${JSON.stringify(args)} ` : '') +
                 (runningOnServer ? `on server ${runningOnServer}.` : 'but it shut down right away.'));
         if (tool.tail === true && runningOnServer) {
             log(ns, `Tailing Tool: ${tool.name} on server ${runningOnServer}` + (args.length > 0 ? ` with args ${JSON.stringify(args)}` : ''));
-            ns.tail(tool.name, runningOnServer, ...args);
+            tail(ns, runningPid);
             //tool.tail = false; // Avoid popping open additional tail windows in the future
         }
         return true;
