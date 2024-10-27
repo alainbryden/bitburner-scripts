@@ -85,7 +85,7 @@ export async function main(ns) {
         await liquidate(ns); // Sell all stocks
         return;
     } // Otherwise, prevent multiple instances of this script from being started, even with different args.
-    if (await instanceCount(ns) > 1) return;
+    if ((await instanceCount(ns)) > 1) return;
 
     ns.disableLog("ALL");
     // Extract various options from the args (globals, purchasing decision factors, pre-4s factors)

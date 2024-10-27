@@ -88,7 +88,7 @@ export async function main(ns) {
     /** @param {NS} ns */
     async function start() {
         const runOptions = getConfiguration(ns, argsSchema);
-        if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
+        if (!runOptions || (await instanceCount(ns)) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
 
         logtime = runOptions.logtime;
         runOnce = runOptions.runOnce;
