@@ -27,6 +27,7 @@ const argsSchema = [ // The set of all command line arguments
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
     ['xp-mode-interval-minutes', 55], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
     ['xp-mode-duration-minutes', 5], // The number of minutes to keep daemon.js in --xp-only mode before switching back to normal money-earning mode.
+    ['no-tail-windows', false], // Set to true to prevent the default behaviour of opening a tail window for certain launched scripts. (Doesn't affect scripts that open their own tail windows)
 ];
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -513,6 +514,8 @@ async function checkOnRunningScripts(ns, player) {
         if (resetInfo.currentNode == 8) daemonArgs.push("--stock-manipulation-focus");
         // Don't run the script to join and manage bladeburner if it is explicitly disabled
         if (options['disable-bladeburner']) daemonArgs.push('--disable-script', getFilePath('bladeburner.js'));
+        // Relay the option to suppress tail windows
+        if (options['no-tail-windows']) daemonArgs.push('--no-tail-windows');
         // If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
         if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
             daemonArgs.push('--reserved-ram', 32 * ((unlockedSFs[4] ?? 0) == 2 ? 4 : 16));
@@ -863,7 +866,8 @@ function shouldWeKeepRunning(ns) {
 /** Helper to launch a script and log whether if it succeeded or failed
  * @param {NS} ns */
 function launchScriptHelper(ns, baseScriptName, args = [], convertFileName = true) {
-    tail(ns); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
+    if (!options['no-tail-windows'])
+        tail(ns); // If we're going to be launching scripts, show our tail window so that we can easily be killed if the user wants to interrupt.
     let pid, err;
     try { pid = ns.run(convertFileName ? getFilePath(baseScriptName) : baseScriptName, 1, ...args); }
     catch (e) { err = e; }
