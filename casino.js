@@ -150,6 +150,9 @@ export async function main(ns) {
                 if (!travelled) {
                     await click(ns, await findRequiredElement(ns, "//div[@role='button' and ./div/p/text()='Travel']"));
                     await click(ns, await findRequiredElement(ns, "//span[contains(@class,'travel') and ./text()='A']"));
+                    // If this didn't put us in Aevum, there's likely a travel confirmation dialog we need to click through
+                    if (!ns.getPlayer().city != "Aevum")
+                        await click(ns, await findRequiredElement(ns, "//button[p/text()='Travel']"));
                 }
                 if (ns.getPlayer().city == "Aevum")
                     log(ns, `SUCCESS: We're now in Aevum!`)
