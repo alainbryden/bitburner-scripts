@@ -817,7 +817,7 @@ export function tail(ns, processId = undefined) {
     ns.tail(processId);
     // Don't move or resize tail windows that were previously opened and possibly moved by the player
     if (tailedPids.has(processId))
-        return ns.tprint(`PID was previously moved ${processId}`) // TODO REMOVE WHEN DONE DEBUGGING
+        return //ns.tprint(`PID was previously moved ${processId}`);
     // By default, make all tail windows take up 75% of the width, 25% of the height available
     const [width, height] = ns.ui.windowSize();
     ns.resizeTail(width * 0.75, height * 0.25, processId);
