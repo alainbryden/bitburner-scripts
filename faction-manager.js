@@ -838,7 +838,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         nextNfLevel++;
         nfPurchased++;
     }
-    log(ns, `With ${formatMoney(budget)}, can afford to purchase ${nfPurchased} level${nfPurchased > 1 ? 's' : ''} of ${strNF}.` +
+    log(ns, `With ${formatMoney(budget)}, can afford to purchase ${nfPurchased} level${nfPurchased == 1 ? '' : 's'} of ${strNF}.` +
         ` New total cost: ${getCostString(totalAugCost, totalRepCost)}`);
     manageFilteredSubset(ns, outputRows, `(${purchaseableAugs.length - nfPurchased} Augs + ${nfPurchased} NF)`, purchaseableAugs, true, false, false);
     if (nextUpAug) outputRows.push(nextUpAug);
