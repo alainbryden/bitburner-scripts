@@ -265,9 +265,9 @@ export async function runCommand(ns, command, fileName, args = [], verbose = fal
     return await runCommand_Custom(ns, ns.run, command, fileName, args, verbose, maxRetries, retryDelayMs, silent);
 }
 
-const _cachedExports = [];
+const _cachedExports = []; // A cached list of functions exported by helpers.js. Should be fine as long as we aren't actively editing it.
 /** @param {NS} ns The nestcript instance passed to your script's main entry point
- * @returns {string[]} The set of all funciton names exported by this file. */
+ * @returns {string[]} The set of all function names exported by this file. */
 function getExports(ns) {
     if (_cachedExports.length > 0) return _cachedExports;
     const scriptHelpersRows = ns.read(getFilePath('helpers.js')).split("\n");
@@ -826,4 +826,5 @@ export function tail(ns, processId = undefined) {
     ns.moveTail(offsetPct * (width * 0.25 - 300) + 250, offsetPct * (height * 0.75 - 100) + 50, processId);
     tailedPids.add(processId);
 }
+// TODO: PIDs are reset on install, but this cache isn't, so this isn't a good long term solution
 const tailedPids = new Set([-1]); // The pids we previously configured a tail window for
