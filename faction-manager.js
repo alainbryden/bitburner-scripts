@@ -748,12 +748,12 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     if (options['neuroflux-disabled']) return;
     const augNf = augmentationData[strNF];
     // We can reverse-engineer our current NeuroFlux level by looking at its current price, and knowing its cost scales at x1.14 per level.
-    let nfLevel = Math.round(Math.log(augNf.price / (augCountMult ** (numAugsAwaitingInstall + 1)) / 750000) / Math.log(1.14));
-    nfLevelPurchased = nfLevel;
+    nfLevelPurchased = Math.round(Math.log(augNf.price / (augCountMult ** (numAugsAwaitingInstall + 1)) / 750000) / Math.log(1.14));
+    let nextNfLevel = nfLevelPurchased + 1;
     let getFrom = augNf.getFromJoined();
     // If No currently joined factions can provide us with the next level of Neuroflux, look for the best joined **or unjoined** faction to get NF from.
     if (!augNf.canAfford() && !augNf.canAffordWithDonation()) {
-        outputRows.push(`Cannot purchase any ${strNF}. The next level (${nfLevel + 1}) requires ${formatNumberShort(augNf.reputation)} reputation, but ` +
+        outputRows.push(`Cannot purchase any ${strNF}. The next level (${nextNfLevel}) requires ${formatNumberShort(augNf.reputation)} reputation, but ` +
             (!getFrom ? `it isn't being offered by any of our factions` : `the best faction (${getFrom}) has insufficient rep (${formatNumberShort(factionData[getFrom].reputation)}).`));
         // Prefer factions that support donating for reputation, otherwise grinding rep takes a long time.
         const factionSort = (a, b) => ((b.donationsUnlocked ? 1 : 0) - (a.donationsUnlocked ? 1 : 0)) || (b.favor - a.favor);
@@ -792,15 +792,16 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             outputRows.push(`WARNING: The current faction (${getFrom}) with the most rep for buying NeuroFlux levels does not support donating for reputation. ` +
                 `Until logic is built to handle this, consider joining one or more factions that support donating for reputation.`);
     }
-    // Temporarily remove free (money) augmentations from the purchase order, they can be added on after NF purchases.
-    const cheapAugs = purchaseableAugs.filter(a => a.price == 0);
-    purchaseableAugs = purchaseableAugs.filter(a => a.price > 0);
-    const augsCheaperThanNF = purchaseableAugs.filter(a => a.price < augNf.price).length;
+    // Make note of any augmentations at the end of the purchase order list that are cheaper than NF. We will insert NF above them.
+    // Note, we cannot simply count all augmentations cheaper than NF, as some may be prerequisites higher up the list.
+    let nfAppendPosition = 0;
+    for (let i = purchaseableAugs.length - 1; i >= 0 && purchaseableAugs[i].price < augNf.price; i--)
+        nfAppendPosition--;
     // Start adding as many NeuroFlux levels as we can afford
     let nfPurchased = purchaseableAugs.filter(a => a.name === augNf.name).length;
     const augNfFaction = factionData[augNf.getFromJoined()];
     if (augNfFaction && (augNf.canAfford() || augNf.canAffordWithDonation()))
-        log(ns, `Getting NF from faction ${augNfFaction.name} (rep: ${formatNumberShort(augNfFaction.reputation)}). Price of next NF (Level ${nfLevel + 1}) is ` +
+        log(ns, `Getting NF from faction ${augNfFaction.name} (rep: ${formatNumberShort(augNfFaction.reputation)}). Price of next NF (Level ${nextNfLevel}) is ` +
             `${formatMoney(augNf.price)}, requires reputation: ${formatNumberShort(augNf.reputation)} ` +
             `(have ${formatNumberShort(augNfFaction.reputation)}, donate ${formatNumberShort(getReqDonationForRep(augNf.reputation, augNfFaction))})`);
     let nextUpNf; // Will tell the user when they will unlock the next NF level
@@ -811,11 +812,11 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         const nextNfTotalRepDonation = (nextNfRep <= augNfFaction.reputation) ? 0 : getReqDonationForRep(nextNfRep, augNfFaction);
         const nextNfRepCost = Math.max(0, nextNfTotalRepDonation - currentNfFactionDonation); // Compute the incremental cost of donating for rep
         const totalCostWithNextNf = totalAugCost + nextNfCost + totalRepCost + nextNfRepCost;
-        log(ns, `Adding ${nfPurchased + 1} NF (Level ${nfLevel + 1}) Requires ${formatNumberShort(nextNfRep, 4)} reputation, ` +
+        log(ns, `Adding ${nfPurchased + 1} NF (Level ${nextNfLevel}) Requires ${formatNumberShort(nextNfRep, 4)} reputation, ` +
             `would cost another ${getCostString(nextNfCost, nextNfRepCost)} for a ` +
             `total of ${getCostString(totalAugCost + nextNfCost, totalRepCost + nextNfRepCost)}`);
         if (totalCostWithNextNf > budget || nextNfRep > augNfFaction.reputation && !augNfFaction.donationsUnlocked) {
-            nextUpNf = `Next NF (L${nfLevel + 1}) will be available at:`.padEnd(37) +
+            nextUpNf = `Next NF (L${nextNfLevel}) will be available at:`.padEnd(37) +
                 ` ${getCostString(totalAugCost + nextNfCost, totalRepCost + nextNfRepCost)}  Money (` +
                 `${(totalCostWithNextNf > budget ? '✗' : '✓')}) and ${formatNumberShort(nextNfRep)} Reputation with "${augNfFaction.name}" (` +
                 (nextNfRep > augNfFaction.reputation && !augNfFaction.donationsUnlocked ? '✗' : '✓') +
@@ -824,22 +825,21 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             break; // If we cannot afford the next NF, break
         }
         // Otherwise, add the next NF to our purchase order, and see if we can afford any more.
-        // TODO: Clone nf first, and possible buy from different factions as we move from ones with enough rep to ones that support donation
+        // TODO: #145 Buy NF from different factions as we move from ones with enough rep to ones that support donation
         const nextNfPrice = augNf.price * (nfCountMult ** nfPurchased); // Note this should be the base price, before scaling for number of augs purchased
         const nfClone = new AugmentationData(augNf.name, nextNfRep, nextNfPrice, augNf.stats, augNf.prereqs); // { ...augNf };
-        nfClone.displayName += ` Level ${++nfLevel}`
+        nfClone.displayName += ` Level ${nextNfLevel}`
         // Note, insert all NF purchases after the current NF purchase, in front of all augs cheaper than the first NF
-        purchaseableAugs.splice(purchaseableAugs.length - augsCheaperThanNF, 0, nfClone);
+        purchaseableAugs.splice(purchaseableAugs.length + nfAppendPosition, 0, nfClone);
         totalAugCost += nextNfCost;
         const newDonationForRep = Math.max(currentNfFactionDonation, nextNfTotalRepDonation);
         if (newDonationForRep > 0) purchaseFactionDonations[augNfFaction.name] = newDonationForRep;
         totalRepCost = Object.values(purchaseFactionDonations).reduce((t, r) => t + r, 0);
+        nextNfLevel++;
         nfPurchased++;
     }
     log(ns, `With ${formatMoney(budget)}, can afford to purchase ${nfPurchased} level${nfPurchased > 1 ? 's' : ''} of ${strNF}.` +
         ` New total cost: ${getCostString(totalAugCost, totalRepCost)}`);
-    // Add back free augmentations removed temporarily before inserting additional NF purchases
-    purchaseableAugs.push(...cheapAugs);
     manageFilteredSubset(ns, outputRows, `(${purchaseableAugs.length - nfPurchased} Augs + ${nfPurchased} NF)`, purchaseableAugs, true, false, false);
     if (nextUpAug) outputRows.push(nextUpAug);
     if (nextUpNf) outputRows.push(nextUpNf);
