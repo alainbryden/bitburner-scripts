@@ -29,6 +29,12 @@ const companySpecificConfigs = [
     { name: "NWO", statModifier: 249 },
     { name: "MegaCorp", statModifier: 249 },
     { name: "Blade Industries", statModifier: 224 },
+    { name: "Bachman & Associates", statModifier: 224 },
+    { name: "ECorp", statModifier: 249 },
+    { name: "Clarke Incorporated", statModifier: 224 },
+    { name: "OmniTek Incorporated", statModifier: 224 },
+    { name: "KuaiGong International", statModifier: 224 },
+    { name: "Four Sigma", statModifier: 224 },
     { name: "Fulcrum Secret Technologies", companyName: "Fulcrum Technologies", statModifier: 224 }, // Special snowflake
     { name: "Silhouette", companyName: "TBD", repRequiredForFaction: 1.0e7 } // Hack: 3.2e6 should be enough rep to get the CTO position, but once
     // we hit this rep we might break out of the work loop before getting the final promotion, so we keep working until we get the faction invite.
