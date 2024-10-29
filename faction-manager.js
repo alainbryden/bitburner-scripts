@@ -130,7 +130,7 @@ export async function main(ns) {
         log(ns, `WARNING: This script makes heavy use of singularity functions, which are quite expensive before you have SF4.3. ` +
             `Unless you have a lot of free RAM for temporary scripts, you may get runtime errors.`);
     const sf11Level = ownedSourceFiles[11] || 0;
-    augCountMult = [1.9, 1.824, 1.786, 1.767][sf11Level];
+    augCountMult = 1.9 * [1, 0.96, 0.94, 0.93][sf11Level];
 
     log(ns, `Player has sf11Level ${sf11Level}, so the multiplier after each aug purchased is ${augCountMult}.`);
 
@@ -748,7 +748,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     if (options['neuroflux-disabled']) return;
     const augNf = augmentationData[strNF];
     // We can reverse-engineer our current NeuroFlux level by looking at its current price, and knowing its cost scales at x1.14 per level.
-    nfLevelPurchased = Math.round(Math.log(augNf.price / (augCountMult ** (numAugsAwaitingInstall + 1)) / 750000) / Math.log(1.14));
+    nfLevelPurchased = Math.round(Math.log(augNf.price / (augCountMult ** numAugsAwaitingInstall * 750000 * bitNodeMults.AugmentationMoneyCost)) / Math.log(1.14));
     let nextNfLevel = nfLevelPurchased + 1;
     let getFrom = augNf.getFromJoined();
     // If No currently joined factions can provide us with the next level of Neuroflux, look for the best joined **or unjoined** faction to get NF from.
