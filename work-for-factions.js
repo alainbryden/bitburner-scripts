@@ -25,6 +25,10 @@ const argsSchema = [
     ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
 ];
 
+// Note: The way the game source encodes job requirements is: [1, 26, 49, 149] (for example), and all then all faction-related
+//       companies get a stat modifier of "+224", except a few which have "+249". Rather than replicate those gross numbers,
+//       I would just store those job stat requirements as [225, 250, 275, 375] below. I then keep track of the few companies
+//       which require +25 on all stat requirements. Don't worry, I make up for it by being convoluted in other ways...
 const companySpecificConfigs = [
     { name: "NWO", statModifier: 25 },
     { name: "MegaCorp", statModifier: 25 },
@@ -34,8 +38,20 @@ const companySpecificConfigs = [
     // we hit this rep we might break out of the work loop before getting the final promotion, so we keep working until we get the faction invite.
 ]
 const jobs = [ // Job stat requirements for a company with a base stat modifier of +224 (modifier of all megacorps except the ones above which are 25 higher)
-    { name: "it", reqRep: [0, 7E3, 35E3, 175E3], reqHack: [225, 250, 275, 375], reqCha: [0, 0, 275, 300], repMult: [0.9, 1.1, 1.3, 1.4] },
-    { name: "software", reqRep: [0, 8E3, 40E3, 200E3, 400E3, 800E3, 1.6e6, 3.2e6], reqHack: [225, 275, 475, 625, 725, 725, 825, 975], reqCha: [0, 0, 275, 375, 475, 475, 625, 725], repMult: [0.9, 1.1, 1.3, 1.5, 1.6, 1.6, 1.75, 2] },
+    {
+        name: "it",
+        reqRep: [0e0, 7e3, 35e3, 175e3],
+        reqHck: [225, 250, 275, 375], // [1, 26, 51, 151] + 224
+        reqCha: [0e0, 0e0, 275, 300], // [0,  0, 51,  76] + 224
+        repMult: [0.9, 1.1, 1.3, 1.4]
+    },
+    {
+        name: "software",
+        reqRep: [0e0, 8e3, 4e4, 2e5, 4e5, 8e5, 16e5, 32e5],
+        reqHck: [225, 275, 475, 625, 725, 725, 825, 975],   // [1, 51, 251, 401, 501, 501, 601, 751] + 224
+        reqCha: [0e0, 0e0, 275, 375, 475, 475, 625, 725],   // [0,  0,  51, 151, 251, 251, 401, 501] + 224
+        repMult: [0.9, 1.1, 1.3, 1.5, 1.6, 1.6, 1.75, 2.0]
+    },
 ]
 const factions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
@@ -1098,8 +1114,8 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     // TODO: In some scenarios, the best career path may require combat stats, this hard-codes the optimal path for hack stats
     const itJob = jobs.find(j => j.name == "it");
     const softwareJob = jobs.find(j => j.name == "software");
-    if (itJob.reqHack[0] + statModifier > player.skills.hacking) // We don't qualify to work for this company yet if we can't meet IT qualifications (lowest there are)
-        return ns.print(`Cannot yet work for "${companyName}": Need Hack ${itJob.reqHack[0] + statModifier} to get hired (current Hack: ${player.skills.hacking});`);
+    if (itJob.reqHck[0] + statModifier > player.skills.hacking) // We don't qualify to work for this company yet if we can't meet IT qualifications (lowest there are)
+        return ns.print(`Cannot yet work for "${companyName}": Need Hack ${itJob.reqHck[0] + statModifier} to get hired (current Hack: ${player.skills.hacking});`);
     ns.print(`Going to work for Company "${companyName}" next...`)
     let currentReputation, currentRole = "", currentJobTier = -1; // TODO: Derive our current position and promotion index based on player.jobs[companyName]
     let lastStatus = "", lastStatusUpdateTime = 0;
@@ -1111,7 +1127,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // Determine the next promotion we're striving for (the sooner we get promoted, the faster we can earn company rep)
         const getTier = job => Math.min( // Check all requirements for all job (taking into account modifiers) and find the minimum we meet
             job.reqRep.filter(r => (r * (backdoored ? 0.75 : 1)) <= currentReputation).length,
-            job.reqHack.filter(h => (h === 0 ? 0 : h + statModifier) <= player.skills.hacking).length,
+            job.reqHck.filter(h => (h === 0 ? 0 : h + statModifier) <= player.skills.hacking).length,
             job.reqCha.filter(c => (c === 0 ? 0 : c + statModifier) <= player.skills.charisma).length) - 1;
         // It's generally best to hop back-and-forth between it and software engineer career paths (rep gain is about the same, but better money from software)
         const qualifyingItTier = getTier(itJob), qualifyingSoftwareTier = getTier(softwareJob);
@@ -1131,11 +1147,11 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         const nextJobName = currentRole == "it" || nextJobTier >= itJob.reqRep.length ? "software" : "it";
         const nextJob = nextJobName == "it" ? itJob : softwareJob;
         const requiredRep = nextJob.reqRep[nextJobTier] * (backdoored ? 0.75 : 1); // Rep requirement is decreased when company server is backdoored
-        const requiredHack = nextJob.reqHack[nextJobTier] === 0 ? 0 : nextJob.reqHack[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
+        const requiredHack = nextJob.reqHck[nextJobTier] === 0 ? 0 : nextJob.reqHck[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         const requiredCha = nextJob.reqCha[nextJobTier] === 0 ? 0 : nextJob.reqCha[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         let status = `Next promotion ('${nextJobName}' #${nextJobTier}) at Hack:${requiredHack} Cha:${requiredCha} Rep:${requiredRep?.toLocaleString('en')}` +
             (repRequiredForFaction > requiredRep ? '' : `, but we won't need it, because we'll sooner hit ${repRequiredForFaction.toLocaleString('en')} reputation to unlock company faction "${factionName}"!`);
-        if (nextJobTier >= nextJob.reqHack.length) // Special case status message if we're at the maximum promotion, but need additional reputation to unlock the company
+        if (nextJobTier >= nextJob.reqHck.length) // Special case status message if we're at the maximum promotion, but need additional reputation to unlock the company
             status = `We've reached the maximum promotion level, but are continuing to work until we hit ${repRequiredForFaction.toLocaleString('en')} reputation to unlock company faction "${factionName}."`;
         // Monitor that we are still performing the expected work
         let currentWork = await getCurrentWorkInfo(ns);
