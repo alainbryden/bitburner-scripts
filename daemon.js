@@ -322,14 +322,21 @@ export async function main(ns) {
 
         await establishMultipliers(ns); // figure out the various bitNode and player multipliers
 
+        // Helper to determine whether we meed a given home RAM requirement (To avoid wasting precious early-BN RAM, many scripts don't launch unless we have more than a certain amount)
+        const reqRam = (ram) => homeServer.totalRam(/*ignoreReservedRam:*/true) >= ram;
+        // Helper to decide whether we should launch one of the hacknet upgrade manager scripts.
+        const shouldUpgradeHacknet = () =>
+            reqRam(homeReservedRam + 6.1) && // These scripts consume 6.1 GB and keep running a long time, so we want to ensure we have more than the home reservered RAM amount available
+            reservedMoney(ns) < getPlayerMoney(ns) && // Player money exceeds the reserve (otherwise it will sit there buying nothing)
+            (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)[0] === null) // No other hacknet-upgrade-manager script is running
+
         // ASYNCHRONOUS HELPERS
         // Set up "asynchronous helpers" - standalone scripts to manage certain aspacts of the game. daemon.js launches each of these once when ready (but not again if they are shut down)
-        const reqRam = (ram) => homeServer.totalRam(/*ignoreReservedRam:*/true) >= ram; // To avoid wasting precious RAM, many scripts don't launch unless we have more than a certain amount
         asynchronousHelpers = [
             { name: "stats.js", shouldRun: () => reqRam(64), shouldTail: false }, // Adds stats not usually in the HUD (nice to have)
-            { name: "go.js", shouldRun: () => reqRam(32), args: openTailWindows ? [] : ['--silent'], minRamReq: 20.2 }, // Play go.js (various multipliers, but large dynamic ram requirements)
+            { name: "go.js", shouldRun: () => reqRam(64), args: openTailWindows ? [] : ['--silent'], minRamReq: 20.2 }, // Play go.js (various multipliers, but large dynamic ram requirements)
             { name: "stockmaster.js", shouldRun: () => reqRam(64), args: openTailWindows ? ["--show-market-summary"] : [] }, // Start our stockmaster
-            { name: "hacknet-upgrade-manager.js", shouldRun: () => reqRam(32), args: ["-c", "--max-payoff-time", "1h"], shouldTail: false }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
+            { name: "hacknet-upgrade-manager.js", shouldRun: () => shouldUpgradeHacknet(), args: ["-c", "--max-payoff-time", "1h"], shouldTail: false }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
             { name: "spend-hacknet-hashes.js", shouldRun: () => reqRam(64) && 9 in dictSourceFiles, args: [], shouldTail: false }, // Always have this running to make sure hashes aren't wasted
             { name: "sleeve.js", shouldRun: () => reqRam(64) && 10 in dictSourceFiles }, // Script to create manage our sleeves for us
             { name: "gangs.js", shouldRun: () => reqRam(64) && 2 in dictSourceFiles }, // Script to create manage our gang for us
@@ -356,7 +363,6 @@ export async function main(ns) {
 
         // PERIODIC SCRIPTS
         // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-        let shouldUpgradeHacknet = () => (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)[0] === null) && reservedMoney(ns) < getPlayerMoney(ns);
         // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
         let shouldImproveHacking = () => bitNodeMults.ScriptHackMoneyGain != 0 && !isInBn8 || getPlayerMoney(ns) > 1e12;
         // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
