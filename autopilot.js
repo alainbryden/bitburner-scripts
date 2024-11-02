@@ -445,7 +445,9 @@ async function checkOnRunningScripts(ns, player) {
 
     // Spend hacknet hashes on our boosting best hack-income server once established
     const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
-    if ((9 in unlockedSFs) && !spendingHashesOnHacking && getTimeInAug() >= options['time-before-boosting-best-hack-server'] && !(resetInfo.currentNode == 8)) {
+    if ((9 in unlockedSFs) && !spendingHashesOnHacking && getTimeInAug() >= options['time-before-boosting-best-hack-server']
+        && 0 != bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain) // No point in boosting hack income if it's scaled to 0 in the current BN
+    {
         const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
         if (strServerIncomeInfo) {
             const incomeByServer = JSON.parse(strServerIncomeInfo);
@@ -486,8 +488,9 @@ async function checkOnRunningScripts(ns, player) {
             daemonArgs.push("--no-share", "--initial-max-targets", 1);
         } else { // XP-ONLY MODE: We can shift daemon.js to this when we want to prioritize earning hack exp rather than money
             // Only do this if we aren't in --looping mode because TODO: currently it does not kill it's loops on shutdown, so they'd be stuck in hack exp mode
-            // In BNs that give no money for hacking, always start daemon.js in this mode.
-            let useXpOnlyMode = prioritizeHackForDaedalus || bitNodeMults.ScriptHackMoney == 0;
+            let useXpOnlyMode = prioritizeHackForDaedalus ||
+                // In BNs that give no money for hacking, always start daemon.js in this mode (except BN8, because TODO: --xp-only doesn't handle stock manipulation)
+                (bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain == 0 && resetInfo.currentNode != 8);
             if (!useXpOnlyMode) { // Otherwise, respect the configured interval / duration
                 const xpInterval = Number(options['xp-mode-interval-minutes']);
                 const xpDuration = Number(options['xp-mode-duration-minutes']);
@@ -599,9 +602,9 @@ async function maybeDoCasino(ns, player) {
         if (pid) await waitForProcessToComplete(ns, pid);
     } else if (casinoRanFileSet)
         return ranCasino = true;
-    // If it's been less than 1 minute, wait a while to establish income
+    // If it's been less than 1 minute, wait a while to establish income (unless in BN8)
     // The exception is if we are in BN8 and have CashRoot Starter Kit. In this case we can head straight to the casino.
-    if (getTimeInAug() < 60000 && !(resetInfo.currentNode == 8 && cashRootBought))
+    if (resetInfo.currentNode != 8 && getTimeInAug() < 60000)
         return;
     // If we're making more than ~5b / minute, no need to run casino. (Unless BN8, if BN8 we always need casino cash bootstrap)
     // Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.

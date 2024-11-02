@@ -132,7 +132,6 @@ export async function main(ns) {
     let currentTerminalServer = ""; // Periodically updated when intelligence farming, the current connected terminal server.
     let dictSourceFiles = (/**@returns{{[bitNode: number]: number;}}*/() => undefined)(); // Available source files
     let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)();
-    let currentBn = 0, isInBn8 = false; // Flag indicating whether we are in BN8 (where lots of rules change)
     let haveTixApi = false, have4sApi = false; // Whether we have WSE API accesses
     let _cachedPlayerInfo = (/**@returns{Player}*/() => undefined)(); // stores multipliers for player abilities and other player info
 
@@ -271,8 +270,6 @@ export async function main(ns) {
         } catch {
             resetInfo = { currentNode: 1, lastAugReset: Date.now() };
         }
-        currentBn = resetInfo.currentNode;
-        isInBn8 = currentBn === 8; // We do some things differently if we're in BN8 (Stock Market BN)
         dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
         log(ns, "The following source files are active: " + JSON.stringify(dictSourceFiles));
 
@@ -346,7 +343,8 @@ export async function main(ns) {
             },
             {
                 name: "bladeburner.js", // Script to manage bladeburner for us. Run automatically if not disabled and bladeburner API is available
-                shouldRun: () => !options['disable-script'].includes('bladeburner.js') && reqRam(64) && 7 in dictSourceFiles && !isInBn8
+                shouldRun: () => !options['disable-script'].includes('bladeburner.js') && reqRam(64)
+                    && 7 in dictSourceFiles && bitNodeMults.BladeburnerRank != 0 // Don't run bladeburner in BN's where it can't rank up (currently just BN8)
             },
         ];
         asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
@@ -363,8 +361,9 @@ export async function main(ns) {
 
         // PERIODIC SCRIPTS
         // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-        // In BN8 (stocks-only bn) and others with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
-        let shouldImproveHacking = () => bitNodeMults.ScriptHackMoneyGain != 0 && !isInBn8 || getPlayerMoney(ns) > 1e12;
+        // In bitnodes with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
+        let shouldImproveHacking = () => getPlayerMoney(ns) > 1e12 || !(bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0)
+            || resetInfo.currentNode === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
         // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
         periodicScripts = [
             // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
@@ -1369,7 +1368,7 @@ export async function main(ns) {
             args.push(stockMode && (toolName == "hack" && shouldManipulateHack[target] || toolName == "grow" && shouldManipulateGrow[target]) ? 1 : 0);
         if (["hack", "weak"].includes(toolName))
             args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
-                (toolName == "hack" && (bitNodeMults.ScriptHackMoneyGain == 0 || isInBn8)) ? 1 : 0); // Disable automatically in BN8 (hack income disabled)
+                (toolName == "hack" && (bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0)) ? 1 : 0); // Disable automatically in BN8 and other BNs where hack income is disabled
         args.push(allowLooping && loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
         return args;
     }
