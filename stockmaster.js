@@ -10,7 +10,6 @@ let lastLog = ""; // We update faster than the stock-market ticks, but we don't 
 let allStockSymbols = null; // Stores the set of all symbols collected at start
 let mock = false; // If set to true, will "mock" buy/sell but not actually buy/sell anythingorecast
 let noisy = false; // If set to true, tprints and announces each time stocks are bought/sold
-let dictSourceFiles; // Populated at init, a dictionary of source-files the user has access to, and their level
 // Pre-4S configuration (influences how we play the stock market before we have 4S data, after which everything's fool-proof)
 let showMarketSummary = false;  // If set to true, will always generate and display the pre-4s forecast table in a separate tail window
 let minTickHistory; // This much history must be gathered before we will offer a stock forecast.
@@ -129,8 +128,8 @@ export async function main(ns) {
         } while (!success);
     }
 
-    dictSourceFiles = await getActiveSourceFiles(ns); // Find out what source files the user has unlocked
-    if (!disableShorts && (!(8 in dictSourceFiles) || dictSourceFiles[8] < 2)) {
+    const effectiveSourceFiles = await getActiveSourceFiles(ns, true); // Find out what source files the user has unlocked
+    if (!disableShorts && effectiveSourceFiles[8] < 2) {
         log(ns, "INFO: Shorting stocks has been disabled (you have not yet unlocked access to shorting)");
         disableShorts = true;
     }

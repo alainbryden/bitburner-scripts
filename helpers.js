@@ -541,7 +541,8 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
     if (includeLevelsFromCurrentBitnode) {
         try {
             const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt', null, null, null, null, silent)).currentNode;
-            let effectiveSfLevel = currentNode == 4 ? 3 : 1; // In BN4, we get the perks of SF4.3
+            // In some Bitnodes, we get the *effects* of source file level 3 just by being in the bitnode.
+            let effectiveSfLevel = [4, 8].includes(currentNode) ? 3 : 1;
             dictSourceFiles[currentNode] = Math.max(effectiveSfLevel, dictSourceFiles[currentNode] || 0);
         } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
     }
