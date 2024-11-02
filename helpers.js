@@ -821,7 +821,7 @@ export function tail(ns, processId = undefined) {
         return //ns.tprint(`PID was previously moved ${processId}`);
     // By default, make all tail windows take up 75% of the width, 25% of the height available
     const [width, height] = ns.ui.windowSize();
-    ns.resizeTail(width * 0.75, height * 0.25, processId);
+    ns.resizeTail(width * 0.60, height * 0.25, processId);
     // Cascade windows: After each tail, shift the window slightly down and over so that they don't overlap
     let offsetPct = ((((tailedPids.size % 30.0) / 30.0) + tailedPids.size) % 6.0) / 6.0;
     ns.moveTail(offsetPct * (width * 0.25 - 300) + 250, offsetPct * (height * 0.75 - 100) + 50, processId);
