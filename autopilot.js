@@ -700,7 +700,15 @@ async function maybeInstallAugmentations(ns, player) {
         if (totalCost == 0) totalCost = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
     }
 
-    // TODO: If we are in BN8, we get a big cash influx on each reset and it may be worth doing an immediate install or 2 to purchse upgrades, then get more free cash.
+    // Heuristic: if we can afford 4 or more augs in the first ~20 minutes, it's usually worth doing a "quick install"
+    // For example, in BN8, we get a big cash influx on each reset and can buy reputation immediately, so it's worth
+    //     doing an few immediate installs to purchse upgrades, then reset for more free cash.
+    if ((getTimeInAug() < 20 * 60 * 1000 && pendingAugInclNfCount >= 4) || (resetInfo.currentNode == 8 && getTimeInBitnode() < 10 * 60 * 1000)) {
+        shouldReset = true;
+        resetStatus = `We haven't been in this reset for long. We can do a quick reset immediately for a quick stat boost.\n${resetStatus}`;
+        if (options['install-countdown'] > 30 * 1000)
+            options['install-countdown'] = 30 * 1000; // Install relatively quickly in this scenario (30s)
+    }
 
     // If not ready to reset, set a status with our progress and return
     if (!shouldReset) {
