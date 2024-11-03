@@ -39,6 +39,7 @@ let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information abou
 let ownedSourceFiles;
 let myGangFaction = "";
 let isHackGang = false;
+let is4sBought = false;
 let strWantedReduction;
 let requiredRep = 0;
 let myGangMembers = [];
@@ -95,6 +96,7 @@ async function initialize(ns) {
     pctTraining = options['no-training'] ? 0 : options['training-percentage'];
 
     let loggedWaiting = false;
+    is4sBought = false;
     resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
     const bitNode = resetInfo.currentNode;
     let haveJoinedAGang = false;
@@ -423,7 +425,9 @@ async function tryUpgradeMembers(ns, dictMembers) {
     let budget = Math.min(maxBudget, (options['equipment-budget'] || defaultMaxSpendPerTickTransientEquipment)) * homeMoney;
     let augBudget = Math.min(maxBudget, (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment)) * homeMoney;
     // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when BitnodeMults are such that gang income is severely nerfed)
-    if (!ns.stock.has4SDataTIXAPI() || resetInfo.currentNode === 8) {
+    if (!is4sBought)
+        is4sBought = await getNsDataThroughFile(ns, 'ns.stock.has4SDataTIXAPI()');
+    if (!is4sBought || resetInfo.currentNode === 8) {
         budget /= 100;
         augBudget /= 100;
     }
