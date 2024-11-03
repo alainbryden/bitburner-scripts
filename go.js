@@ -15,9 +15,10 @@ import { getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFile
 const argsSchema = [
     ['cheats', true], // (Now true by default - but still an option for backwards compatibility) This is only possible if you have BN14.2
     ['disable-cheats', false], // Set to true if you want to *not* use cheats for some reason.
+    ['cheat-chance-threshold', 0.9], // Don't cheat if our success chance is less than this
     ['logtime', false], // Logs time time it takes for each player to take their move
     ['runOnce', false], // Will only play one game if enabled
-    ['silent', false], // Enabling this stops the window from spawning.
+    ['silent', false], // (Obsolete) This script used to automatically tail. Now if you want to do this, call with --tail like normal.
 ];
 
 export function autocomplete(data, args) {
@@ -30,6 +31,7 @@ export function autocomplete(data, args) {
  * @param {NS} ns */
 export async function main(ns) {
     let cheats = false;
+    let cheatChanceThreshold = 1.0;
     let logtime = false;
     let runOnce = true;
     let silent = false;
@@ -92,12 +94,11 @@ export async function main(ns) {
 
         logtime = runOptions.logtime;
         runOnce = runOptions.runOnce;
-        silent = runOptions.silent;
 
         const sourceFiles = await getActiveSourceFiles(ns, true);
         // Enable cheats if we have SF14.2 or higher (unless the user disabled cheats).
         cheats = !runOptions['disable-cheats'] && (sourceFiles[14] ?? 0) >= 2;
-        if (!silent) { tail(ns); }
+        cheatChanceThreshold = runOptions['cheat-chance-threshold'];
 
         ns.disableLog("go.makeMove")
 
@@ -110,7 +111,6 @@ export async function main(ns) {
             catch (err) {
                 log(ns, `WARNING: go.js Caught (and suppressed) an unexpected error:\n${getErrorInfo(err)}`, false, 'warning');
                 log(ns, `INFO: Will sleep for 10 seconds than try playing again.`, false);
-                tail(ns);
                 await ns.sleep(10 * 1000);
             }
         }
@@ -1310,11 +1310,11 @@ export async function main(ns) {
         const [s1x, s1y, s2x, s2y] = attack.coords
         if (s1x === undefined) return false
         const chance = await go_cheat_getCheatSuccessChance(ns);
-        if (chance < .7) return false
+        if (chance < cheatChanceThreshold) return false
         try {
             let mid = performance.now()
             const results = await go_cheat_playTwoMoves(ns, s1x, s1y, s2x, s2y)
-            ns.printf("%s", attack.msg)
+            ns.printf("%s  Chance: %.2f%%  Result: %s", attack.msg, chance * 100, results.type);
             let END = performance.now()
             if (logtime) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
             START = performance.now()
