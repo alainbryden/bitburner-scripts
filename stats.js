@@ -1,6 +1,6 @@
 import {
     log, disableLogs, instanceCount, getConfiguration, getNsDataThroughFile, getActiveSourceFiles,
-    getStocksValue, formatNumberShort, formatMoney, formatRam
+    getStocksValue, formatNumberShort, formatMoney, formatRam, getFilePath
 } from './helpers.js'
 
 const argsSchema = [
@@ -126,7 +126,7 @@ function updateHudElement(header, visible, value, toolTip) {
  * @typedef {[header, show, formattedValue, toolTip]} HudRowConfig The configuration for a custom row displayed in the HUD
  * @returns {Promise<HudRowConfig[]>} **/
 async function getHudData(ns, bitNode, dictSourceFiles, options) {
-    const hudData = [];
+    const hudData = (/**@returns {HudRowConfig[]}*/() => [])();
 
     // Show what bitNode we're currently playing in
     {
@@ -137,22 +137,25 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
 
     // Show Hashes
     {
-        const val1 = ["Hashes"]
-        const val2 = [" "]
+        const val1 = ["Hashes"];
+        const val2 = [" "]; // Blank line placeholder for when hashes are being liquidated
         if (9 in dictSourceFiles || 9 == bitNode) { // Section not relevant if you don't have access to hacknet servers
             const hashes = await getNsDataThroughFile(ns, '[ns.hacknet.numHashes(), ns.hacknet.hashCapacity()]', '/Temp/hash-stats.txt')
             if (hashes[1] > 0) {
                 val1.push(true, `${formatNumberShort(hashes[0], 3, 1)}/${formatNumberShort(hashes[1], 3, 1)}`,
                     `Current Hashes ${hashes[0].toLocaleString('en')} / Current Hash Capacity ${hashes[1].toLocaleString('en')}`)
-            } else val1.push(false)
-            // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)
-            if (ns.isRunning('spend-hacknet-hashes.js', 'home', '--liquidate') || ns.isRunning('spend-hacknet-hashes.js', 'home', '-l')) {
-                val2.push(true, "Liquidating", 'You have a script running that is selling hashes as quickly as possible (likely `spend-hacknet-hashes.js --liquidate`)')
-            } else val2.push(false)
-        } else {
-            val1.push(false)
-            val2.push(false)
+                // Detect and notify the HUD if we are liquidating hashes (selling them as quickly as possible)
+                const spendHashesScript = getFilePath('spend-hacknet-hashes.js');
+                const liquidatingHashes = await getNsDataThroughFile(ns,
+                    `ns.ps('home').filter(p => p.filename == ns.args[0] && (p.args.includes('--liquidate') || p.args.includes('-l')))`,
+                    '/Temp/hash-liquidation-scripts.txt', [spendHashesScript]);
+                if (liquidatingHashes.length > 0)
+                    val2.push(true, "Liquidating", `You have a script running that is selling hashes as quickly as possible ` +
+                        `(PID ${liquidatingHashes[0].pid}: ${spendHashesScript} ${liquidatingHashes[0].args.join(' ')})`);
+            }
         }
+        if (val1.length < 2) val1.push(false);
+        if (val2.length < 2) val2.push(false);
         hudData.push(val1, val2)
     }
 
@@ -169,8 +172,10 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     }
 
     // Show total instantaneous script income and experience per second (values provided directly by the game)
-    hudData.push(["Scr Inc", true, formatMoney(ns.getTotalScriptIncome()[0], 3, 2) + '/sec', "Total 'instantaneous' income per second being earned across all scripts running on all servers."]);
-    hudData.push(["Scr Exp", true, formatNumberShort(ns.getTotalScriptExpGain(), 3, 2) + '/sec', "Total 'instantaneous' hack experience per second being earned across all scripts running on all servers."]);
+    const totalScriptInc = await getNsDataThroughFile(ns, 'ns.getTotalScriptIncome()');
+    const totalScriptExp = await getNsDataThroughFile(ns, 'ns.getTotalScriptExpGain()');
+    hudData.push(["Scr Inc", true, formatMoney(totalScriptInc[0], 3, 2) + '/sec', "Total 'instantaneous' income per second being earned across all scripts running on all servers."]);
+    hudData.push(["Scr Exp", true, formatNumberShort(totalScriptExp, 3, 2) + '/sec', "Total 'instantaneous' hack experience per second being earned across all scripts running on all servers."]);
 
     // Show reserved money
     {
