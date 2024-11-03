@@ -129,7 +129,7 @@ export async function main(ns) {
     }
 
     const effectiveSourceFiles = await getActiveSourceFiles(ns, true); // Find out what source files the user has unlocked
-    if (!disableShorts && effectiveSourceFiles[8] < 2) {
+    if (!disableShorts && (effectiveSourceFiles[8] ?? 0) < 2) {
         log(ns, "INFO: Shorting stocks has been disabled (you have not yet unlocked access to shorting)");
         disableShorts = true;
     }
@@ -456,7 +456,6 @@ let transactStock = async (ns, sym, numShares, action) =>
 async function doBuy(ns, stk, sharesToBuy) {
     // We include -2*commission in the "holdings value" of our stock, but if we make repeated purchases of the same stock, we have to track
     // the additional commission somewhere. So only subtract it from our running profit if this isn't our first purchase of this symbol
-    let price = 0; //price wasn't defined yet.
     if (stk.owned())
         totalProfit -= commission;
     let long = stk.bullish();
@@ -465,14 +464,7 @@ async function doBuy(ns, stk, sharesToBuy) {
         `${stk.maxShares == sharesToBuy + stk.ownedShares() ? '@max shares' : `${formatNumberShort(sharesToBuy + stk.ownedShares(), 3, 3).padStart(5)}/${formatNumberShort(stk.maxShares, 3, 3).padStart(5)}`}) ` +
         `${stk.sym.padEnd(5)} @ ${formatMoney(expectedPrice).padStart(9)} for ${formatMoney(sharesToBuy * expectedPrice).padStart(9)} (Spread:${(stk.spread_pct * 100).toFixed(2)}% ` +
         `ER:${formatBP(stk.expectedReturn()).padStart(8)}) Ticks to Profit: ${stk.timeToCoverTheSpread().toFixed(2)}`, noisy, 'info');
-    try {
-        price = mock ? expectedPrice : Number(await transactStock(ns, stk.sym, sharesToBuy, long ? 'buyStock' : 'buyShort'));
-    } catch (err) {
-        if (long) throw err;
-        disableShorts = true;
-        log(ns, `WARN: Failed to short ${stk.sym} (Shorts not available?). Disabling shorts...`, true, 'warning');
-        return 0;
-    }
+    let price = mock ? expectedPrice : Number(await transactStock(ns, stk.sym, sharesToBuy, long ? 'buyStock' : 'buyShort'));
     // The rest of this work is for troubleshooting / mock-mode purposes
     if (price == 0) {
         const playerMoney = (await getPlayerInfo(ns)).money;
