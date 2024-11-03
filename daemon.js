@@ -43,6 +43,7 @@ const argsSchema = [
     ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule more
     ['i', false], // Farm intelligence with manual hack.
     ['reserved-ram', 32], // Keep this much home RAM free when scheduling hack/grow/weaken cycles on home.
+    ['double-reserve-threshold', 512], // in GB of RAM. Double our home RAM reserve once there is this much home max RAM.
     ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
     ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
     ['share', false], // Enable sharing free ram to increase faction rep gain (enabled automatically once RAM is sufficient)
@@ -323,6 +324,7 @@ export async function main(ns) {
         const reqRam = (ram) => homeServer.totalRam(/*ignoreReservedRam:*/true) >= ram;
         // Helper to decide whether we should launch one of the hacknet upgrade manager scripts.
         const shouldUpgradeHacknet = () =>
+            bitNodeMults.HacknetNodeMoney != 0 && // Ensure hacknet is not disabled in this BN
             reqRam(homeReservedRam + 6.1) && // These scripts consume 6.1 GB and keep running a long time, so we want to ensure we have more than the home reservered RAM amount available
             reservedMoney(ns) < getPlayerMoney(ns) && // Player money exceeds the reserve (otherwise it will sit there buying nothing)
             (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)[0] === null) // No other hacknet-upgrade-manager script is running
@@ -366,7 +368,7 @@ export async function main(ns) {
             || resetInfo.currentNode === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
         // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
         periodicScripts = [
-            // Buy tor as soon as we can if we haven't already, and all the port crackers (exception: don't buy 2 most expensive port crackers until later if in a no-hack BN)
+            // Buy tor as soon as we can if we haven't already, and all the port crackers
             { interval: 25000, name: "/Tasks/tor-manager.js", shouldRun: () => 4 in dictSourceFiles && !allHostNames.includes("darkweb") },
             { interval: 26000, name: "/Tasks/program-manager.js", shouldRun: () => 4 in dictSourceFiles && ownedCracks.length != 5 },
             { interval: 27000, name: "/Tasks/contractor.js", minRamReq: 14.2 }, // Periodically look for coding contracts that need solving
@@ -397,7 +399,7 @@ export async function main(ns) {
                 }
             },
             // Check if any new servers can be backdoored. If there are many, this can eat up a lot of RAM, so make this the last script scheduled at startup.
-            { interval: 33000, name: "/Tasks/backdoor-all-servers.js", shouldRun: () => 4 in dictSourceFiles },
+            { interval: 33000, name: "/Tasks/backdoor-all-servers.js", shouldRun: () => 4 in dictSourceFiles && playerHackSkill() > 10 }, // Don't do this until we reach hack level 10. If we backdoor too early, it's very slow and eats up RAM for a long time,
         ];
         periodicScripts.forEach(tool => tool.name = getFilePath(tool.name));
         periodicScripts.forEach(tool => tool.ignoreReservedRam = true);
@@ -953,6 +955,9 @@ export async function main(ns) {
     async function updateCachedServerData(ns) {
         if (verbose) log(ns, `updateCachedServerData`);
         dictServerMaxRam = await getServersDict(ns, 'getServerMaxRam');
+        // Double home reserved ram once we reach the configured threshold
+        if (homeServer && homeServer.totalRam(true) >= options['double-reserve-threshold'])
+            homeReservedRam = 2 * options['reserved-ram'];
     }
 
     /** Refresh data that might change rarely over time, but for which having precice up-to-the-minute information isn't critical.
