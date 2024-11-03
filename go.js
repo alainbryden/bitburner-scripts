@@ -149,7 +149,8 @@ export async function main(ns) {
     /** @param {NS} ns @param {number} x1 @param {number} y1 @param {number} x2 @param {number} y2
      * @returns {Promise<{type: "move" | "pass" | "gameOver";x: number;y: number;}>} */
     async function go_makeMove(ns, x, y) {
-        return await getNsDataThroughFile(ns, `await ns.go.makeMove(...ns.args)`, null, [x, y]);
+        return await ns.go.makeMove(x, y);
+        //return await getNsDataThroughFile(ns, `await ns.go.makeMove(...ns.args)`, null, [x, y]);
     }
 
     /** @param {NS} ns */
