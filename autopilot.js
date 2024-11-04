@@ -82,7 +82,8 @@ let playerInBladeburner = false; // Whether we've joined bladeburner
 let wdHack = 0; // If the WD server is available (i.e. TRP is installed), caches the required hack level
 let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
-let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false, prioritizeHackForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
+let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
+let prioritizeHackForDaedalus = false, prioritizeHackForWd = false;
 let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
 let homeRam = 0; // Amount of RAM on the home server, last we checked
 let killScripts = []; // A list of scripts flagged to be restarted due to changes in priority
@@ -134,7 +135,8 @@ async function startUp(ns) {
 
     // Reset global state
     playerInGang = rushGang = playerInBladeburner = ranCasino =
-        alreadyJoinedDaedalus = autoJoinDaedalusUnavailable = reservingMoneyForDaedalus = prioritizeHackForDaedalus =
+        alreadyJoinedDaedalus = autoJoinDaedalusUnavailable = reservingMoneyForDaedalus =
+        prioritizeHackForDaedalus = prioritizeHackForWd =
         bnCompletionSuppressed = stanekLaunched = false;
     playerInstalledAugCount = wdHack = null;
     installCountdown = daemonStartTime = lastScriptsCheck = homeRam = reservedPurchase = 0;
@@ -266,9 +268,9 @@ async function checkOnDaedalusStatus(ns, player, stocksValue) {
     if (player.skills.hacking < 2500) {
         // If we happen to already have enough money for daedalus and are only waiting on hack-level,
         // set a flag to switch daemon.js into --xp-only mode, to prioritize earning hack exp over money
-        // HEURISTIC (i.e. Hack): Only do this if we naturally get within 90% of the hack stat requirement,
+        // HEURISTIC (i.e. Hack): Only do this if we naturally get within 75% of the hack stat requirement,
         //    otherwise, assume our hack gain rate is too low in this reset to make it all the way to 2500.
-        if (totalWorth >= moneyReq && player.skills.hacking >= (2500 * 0.90))
+        if (totalWorth >= moneyReq && player.skills.hacking >= (2500 * 0.75))
             prioritizeHackForDaedalus = true;
         //log(ns, `total worth: ${formatMoney(totalWorth)} moneyReq: ${formatMoney(moneyReq)} prioritizeHackForDaedalus: ${prioritizeHackForDaedalus}`)
         return reservingMoneyForDaedalus = false; // Don't reserve money until hack level suffices
@@ -318,6 +320,12 @@ async function checkIfBnIsComplete(ns, player) {
         bnComplete = await getNsDataThroughFile(ns,
             `ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
             '/Temp/bladeburner-completed.txt');
+
+    // HEURISTIC: If we naturally get within 75% of the if w0r1d_d43m0n hack stat requirement,
+    //    switch daemon.js to prioritize earning hack exp for the remainder of the BN
+    if (player.skills.hacking >= (wdHack * 0.75))
+        prioritizeHackForWd = true;
+
     if (!bnComplete) return false; // No win conditions met
 
     const text = `BN ${resetInfo.currentNode}.${(dictOwnedSourceFiles[resetInfo.currentNode] || 0) + 1} completed at ` +
@@ -488,7 +496,7 @@ async function checkOnRunningScripts(ns, player) {
             daemonArgs.push("--no-share", "--initial-max-targets", 1);
         } else { // XP-ONLY MODE: We can shift daemon.js to this when we want to prioritize earning hack exp rather than money
             // Only do this if we aren't in --looping mode because TODO: currently it does not kill it's loops on shutdown, so they'd be stuck in hack exp mode
-            let useXpOnlyMode = prioritizeHackForDaedalus ||
+            let useXpOnlyMode = prioritizeHackForDaedalus || prioritizeHackForWd ||
                 // In BNs that give no money for hacking, always start daemon.js in this mode (except BN8, because TODO: --xp-only doesn't handle stock manipulation)
                 (bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain == 0 && resetInfo.currentNode != 8);
             if (!useXpOnlyMode) { // Otherwise, respect the configured interval / duration
@@ -505,10 +513,11 @@ async function checkOnRunningScripts(ns, player) {
                 daemonArgs.push("--xp-only", "--silent-misfires", "--no-share");
                 // If daemon.js isn't already running in hack exp mode, prepare a message to communicate the change
                 if (!existingDaemon?.args.includes("--xp-only"))
-                    daemonRelaunchMessage = prioritizeHackForDaedalus ?
-                        `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
-                        bitNodeMults.ScriptHackMoney == 0 ? `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.` :
-                            `Relaunching daemon.js to focus on earning Hack Experience for ${options['xp-mode-duration-minutes']} minutes (--xp-mode-duration-minutes)`;
+                    daemonRelaunchMessage = prioritizeHackForWd ? `We're close to the required hack level destroy the BN.` :
+                        prioritizeHackForDaedalus ? `Hack Level is the only missing requirement for Daedalus, so we will run daemon.js in --xp-only mode to try and speed along the invite.` :
+                            (bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain == 0) ?
+                                `The current BitNode does not give any money from hacking, so we will run daemon.js in --xp-only mode.` :
+                                `Relaunching daemon.js to focus on earning Hack Experience for ${options['xp-mode-duration-minutes']} minutes (--xp-mode-duration-minutes)`;
             }
         }
         // Prevent daemon from starting "work-for-faction.js" since we now manage that script
