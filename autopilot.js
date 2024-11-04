@@ -39,7 +39,6 @@ export function autocomplete(data, args) {
 
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
-const casinoFlagFile = "/Temp/ran-casino.txt";
 const defaultBnOrder = [ // The order in which we intend to play bitnodes
     // 1st Priority: Key new features and/or major stat boosts
     4.3,  // Normal. Need singularity to automate everything, and need the API costs reduced from 16x -> 4x -> 1x reliably do so from the start of each BN
@@ -573,7 +572,7 @@ async function checkOnRunningScripts(ns, player) {
     // If gangs are unlocked, micro-manage how 'work-for-factions.js' is running by killing off unwanted instances
     if (2 in unlockedSFs) {
         // Check if we've joined a gang yet. (Never have to check again once we know we're in one)
-        if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()', null);
+        if (!playerInGang) playerInGang = await getNsDataThroughFile(ns, 'ns.gang.inGang()');
         rushGang = !options['disable-rush-gangs'] && !playerInGang;
         // Detect if a 'work-for-factions.js' instance is running with args that don't match our goal. We aren't too picky,
         // (so the player can run with custom args), but should have --crime-focus if (and only if) we're still working towards a gang.
@@ -597,34 +596,46 @@ async function checkOnRunningScripts(ns, player) {
     }
 }
 
+/** Get the source of the player's earnings by category.
+ * @param {NS} ns
+ * @returns {Promise<MoneySources>} */
+async function getPlayerMoneySources(ns) {
+    return await getNsDataThroughFile(ns, 'ns.getMoneySources()');
+}
+
 /** Logic to steal 10b from the casino
  * @param {NS} ns
  * @param {Player} player */
 async function maybeDoCasino(ns, player) {
     if (ranCasino || options['disable-casino']) return;
-    const casinoRanFileSet = ns.read(casinoFlagFile);
-    const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
-    // If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
-    // it's likely a sign that the flag is wrong and we should run cleanup and let casino get run again to be safe.
-    if (getTimeInAug() < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns)) < 8E9) {
-        const pid = launchScriptHelper(ns, 'cleanup.js');
-        if (pid) await waitForProcessToComplete(ns, pid);
-    } else if (casinoRanFileSet)
+    // Figure out whether we've already been kicked out of the casino for earning more than 10b there
+    const moneySources = await getPlayerMoneySources(ns);
+    const casinoEarnings = moneySources.sinceInstall.casino;
+    if (casinoEarnings >= 1e10) {
+        log(ns, `INFO: Skipping running casino.js, as we've previously earned ${formatMoney(casinoEarnings)} and been kicked out.`);
         return ranCasino = true;
-    // If it's been less than 1 minute, wait a while to establish income (unless in BN8)
-    // The exception is if we are in BN8 and have CashRoot Starter Kit. In this case we can head straight to the casino.
-    if (resetInfo.currentNode != 8 && getTimeInAug() < 60000)
-        return;
-    // If we're making more than ~5b / minute, no need to run casino. (Unless BN8, if BN8 we always need casino cash bootstrap)
-    // Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
-    if (resetInfo.currentNode != 8 && (cashRootBought ? player.money - 1e6 : player.money) / getTimeInAug() > 5e9 / 60000)
-        return ranCasino = true;
-    if (player.money > 10E9) // If we already have 10b, assume we ran and lost track, or just don't need the money
-        return ranCasino = true;
-    if (player.money < 250000)
-        return; // We need at least 200K (and change) to run casino so we can travel to aevum
+    }
 
-    // Run casino.js (and expect ourself to get killed in the process)
+    // If we're making more than ~5b / minute from the start of the BN, there's no need to run casino.
+    // In BN8 this is impossible, so in that case we don't even check and head straight to the casino.
+    if (resetInfo.currentNode != 8) {
+        // If we've been in the BN for less than 1 minute, wait a while to establish player's income rate 
+        if (getTimeInAug() < 60000)
+            return;
+        // Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
+        const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
+        const playerWealth = player.money + (await getStocksValue(ns)) - (cashRootBought ? 1e6 : 0);
+        const incomePerMinute = playerWealth / getTimeInAug();
+        if (incomePerMinute > 5e9 / 60000) {
+            log(ns, `INFO: Skipping running casino.js this augmentation, since our income (${formatMoney(incomePerMinute)}/min) >= 5b/min`);
+            return ranCasino = true;
+        }
+    }
+    // If we aren't in Aevum already, wait until we have the 200K required to travel (plus some extra buffer to actually spend at the casino)
+    if (player.city != "Aevum" && player.money < 250000)
+        return;
+
+    // Run casino.js (and expect this script to get killed in the process)
     // Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
     await killScript(ns, 'work-for-factions.js');
     // Kill any action, in case we are studying or working out, as it might steal focus or funds before we can bet it at the casino.
@@ -635,10 +646,8 @@ async function maybeDoCasino(ns, player) {
     if (pid) {
         await waitForProcessToComplete(ns, pid);
         await ns.sleep(1000); // Give time for this script to be killed if the game is being restarted by casino.js
-        // If we didn't get killed, see if casino.js discovered it was already previously kicked out
-        if (ns.read(casinoFlagFile)) return ranCasino = true;
         // Otherwise, something went wrong
-        log(ns, `ERROR: Something went wrong. Casino.js ran, but we haven't been killed, and the casino flag file "${casinoFlagFile}" isn't set.`)
+        log(ns, `ERROR: Something went wrong. casino.js was run, but we haven't been killed. It must have run into a problem...`)
     }
 }
 

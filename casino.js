@@ -1,12 +1,11 @@
 import {
     log, getConfiguration, getFilePath, waitForProcessToComplete,
-    runCommand, getNsDataThroughFile, getActiveSourceFiles, getErrorInfo, tail
+    runCommand, getNsDataThroughFile, formatMoney, getErrorInfo, tail
 } from './helpers.js'
 
 // Note to self: This script doesn't use ram-dodging in the inner loop, because we want to
 // delete all temp files and avoid creating more so that the game saves / reloads faster.
 
-const ran_flag = "/Temp/ran-casino.txt"
 const supportMsg = "Consider posting a full-game screenshot and your save file in the Discord channel or in a new github issue if you want help debugging this issue.";
 let doc = eval("document");
 let options;
@@ -123,7 +122,7 @@ export async function main(ns) {
 
     // Note, we deliberately DO NOT pre-emptively check our active source files, or do any kind of RAM dodging
     // const unlockedSFs = await getActiveSourceFiles(ns, true); // See if we have SF4 to travel automatically
-    // Why? Because this creates "Temp files", and we want to keep the safe file as small as possible for fast saves and reloads.
+    // Why? Because this creates "Temp files", and we want to keep the save file as small as possible for fast saves and reloads.
     //      We use an empty temp folder as a sign that we previously ran and killed all scripts and can safely proceed.
 
     // Step 2: Try to navigate to the blackjack game (with retries in case of transient errors)
@@ -184,8 +183,13 @@ export async function main(ns) {
             btnStartGame = await findRequiredElement(ns, "//button[text() = 'Start']");
 
             // Step 2.6: Clean up temp files and kill other running scripts to speed up the reload cycle
-            if (ns.ls("home", "Temp/").length > 0) { // Do a little clean-up to speed up save/load.
+            if (ns.ls("home", "Temp/").length > 0) { // If there are some temp files, it suggests we haven't killed all scripts and cleaned up yet
                 // Step 2.6.1: Test that we aren't already kicked out of the casino before doing drastic things like killing scripts
+                const moneySources = await getNsDataThroughFile(ns, 'ns.getMoneySources()'); // NEW (2022): We can use money sources to see what our casino earnings have been
+                const priorCasinoEarnings = moneySources.sinceInstall.casino;
+                if (priorCasinoEarnings >= 1e10)
+                    log(ns, `INFO: We've previously earned ${formatMoney(priorCasinoEarnings)} from the casino, which should mean we've already been kicked out, ` +
+                        `but we can double-check anyway by attempting to play a game, since you bothered running this script, and I've bothered scripting the check :)`, true)
                 await setText(ns, inputWager, `1`); // Bet just a dollar and quick the game right away, no big deal
                 await click(ns, btnStartGame);
                 if (await tryfindElement(ns, "//p[contains(text(), 'Count:')]", 10)) { // If this works, we're still allowed in
@@ -417,11 +421,10 @@ async function killAllOtherScripts(ns, removeRemoteFiles) {
  *  @param {boolean} kickedOutAfterPlaying (default: true) set to false if we detected having been kicked out before we even started.
  *  Run when we can no longer gamble at the casino (presumably because we've been kicked out) **/
 async function onCompletion(ns, kickedOutAfterPlaying = true) {
-    ns.write(ran_flag, "True", "w"); // Write a file indicating we think we've been kicked out of the casino.
     if (kickedOutAfterPlaying)
         log(ns, "SUCCESS: We've been kicked out of the casino.", true);
     else
-        log(ns, "WARNING: We appear to have been previously kicked out of the casino. Continuing without playing...", true);
+        log(ns, "INFO: We appear to have been previously kicked out of the casino. Continuing without playing...", true);
 
     // For convenience, route to the terminal (but no stress if it doesn't work)
     try {
