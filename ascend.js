@@ -172,6 +172,16 @@ export async function main(ns) {
         lastMoney = money;
     }
 
+    // TODO STEP 11: Accept any outstanding faction invitations, and claim our +1 free favour if available.
+    /*
+    const factionInvites = ns.singularity.checkFactionInvitations()
+    if (factionInvites.length > 0)
+        factionInvites.forEach(factionName => ns.singularity.joinFaction(factionName));
+    if (ns.singularity.exportGameBonus())
+        ns.singularity.exportGame();
+    // TODO: No way to close the pop-up save dialog, which is a deal-breaker for me.
+    */
+
     // STEP 4 REDUX: If somehow we have money left over and can afford some junk augs that weren't on our desired list, grab them too
     log(ns, 'Seeing if we can afford any other augmentations...', true, 'info');
     facmanArgs.push('--stat-desired', '_'); // Means buy any aug with any stats
