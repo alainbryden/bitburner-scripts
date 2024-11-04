@@ -105,23 +105,40 @@ export function main(ns) {
         return output;
     }
     function ordering(serverA, serverB) {
+        // Sort servers with a smaller sub-tree to the top. Hack: This is O(N^2) but it's easier to
+        // re-compute the entire subtree here than to figure out what the heck is going on in buildOutput above.
+        let orderNumber = treeDepth[serverA] - treeDepth[serverB];
         // Sort servers with fewer connections towards the top.
-        let orderNumber = ns.scan(serverA).length - ns.scan(serverB).length;
+        if (orderNumber == 0) orderNumber = ns.scan(serverA).length - ns.scan(serverB).length;
         // Purchased servers to the very top
-        orderNumber = orderNumber != 0 ? orderNumber :
-            getServerInfo(serverB).purchasedByPlayer - getServerInfo(serverA).purchasedByPlayer;
+        if (orderNumber == 0)
+            orderNumber = getServerInfo(serverB).purchasedByPlayer - getServerInfo(serverA).purchasedByPlayer;
         // Hack: compare just the first 2 chars to keep purchased servers in order purchased
-        orderNumber = orderNumber != 0 ? orderNumber :
-            serverA.slice(0, 2).toLowerCase().localeCompare(serverB.slice(0, 2).toLowerCase());
+        if (orderNumber == 0)
+            orderNumber = serverA.slice(0, 2).toLowerCase().localeCompare(serverB.slice(0, 2).toLowerCase());
         return orderNumber;
     }
 
     // refresh css (in case it changed)
-    doc.getElementById("scanCSS")?.remove()
-    doc.head.insertAdjacentHTML('beforeend', css)
-    let servers = ["home"],
-        parentByIndex = [""],
-        routes = { home: "home" }
+    doc.getElementById("scanCSS")?.remove();
+    doc.head.insertAdjacentHTML('beforeend', css);
+
+    // Scan once to determine big the subtree of each node is (purely for sorting purposes)
+    let treeDepth = {};
+    function getTreeDepth(server, stack = []) {
+        stack.push(server);
+        const connectedServers = ns.scan(server).filter(s => !stack.includes(s));
+        if (connectedServers.length == 0)
+            return treeDepth[server] = 0;
+        const maxSubTreeDepth = 1 + Math.max(...connectedServers.map(s => getTreeDepth(s, stack)));
+        return treeDepth[server] = maxSubTreeDepth;
+    }
+    getTreeDepth("home");
+
+    // Loop over the servers connected to home in the desired sort order to collect display info
+    let servers = ["home"];
+    let parentByIndex = [""];
+    let routes = { home: "home" }; // Command to connect to this server
     for (let server of servers)
         for (let oneScanResult of ns.scan(server).sort(ordering))
             if (!servers.includes(oneScanResult)) {
@@ -131,6 +148,7 @@ export function main(ns) {
                 routes[oneScanResult] = backdoored ? "connect " + oneScanResult : routes[server] + ";connect " + oneScanResult;
             }
 
+    // Build the output and insert it into the terminal
     terminalInsert(`<div class="serverscan new">${buildOutput()}</div>`);
     doc.querySelectorAll(".serverscan.new .server").forEach(serverEntry => serverEntry
         .addEventListener('click', setNavCommand.bind(null, routes[serverEntry.childNodes[0].nodeValue])));
