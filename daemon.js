@@ -1536,10 +1536,11 @@ export async function main(ns) {
             return Math.floor((ramAvailable / tool.cost)/*.toPrecision(14)*/);
         };
 
+        let targetServer = null;
         let remainingThreads = threads;
         let splitThreads = false;
         for (let i = 0; i < rootedServersByFreeRam.length && remainingThreads > 0; i++) {
-            let targetServer = rootedServersByFreeRam[i];
+            targetServer = rootedServersByFreeRam[i];
             const maxThreadsHere = Math.min(remainingThreads, computeMaxThreads(targetServer));
             if (maxThreadsHere <= 0)
                 continue; //break; HACK: We don't break here because there are cases when sort order can change (e.g. we've reserved home RAM)
