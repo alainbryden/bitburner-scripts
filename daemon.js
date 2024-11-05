@@ -18,43 +18,59 @@ import {
 // These parameters are meant to let you tweak the script's behaviour from the command line (without altering source code)
 let options;
 const argsSchema = [
-    ['h', false], // Do nothing but hack, no prepping (drains servers to 0 money, if you want to do that for some reason)
-    ['hack-only', false], // Same as above
-    ['s', true], // Enable Stock Manipulation. This is now true for default, but left as a valid argument for backwards-compatibility.
-    ['stock-manipulation', true], // Same as above
+    // Behaviour-changing flags
     ['disable-stock-manipulation', false], // You must now opt *out* of stock-manipulation mode by enabling this flag.
     ['stock-manipulation-focus', false], // Stocks are main source of income - kill any scripts that would do them harm (TODO: Enable automatically in BN8)
-    ['v', false], // Detailed logs about batch scheduling / tuning
-    ['verbose', false], // Same as above
-    ['o', false], // Good for debugging, run the main targettomg loop once then stop, with some extra logs
-    ['run-once', false], // Same as above
-    ['x', false], // Focus on a strategy that produces the most hack EXP rather than money
-    ['xp-only', false], // Same as above
+    ['s', true], // (obsolete) Enable Stock Manipulation. This is now true for default, but left as a valid argument for backwards-compatibility.
+    ['stock-manipulation', true], // (obsolete) Same as above
+
     ['n', false], // Can toggle on using hacknet nodes for extra hacking ram (at the expense of hash production)
     ['use-hacknet-nodes', false], // Same as above (kept for backwards compatibility, but these are now called hacknet-servers)
     ['use-hacknet-servers', false], // Same as above, but the game recently renamed these
+
     ['spend-hashes-for-money-when-under', 10E6], // (Default 10m) Convert 4 hashes to money whenever we're below this amount
     ['disable-spend-hashes', false], // An easy way to set the above to a very large negative number, thus never spending hashes for Money
-    ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
-    ['initial-max-targets', 2], // Initial number of servers to target / prep (TODO: Scale this as BN progression increases)
-    ['max-steal-percentage', 0.75], // Don't steal more than this in case something goes wrong with timing or scheduling, it's hard to recover from
-    ['cycle-timing-delay', 16000], // Time
-    ['queue-delay', 1000], // Delay before the first script begins, to give time for all scripts to be scheduled
-    ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule more
-    ['i', false], // Farm intelligence with manual hack.
+
+    ['x', false], // Focus on a strategy that produces the most hack EXP rather than money
+    ['xp-only', false], // Same as above
+    ['initial-study-time', 10], // Seconds. Set to 0 to not do any studying at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
+    ['initial-hack-xp-time', 10], // Seconds. Set to 0 to not do any hack-xp grinding at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
+
     ['reserved-ram', 32], // Keep this much home RAM free when scheduling hack/grow/weaken cycles on home.
     ['double-reserve-threshold', 512], // in GB of RAM. Double our home RAM reserve once there is this much home max RAM.
-    ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
-    ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
+
     ['share', false], // Enable sharing free ram to increase faction rep gain (enabled automatically once RAM is sufficient)
     ['no-share', false], // Disable sharing free ram to increase faction rep gain
     ['share-cooldown', 5000], // Wait before attempting to schedule more share threads (e.g. to free RAM to be freed for hack batch scheduling first)
     ['share-max-utilization', 0.8], // Set to 1 if you don't care to leave any RAM free after sharing. Will use up to this much of the available RAM
-    ['no-tail-windows', false], // Set to true to prevent the default behaviour of opening a tail window for certain launched scripts. (Doesn't affect scripts that open their own tail windows)
-    ['initial-study-time', 10], // Seconds. Set to 0 to not do any studying at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
-    ['initial-hack-xp-time', 10], // Seconds. Set to 0 to not do any hack-xp grinding at startup. By default, if early in an augmentation, will start with a little study to boost hack XP
+
     ['disable-script', []], // The names of scripts that you do not want run by our scheduler
     ['run-script', []], // The names of additional scripts that you want daemon to run on home
+
+    ['max-purchased-server-spend', 0.50], // Percentage of total hack income earnings we're willing to re-invest in new hosts (extra RAM in the current aug only)
+
+    // Batch script fine-tuning flags
+    ['initial-max-targets', 2], // Initial number of servers to target / prep (TODO: Scale this as BN progression increases)
+    ['cycle-timing-delay', 16000], // (ms) Length of a hack cycle. The smaller this is, the more batches (HWGW) we can schedule before the first cycle fires, but the greater the chance of a misfire
+    ['queue-delay', 1000], // (ms) Delay before the first script begins, to give time for all scripts to be scheduled
+    ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
+    ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule mor
+    ['max-steal-percentage', 0.75], // Don't steal more than this in case something goes wrong with timing or scheduling, it's hard to recover frome
+
+    ['looping-mode', false], // Set to true to attempt to schedule perpetually-looping tasks.
+
+    // Special-situation flags
+    ['i', false], // Farm intelligence with manual hack.
+
+    // Debugging flags
+    ['silent-misfires', false], // Instruct remote scripts not to alert when they misfire
+    ['no-tail-windows', false], // Set to true to prevent the default behaviour of opening a tail window for certain launched scripts. (Doesn't affect scripts that open their own tail windows)
+    ['h', false], // Do nothing but hack, no prepping (drains servers to 0 money, if you want to do that for some reason)
+    ['hack-only', false], // Same as above
+    ['v', false], // Detailed logs about batch scheduling / tuning
+    ['verbose', false], // Same as above
+    ['o', false], // Good for debugging, run the main targettomg loop once then stop, with some extra logs
+    ['run-once', false], // Same as above
 ];
 
 export function autocomplete(data, args) {
@@ -135,6 +151,7 @@ export async function main(ns) {
     let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)();
     let haveTixApi = false, have4sApi = false; // Whether we have WSE API accesses
     let _cachedPlayerInfo = (/**@returns{Player}*/() => undefined)(); // stores multipliers for player abilities and other player info
+    let moneySources = (/**@returns{MoneySources}*/() => undefined)(); // Cache of player income/expenses by category
 
     // Property to avoid log churn if our status hasn't changed since the last loop
     let lastUpdate = "";
@@ -363,9 +380,19 @@ export async function main(ns) {
 
         // PERIODIC SCRIPTS
         // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-        // In bitnodes with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
+        // Helper: In bitnodes with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
         let shouldImproveHacking = () => getPlayerMoney(ns) > 1e12 || !(bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0)
             || resetInfo.currentNode === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
+        // Helper: Get how much we're willing to spend on new servers (host-manager.js budget)
+        async function getRemainingServerBudget() {
+            const serverSpend = -(moneySources?.sinceInstall?.servers ?? 0); // This is given as a negative number (profit), we invert it to get it as a positive expense amount
+            return Math.max(0,
+                // Ensure the total amount of money spent on new servers is less than the configured max spend amount
+                options['max-purchased-server-spend'] * (moneySources?.sinceInstall?.hacking) ?? 0 - serverSpend,
+                // Special-case support: In some BNs hack income is severely penalized (or zero) but earning hack exp is still useful.
+                // To support these, always allow a small percentage (0.1%) of our total earnings (including other income sources) to be spent on servers
+                (moneySources?.sinceInstall?.total ?? 0) * 0.001 - serverSpend);
+        }
         // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
         periodicScripts = [
             // Buy tor as soon as we can if we haven't already, and all the port crackers
@@ -389,14 +416,12 @@ export async function main(ns) {
             },
             {   // Periodically look to purchase new servers, but note that these are often not a great use of our money (hack income isn't everything) so we may hold-back.
                 interval: 32000, name: "host-manager.js", minRamReq: 6.55,
-                // Funky heuristic warning: I find that new players with fewer SF levels under their belt are obsessed with hack income from servers,
-                // but established players end up finding auto-purchased hosts annoying - so now the % of money we spend shrinks as SF levels grow.
-                args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
-                shouldRun: () => {
-                    if (!shouldImproveHacking()) return false; // Skip if hack income is not important in this BN or at this time
-                    let utilization = getTotalNetworkUtilization(); // Utilization-based heuristics for when we likely could use more RAM for hacking
-                    return utilization >= maxUtilization || utilization > 0.80 && maxTargets < 20 || utilization > 0.50 && maxTargets < 5;
-                }
+                // Restrict spending on new servers (i.e. temporary RAM for the current augmentation only) to be a % of total earned hack income.
+                shouldRun: () => shouldImproveHacking() && getRemainingServerBudget() > 0,
+                args: () => ['--budget', getRemainingServerBudget(), '--absolute-reserve', reservedMoney(ns),
+                    // Mechanic to reserve more of our money the longer we've been in the BN. Starts at 0%, after 24h we should be reserving 92%.
+                    '--reserve-by-time', true, '--reserve-by-time-decay-factor', 0.1, '--reserve-percent', 0,
+                    '--utilization-trigger', '0'], // Disable utilization-based restrictions on purchasing RAM
             },
             // Check if any new servers can be backdoored. If there are many, this can eat up a lot of RAM, so make this the last script scheduled at startup.
             { interval: 33000, name: "/Tasks/backdoor-all-servers.js", shouldRun: () => 4 in dictSourceFiles && playerHackSkill() > 10 }, // Don't do this until we reach hack level 10. If we backdoor too early, it's very slow and eats up RAM for a long time,
@@ -977,6 +1002,11 @@ export async function main(ns) {
             log(ns, "WARNING: analyze-hack info unavailable. Will use fallback approach.");
         else
             dictServerProfitInfo = Object.fromEntries(JSON.parse(analyzeHackResult).map(s => [s.hostname, s]));
+        // Double home reserved ram once we reach the configured threshold
+        if (homeServer && homeServer.totalRam(true) >= options['double-reserve-threshold'])
+            homeReservedRam = 2 * options['reserved-ram'];
+
+        // Hack: Below concerns aren't related to "server data", but are things we also wish to refresh just once in a while
         // Determine whether we have purchased stock API accesses yet (affects reserving and attempts to manipulate stock markets)
         haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.hasTIXAPIAccess()`);
         have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`);
@@ -985,9 +1015,8 @@ export async function main(ns) {
             currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()'));
         // Check whether we've purchased access to the formulas API ("formulas.exe")
         hasFormulas = await doesFileExist(ns, "Formulas.exe")
-        // Double home reserved ram once we reach the configured threshold
-        if (homeServer && homeServer.totalRam(true) >= options['double-reserve-threshold'])
-            homeReservedRam = 2 * options['reserved-ram'];
+        // Update our cache of income / expenses by category
+        moneySources = await getNsDataThroughFile(ns, 'ns.getMoneySources()');
     }
 
     class Server {

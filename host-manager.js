@@ -1,4 +1,4 @@
-import { log, getConfiguration, instanceCount, getNsDataThroughFile, formatMoney, formatRam } from './helpers.js'
+import { log, getConfiguration, instanceCount, getNsDataThroughFile, formatMoney, formatRam, formatDuration } from './helpers.js'
 
 // The purpose of the host manager is to buy the best servers it can
 // until it thinks RAM is underutilized enough that you don't need to anymore.
@@ -24,6 +24,8 @@ const argsSchema = [
     ['absolute-reserve', null], // Set to reserve a fixed amount of money. Defaults to the contents of reserve.txt on home
     ['reserve-percent', 0.9], // Set to reserve a percentage of home money
     ['reserve-by-time', false], // Experimental exponential decay by time in the run. Starts willing to spend lots of money, falls off over time.
+    ['reserve-by-time-decay-factor', 0.2], // Controls how quickly our % reserve increases from --reserve-percent to 100% over time. For example, if --reserve-percent is set to 0.05 (allow spending 95% of money), time to reduce spending to ~25% of money is ~6hrs at 0.2, ~4hrs at 0.3, ~2hrs at 0.5
+    ['budget', Number.POSITIVE_INFINITY], // Yet another way to control spending, this budget will not be exceeded, regardless of player owned money. Reserves are still respected.
     ['allow-worse-purchases', false], // Set to true to allow purchase of servers worse than our current best purchased server
     ['compare-to-home-threshold', 0.25], // Do not bother buying servers unless they are at least this big compared to current home RAM
     ['compare-to-network-ram-threshold', 0.02], // Do not bother buying servers unless they are at least this big compared to total network RAM
@@ -76,8 +78,7 @@ export async function main(ns) {
     log(ns, `INFO: --utilization-trigger is set to ${options['utilization-trigger'] * 100}%: ` +
         `New servers will only be purchased when more than this much RAM is in use across the entire network.`);
     if (options['reserve-by-time'])
-        log(ns, `INFO: --reserve-by-time is active! This community-contributed option will spend more of your money on servers ` +
-            `early on, and less later on. Experimental and not tested by me. Have fun!`);
+        log(ns, `INFO: --reserve-by-time is active! This community-contributed option will spend more of your money on servers early on, and less later on.`);
     else
         log(ns, `INFO: --reserve-percent is set to ${pctReservedMoney * 100}%: ` +
             `This means we will spend no more than ${((1 - pctReservedMoney) * 100).toFixed(1)}% of current Money on a new server.`);
@@ -122,32 +123,47 @@ async function tryToBuyBestServerPossible(ns) {
 
     const totalMaxRam = rootedServers.reduce((t, s) => t + ns.getServerMaxRam(s), 0);
     const totalUsedRam = rootedServers.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
-    const utilizationRate = totalUsedRam / totalMaxRam;
-    setStatus(ns, `Using ${Math.round(totalUsedRam).toLocaleString('en')}/${formatRam(totalMaxRam)} (` +
-        `${(utilizationRate * 100).toFixed(1)}%) across ${rootedServers.length} servers ` +
-        `(Triggers at ${options['utilization-trigger'] * 100}%, ${purchasedServers.length} bought so far)`);
+    if (options['utilization-trigger'] > 0) {
+        const utilizationRate = totalUsedRam / totalMaxRam;
+        setStatus(ns, `Using ${Math.round(totalUsedRam).toLocaleString('en')}/${formatRam(totalMaxRam)} (` +
+            `${(utilizationRate * 100).toFixed(1)}%) across ${rootedServers.length} servers ` +
+            `(Triggers at ${options['utilization-trigger'] * 100}%, ${purchasedServers.length} bought so far)`);
+        // If utilization is below target. We don't need another server.
+        if (utilizationRate < options['utilization-trigger'])
+            return;
+    }
 
-    // If utilization is below target. We don't need another server.
-    if (utilizationRate < options['utilization-trigger']) return;
 
     // Check for other reasons not to go ahead with the purchase
     let prefix = 'Host-manager wants to buy another server, but ';
 
     // Determine our budget for spending money on home RAM
-    let spendableMoney = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, null, ["home"]);
+    let cashMoney = await getNsDataThroughFile(ns, `ns.getServerMoneyAvailable(ns.args[0])`, null, ["home"]);
     if (options['reserve-by-time']) { // Option to vary pctReservedMoney by time since augment.
         // Decay factor of 0.2 = Starts willing to spend 95% of our money, backing down to ~75% at 1 hour, ~60% at 2 hours, ~25% at 6 hours, and ~10% at 10 hours.
         // Decay factor of 0.3 = Starts willing to spend 95% of our money, backing down to ~66% at 1 hour, ~45% at 2 hours, ~23% at 4 hours, ~10% at 6 hours
         // Decay factor of 0.5 = Starts willing to spend 95% of our money, then halving every hour (to ~48% at 1 hour, ~24% at 2 hours, ~12% at 3 hours, etc)
-        const timeSinceLastAug = await getNsDataThroughFile(ns, 'ns.getTimeSinceLastAug()');
+        const timeSinceLastAug = Date.now() - (await getNsDataThroughFile(ns, 'ns.getResetInfo()')).lastAugReset;
         const t = timeSinceLastAug / (60 * 60 * 1000); // Time since last aug, in hours.
-        const decayFactor = 0.5;
-        pctReservedMoney = 1 - 0.95 * Math.pow(1 - decayFactor, t);
+        const decayFactor = options['reserve-by-time-decay-factor'];
+        pctReservedMoney = 1.0 - (1.0 - options['reserve-percent']) * Math.pow(1 - decayFactor, t);
+        if (!keepRunning)
+            log(ns, `After spending ${formatDuration(timeSinceLastAug)} in this augmentatin, reserve % has grown from ` +
+                `${(options['reserve-percent'] * 100).toFixed(1)}% to ${(pctReservedMoney * 100).toFixed(1)}%`);
     }
 
-    spendableMoney = Math.min(spendableMoney * (1 - pctReservedMoney), spendableMoney - absReservedMoney);
-    if (spendableMoney <= 0.01)
-        return setStatus(ns, `${prefix}all cash is currently reserved (% reserve: ${(pctReservedMoney * 100).toFixed(1)}%, abs reserve: ${formatMoney(absReservedMoney)})`);
+    let budget = options['budget'];
+    let spendableMoney = Math.min(budget, cashMoney * (1.0 - pctReservedMoney), cashMoney - absReservedMoney);
+    if (spendableMoney <= 0.01) {
+        if (!keepRunning) // Show a more detailed log if we aren't running continuously
+
+            return setStatus(ns, `${prefix}all player cash (${formatMoney(cashMoney)}) is currently reserved (budget: ${formatMoney(budget)}, ` +
+                `abs reserve: ${formatMoney(absReservedMoney)}, ` +
+                `% reserve: ${(pctReservedMoney * 100).toFixed(1)}% (${formatMoney(cashMoney * (1.0 - pctReservedMoney))}))`);
+        // Otherwise the "status" log we show should remain relatively consistent so we aren't spamming e.g. changes in player money in --continuous mode
+        return setStatus(ns, `${prefix}all player cash is currently reserved (budget: ${formatMoney(budget)}, ` +
+            `abs reserve: ${formatMoney(absReservedMoney)}, % reserve: ${(pctReservedMoney * 100).toFixed(1)}%)`);
+    }
 
     // Determine the most ram we can buy with our current money
     let exponentLevel = 1;
