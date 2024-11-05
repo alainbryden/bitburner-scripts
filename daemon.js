@@ -380,19 +380,6 @@ export async function main(ns) {
 
         // PERIODIC SCRIPTS
         // These scripts are spawned periodically (at some interval) to do their checks, with an optional condition that limits when they should be spawned
-        // Helper: In bitnodes with hack income disabled, don't waste money on improving hacking infrastructure unless we have plenty of money to spare
-        let shouldImproveHacking = () => getPlayerMoney(ns) > 1e12 || !(bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0)
-            || resetInfo.currentNode === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
-        // Helper: Get how much we're willing to spend on new servers (host-manager.js budget)
-        async function getRemainingServerBudget() {
-            const serverSpend = -(moneySources?.sinceInstall?.servers ?? 0); // This is given as a negative number (profit), we invert it to get it as a positive expense amount
-            return Math.max(0,
-                // Ensure the total amount of money spent on new servers is less than the configured max spend amount
-                options['max-purchased-server-spend'] * (moneySources?.sinceInstall?.hacking) ?? 0 - serverSpend,
-                // Special-case support: In some BNs hack income is severely penalized (or zero) but earning hack exp is still useful.
-                // To support these, always allow a small percentage (0.1%) of our total earnings (including other income sources) to be spent on servers
-                (moneySources?.sinceInstall?.total ?? 0) * 0.001 - serverSpend);
-        }
         // Note: Periodic script are generally run every 30 seconds, but intervals are spaced out to ensure they aren't all bursting into temporary RAM at the same time.
         periodicScripts = [
             // Buy tor as soon as we can if we haven't already, and all the port crackers
@@ -404,8 +391,8 @@ export async function main(ns) {
             { interval: 28500, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "8h", "--max-spend", getPlayerMoney(ns) * 0.01] },
             // Buy upgrades regardless of payoff if they cost less than 0.1% of our money
             { interval: 29000, name: "hacknet-upgrade-manager.js", shouldRun: shouldUpgradeHacknet, args: () => ["-c", "--max-payoff-time", "1E100h", "--max-spend", getPlayerMoney(ns) * 0.001] },
-            {
-                interval: 30000, name: "/Tasks/ram-manager.js", args: () => ['--budget', 0.5, '--reserve', reservedMoney(ns)], // Spend about 50% of un-reserved cash on home RAM upgrades (permanent) when they become available
+            {   // Spend about 50% of un-reserved cash on home RAM upgrades (permanent) when they become available
+                interval: 30000, name: "/Tasks/ram-manager.js", args: () => ['--budget', 0.5, '--reserve', reservedMoney(ns)],
                 shouldRun: () => 4 in dictSourceFiles && shouldImproveHacking() // Only trigger if hack income is important
             },
             {   // Periodically check for new faction invites and join if deemed useful to be in that faction. Also determines how many augs we could afford if we installed right now
@@ -417,8 +404,8 @@ export async function main(ns) {
             {   // Periodically look to purchase new servers, but note that these are often not a great use of our money (hack income isn't everything) so we may hold-back.
                 interval: 32000, name: "host-manager.js", minRamReq: 6.55,
                 // Restrict spending on new servers (i.e. temporary RAM for the current augmentation only) to be a % of total earned hack income.
-                shouldRun: () => shouldImproveHacking() && getRemainingServerBudget() > 0,
-                args: () => ['--budget', getRemainingServerBudget(), '--absolute-reserve', reservedMoney(ns),
+                shouldRun: () => shouldImproveHacking() && getHostManagerBudget() > 0,
+                args: () => ['--budget', getHostManagerBudget(), '--absolute-reserve', reservedMoney(ns),
                     // Mechanic to reserve more of our money the longer we've been in the BN. Starts at 0%, after 24h we should be reserving 92%.
                     '--reserve-by-time', true, '--reserve-by-time-decay-factor', 0.1, '--reserve-percent', 0,
                     '--utilization-trigger', '0'], // Disable utilization-based restrictions on purchasing RAM
@@ -463,6 +450,27 @@ export async function main(ns) {
 
         // Start the main targetting loop
         await doTargetingLoop(ns);
+    }
+
+    /** Periodic scripts helper function: In bitnodes with hack income disabled, don't waste money on improving hacking infrastructure */
+    function shouldImproveHacking() {
+        return 0 != (bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney) || // Check for disabled hack-income
+            getPlayerMoney(ns) > 1e12 || // If we have sufficient money, we may consider improving hack infrastructure (to earn hack exp more quickly)
+            resetInfo.currentNode === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
+    }
+
+    /** Periodic scripts helper function: Get how much we're willing to spend on new servers (host-manager.js budget) */
+    function getHostManagerBudget() {
+        const serverSpend = -(moneySources?.sinceInstall?.servers ?? 0); // This is given as a negative number (profit), we invert it to get it as a positive expense amount
+        const budget = Math.max(0,
+            // Ensure the total amount of money spent on new servers is less than the configured max spend amount
+            options['max-purchased-server-spend'] * (moneySources?.sinceInstall?.hacking ?? 0) - serverSpend,
+            // Special-case support: In some BNs hack income is severely penalized (or zero) but earning hack exp is still useful.
+            // To support these, always allow a small percentage (0.1%) of our total earnings (including other income sources) to be spent on servers
+            (moneySources?.sinceInstall?.total ?? 0) * 0.001 - serverSpend);
+        log(ns, `Math.max(0, ${options['max-purchased-server-spend']} * (${formatMoney(moneySources?.sinceInstall?.hacking)} ?? 0) - ${formatMoney(serverSpend)}, ` +
+            `(${formatMoney(moneySources?.sinceInstall?.total)} ?? 0) * 0.001 - ${formatMoney(serverSpend)}) = ${formatMoney(budget)}`);
+        return budget;
     }
 
     /** @param {NS} ns
@@ -551,12 +559,11 @@ export async function main(ns) {
      * @returns {Promise<boolean>} true if all scripts have been launched */
     async function runStartupScripts(ns) {
         let launched = 0;
-        for (const helper of asynchronousHelpers) {
-            if (!helper.isLaunched && (helper.shouldRun === undefined || (await helper.shouldRun()))) {
-                if (launched > 0) await ns.sleep(200); // Sleep a short while between each script being launched, so they aren't all fighting for temp RAM at the same time.
-                helper.isLaunched = await tryRunTool(ns, getTool(helper))
-                if (helper.isLaunched) launched++;
-            }
+        for (const script of asynchronousHelpers.filter(s => !s.isLaunched)) {
+            if (!(await tryRunTool(ns, getTool(script))))
+                continue; // We may have chosen not to run the script for a number of reasons. Proceed to the next one.
+            if (++launched > 1) await ns.sleep(1); // If we successfully launch more than 1 script at a time, yeild execution a moment to give them a chance to complete, so many aren't all fighting for temp RAM at the same time.
+            script.isLaunched = true;
         }
         // if every helper is launched already return "true" so we can skip doing this each cycle going forward.
         return asynchronousHelpers.reduce((allLaunched, tool) => allLaunched && tool.isLaunched, true);
@@ -566,15 +573,16 @@ export async function main(ns) {
      * @param {NS} ns */
     async function runPeriodicScripts(ns) {
         let launched = 0;
-        for (const task of periodicScripts) {
-            let tool = getTool(task);
-            if ((Date.now() - (task.lastRun || 0) >= task.interval) && (task.shouldRun === undefined || (await task.shouldRun()))) {
-                task.lastRun = Date.now()
-                if (launched > 0) await ns.sleep(11); // Sleep a short while between each script being launched, so they aren't all fighting for temp RAM at the same time.
-                if (await tryRunTool(ns, tool))
-                    launched++;
-            }
+        for (const script of periodicScripts) {
+            // Only run this tool if it's been more than <task.interval> milliseconds since it was last run
+            const timeSinceLastRun = Date.now() - (script.lastRun || 0);
+            if (timeSinceLastRun <= script.interval) continue;
+            script.lastRun = Date.now(); // Update the last run date whether we successfully ran it or not           
+            if (await tryRunTool(ns, getTool(script))) // Try to run the task
+                if (++launched > 1) await ns.sleep(1); // If we successfully launch more than 1 script at a time, yeild execution a moment to give them a chance to complete, so many aren't all fighting for temp RAM at the same time.
         }
+
+        // Hack: this doesn't really belong here, but is essentially a "temp script" we periodically run when needed
         // Super-early aug, if we are poor, spend hashes as soon as we get them for a quick cash injection. (Only applies if we have hacknet servers)
         if (9 in dictSourceFiles && !options['disable-spend-hashes']) { // See if we have a hacknet, and spending hashes for money isn't disabled
             if (homeServer.getMoney() < options['spend-hashes-for-money-when-under'] // Only if money is below the configured threshold
@@ -591,19 +599,24 @@ export async function main(ns) {
      * @param {NS} ns
      * @param {Tool} tool */
     async function tryRunTool(ns, tool) {
-        if (options['disable-script'].includes(tool.name)) {
+        if (options['disable-script'].includes(tool.name)) { // Ensure the script hasn't been disabled
             if (verbose) log(ns, `Tool ${tool.name} was not launched as it was specified with --disable-script`);
             return false;
         }
-        if (!(await doesFileExist(ns, tool.name))) {
+        if (tool.shouldRun != null && !(await tool.shouldRun())) { // Check the script's own conditions for being run
+            if (verbose) log(ns, `INFO: Tool ${tool.name} was not launched as its shouldRun() function returned false.`);
+            return false;
+        }
+        if (!(await doesFileExist(ns, tool.name))) { // Ensure the script exists
             log(ns, `ERROR: Tool ${tool.name} was not found on ${daemonHost}`, true, 'error');
             return false;
         }
         let [runningOnServer, runningPid] = whichServerIsRunning(ns, tool.name, false);
-        if (runningOnServer != null) {
+        if (runningOnServer != null) { // Ensure the script isn't already running
             if (verbose) log(ns, `INFO: Tool ${tool.name} is already running on server ${runningOnServer} as pid ${runningPid}.`);
             return true;
         }
+        // If all criteria pass, launch the script on home, or wherever we have space for it.
         const args = funcResultOrValue(tool.args) || []; // Support either a static args array, or a function returning the args.
         const lowHomeRam = homeServer.totalRam(true) < 32; // Special-case. In early BN1.1, when home RAM is <32 GB, allow certain scripts to be run on any host
         const runResult = lowHomeRam ?
