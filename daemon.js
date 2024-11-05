@@ -149,6 +149,7 @@ export async function main(ns) {
     let currentTerminalServer = ""; // Periodically updated when intelligence farming, the current connected terminal server.
     let dictSourceFiles = (/**@returns{{[bitNode: number]: number;}}*/() => undefined)(); // Available source files
     let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)();
+    let bitNodeN = 1; // The bitnode we're in
     let haveTixApi = false, have4sApi = false; // Whether we have WSE API accesses
     let _cachedPlayerInfo = (/**@returns{Player}*/() => undefined)(); // stores multipliers for player abilities and other player info
     let moneySources = (/**@returns{MoneySources}*/() => undefined)(); // Cache of player income/expenses by category
@@ -262,6 +263,7 @@ export async function main(ns) {
 
         disableLogs(ns, ['getServerMaxRam', 'getServerUsedRam', 'getServerMoneyAvailable', 'getServerGrowth', 'getServerSecurityLevel', 'exec', 'scan', 'sleep']);
         // Reset global vars on startup since they persist in memory in certain situations (such as on Augmentation)
+        // TODO: Can probably get rid of all of this now that the entire script is wrapped in the main function.
         lastUpdate = "";
         lastUpdateTime = Date.now();
         maxTargets = 2;
@@ -288,6 +290,7 @@ export async function main(ns) {
         } catch {
             resetInfo = { currentNode: 1, lastAugReset: Date.now() };
         }
+        bitNodeN = resetInfo.currentNode;
         dictSourceFiles = await getActiveSourceFiles_Custom(ns, getNsDataThroughFile);
         log(ns, "The following source files are active: " + JSON.stringify(dictSourceFiles));
 
@@ -456,7 +459,7 @@ export async function main(ns) {
     function shouldImproveHacking() {
         return 0 != (bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney) || // Check for disabled hack-income
             getPlayerMoney(ns) > 1e12 || // If we have sufficient money, we may consider improving hack infrastructure (to earn hack exp more quickly)
-            resetInfo.currentNode === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
+            bitNodeN === 8 // The exception is in BN8, we still want lots of hacking to take place to manipulate stocks, which requires this infrastructure (TODO: Strike a balance between spending on this stuff and leaving money for stockmaster.js)
     }
 
     /** Periodic scripts helper function: Get how much we're willing to spend on new servers (host-manager.js budget) */
