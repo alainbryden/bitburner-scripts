@@ -471,8 +471,8 @@ export async function main(ns) {
             // Special-case support: In some BNs hack income is severely penalized (or zero) but earning hack exp is still useful.
             // To support these, always allow a small percentage (0.1%) of our total earnings (including other income sources) to be spent on servers
             (moneySources?.sinceInstall?.total ?? 0) * 0.001 - serverSpend);
-        log(ns, `Math.max(0, ${options['max-purchased-server-spend']} * (${formatMoney(moneySources?.sinceInstall?.hacking)} ?? 0) - ${formatMoney(serverSpend)}, ` +
-            `(${formatMoney(moneySources?.sinceInstall?.total)} ?? 0) * 0.001 - ${formatMoney(serverSpend)}) = ${formatMoney(budget)}`);
+        //log(ns, `Math.max(0, ${options['max-purchased-server-spend']} * (${formatMoney(moneySources?.sinceInstall?.hacking)} ?? 0) - ${formatMoney(serverSpend)}, ` +
+        //    `(${formatMoney(moneySources?.sinceInstall?.total)} ?? 0) * 0.001 - ${formatMoney(serverSpend)}) = ${formatMoney(budget)}`);
         return budget;
     }
 
