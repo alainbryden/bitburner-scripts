@@ -40,8 +40,8 @@ export async function main(ns) {
         else
             ns.tprint(`WARNING: "${fullLocalFilePath}" was not updated. (Currently running, or not located at ${remoteFilePath}?)`)
     }
-    ns.tprint(`INFO: Pull complete. If you have any questions or issues, head over to the Bitburner #alains-scripts Discord channel: ` +
-        `https://discord.com/channels/415207508303544321/935667531111342200`);
+    ns.tprint(`INFO: Pull complete. If you have any questions or issues, create an issue on github or join the ` +
+        `Bitburner Discord channel "#Insight's-scripts": https://discord.com/channels/415207508303544321/935667531111342200`);
     // Remove any temp files / scripts from the prior version
     ns.run(pathJoin(options.subfolder, `cleanup.js`));
 }
