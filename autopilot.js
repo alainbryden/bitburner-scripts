@@ -323,7 +323,7 @@ async function checkIfBnIsComplete(ns, player) {
     // HEURISTIC: If we naturally get within 75% of the if w0r1d_d43m0n hack stat requirement,
     //    switch daemon.js to prioritize earning hack exp for the remainder of the BN
     if (player.skills.hacking >= (wdHack * 0.75))
-        prioritizeHackForWd = true;
+        prioritizeHackForWd = !bnComplete;
 
     if (!bnComplete) return false; // No win conditions met
 
