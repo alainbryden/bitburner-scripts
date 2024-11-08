@@ -99,7 +99,7 @@ const waitForFactionInviteTime = 30 * 1000; // The game will only issue one new 
 
 let shouldFocus; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
-let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner, wasGrafting;
+let hasFocusPenalty, hasSimulacrum, favorToDonate, fulcrumHackReq, notifiedAboutDaedalus, playerInBladeburner, wasGrafting;
 let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // Trick to get strong typing in mono
@@ -175,7 +175,7 @@ export async function main(ns) {
 
 /** @param {NS} ns */
 async function loadStartupData(ns) {
-    repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
+    favorToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     const playerInfo = await getPlayerInfo(ns);
     const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
     bitNodeMults = await tryGetBitNodeMultipliers(ns);
@@ -231,7 +231,7 @@ async function loadStartupData(ns) {
 
     // TODO: If --prioritize-invites is set, we should have a preferred faction order that puts easiest-invites-to-earn at the front (e.g. all city factions)
     numJoinedFactions = playerInfo.factions.length;
-    fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
+    fulcrumHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
 }
 
 let lastMainLoopMessage = "";
@@ -287,11 +287,11 @@ async function mainLoop(ns) {
 
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
     let priorityFactions = options['crime-focus'] ? preferredCrimeFactionOrder.slice() : preferredEarlyFactionOrder.slice();
-    if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
+    if (player.skills.hacking < fulcrumHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
         const fulcrumIdx = priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies")
         if (fulcrumIdx !== -1) {
             priorityFactions.splice(fulcrumIdx, 1);
-            ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
+            ns.print(`Fulcrum faction server requires ${fulcrumHackReq} hack, so removing from our initial priority list for now.`);
         }
     } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
     // If we're in BN 10, we can purchase special Sleeve-related things from the Covenant, so we should always try join it
@@ -352,11 +352,18 @@ async function mainLoop(ns) {
             await workForSingleFaction(ns, faction, true, true);
     if (scope <= 7 || breakToMainLoop()) return;
 
-    // Strategy 8: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
+    // Strategy 8: Everything up until now will skip factions that we've *already* unlocked donations with (can donate in the current install), since we can just throw money at them for aug reputation
+    // But in some BNs, money might be hard to come by, so now we should proceed to grind reputation the old-fasioned way so we don't have to waste money on donations
+    for (const faction of allIncompleteFactions)
+        if (!breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
+            await workForSingleFaction(ns, faction, false, true, true);
+    if (scope <= 8 || breakToMainLoop()) return;
+
+    // Strategy 9: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
     let factionsWeCanWorkFor = joinedFactions.filter(f => !options.skip.includes(f) && !cannotWorkForFactions.includes(f) && f != playerGang);
     let foundWork = false;
-    if (factionsWeCanWorkFor.length > 0 && !options['crime-focus']) {
-        // Do a little work for whatever faction has the most favor (e.g. to earn EXP and enable additional neuroflux purchases)
+    // Work for the faction we already have the most favor with (to earn stat EXP and rep for additional neuroflux levels)
+    if (factionsWeCanWorkFor.length > 0 && !options['crime-focus']) { // Unless we've been asked to prioritize crime (e.g. for Karma)
         let mostFavorFaction = factionsWeCanWorkFor.sort((a, b) => (dictFactionFavors[b] || 0) - (dictFactionFavors[a] || 0))[0];
         let targetRep = 1000 + (await getFactionReputation(ns, mostFavorFaction)) * 1.05; // Hack: Grow rep by ~5%, plus 1000 incase it's currently 0
         ns.print(`INFO: All useful work complete. Grinding an additional 5% rep (to ${formatNumberShort(targetRep)}) ` +
@@ -370,7 +377,7 @@ async function mainLoop(ns) {
         ns.print(`INFO: Nothing to do. Sleeping for 30 seconds to see if magically we join a faction`);
         await ns.sleep(30000);
     }
-    if (scope <= 8) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
+    if (scope <= 9) scope--; // Cap the 'scope' value from increasing perpetually when we're on our last strategy
 }
 
 // Ram-dodging helper, runs a command for all items in a list and returns a dictionary.
@@ -857,26 +864,44 @@ async function isValidInterruption(ns, currentWork = null) {
 }
 
 let lastFactionWorkStatus = "";
-/** @param {NS} ns
- * Checks how much reputation we need with this faction to either buy all augmentations or get 150 favour, then works to that amount.
+/** * Checks how much reputation we need with this faction to either buy all augmentations or get 150 favour, then works to that amount.
+ * @param {NS} ns
+ * @param {string} factionName The faction to work for
+ * @param {boolean} forceUnlockDonations Set to true to keep grinding reputation until we would earn enough favour to unlock donations on our next reset.
+ *                                       If left as the default (false) we will grind rep either until we unlock donations, or can afford the most expensive desired aug, whichever is lower.
+ * @param {boolean} forceBestAug Set to true to a) ignore "desired" stats and just work towards the most expensive (rep) agumentation,
+ *                                          and b) ignore the rep required to unlock donations and keep going until we can buy all augmentations
+ *                               Note: The exception is if donations are already unlocked, then you can already buy all augmentations (by buying rep first), so this does nothing.
+ * @param {boolean|number} forceRep Set to true to force working for reputation even if we have unlocked donations and could just buy reputation.
+ *                               Hack: If set to a number, we will work until that reputation amount regardless of augmentation reputation requirements.
  * */
-export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = undefined) {
+export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = false) {
     const repToFavour = (rep) => Math.ceil(25500 * 1.02 ** (rep - 1) - 25000);
     let highestRepAug = forceBestAug ? mostExpensiveAugByFaction[factionName] : mostExpensiveDesiredAugByFaction[factionName];
-    let startingFavor = dictFactionFavors[factionName] || 0;
-    let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
-    // When to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
-    let factionRepRequired = forceRep ? forceRep : forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
-    if (highestRepAug == -1 && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
+    let startingFavor = dictFactionFavors[factionName] || 0; // How much favour do we already have with this faction?
+    let favorRepRequired = Math.max(0, repToFavour(favorToDonate) - repToFavour(startingFavor));
+    // Determine when to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
+    let factionRepRequired = Math.min(highestRepAug, favorRepRequired); // By default, stop at whichever comes first
+    if (forceUnlockDonations) // If forced, ensure we earn enough reputation to unlock donations on our next reset
+        factionRepRequired = Math.max(factionRepRequired, favorRepRequired)
+    if (forceBestAug)// If forced, ensure we earn enough rep to buy the highest rep augmentation
+        factionRepRequired = Math.max(factionRepRequired, highestRepAug);
+    if (forceRep !== true && forceRep > 0) // If forceRep is a number (not just a flag 'true'), ensure we earn the specified rep amount
+        factionRepRequired = Math.max(factionRepRequired, forceRep)
+    // Check for any reasons to skip working for this faction
+    if (!forceRep && highestRepAug == -1 && !firstFactions.includes(factionName) && !options['get-invited-to-every-faction'])
         return ns.print(`All "${factionName}" augmentations are owned. Skipping unlocking faction...`);
     // Ensure we get an invite to location-based factions we might want / need
     if (!await earnFactionInvite(ns, factionName))
         return ns.print(`We are not yet part of faction "${factionName}". Skipping working for faction...`);
-    if (startingFavor >= repToDonate && !forceRep) // If we have already unlocked donations via favour - no need to grind for rep
-        return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
     if (playerGang == factionName) // Cannot work for your own gang faction.
         return ns.print(`"${factionName}" is your gang faction. You can only earn rep in your gang via respect.`);
-    if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
+    // If we have already unlocked donations via favour, we can just buy the rep needed to unlock augmentations
+    // (earning money is typically faster than earning reputation), so we'll skip trying to earn further reputation
+    if (!forceRep && startingFavor >= favorToDonate)
+        return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
+    // Hack: Even in "forceUnlockDonations" mode, don't ever bother unlocking donations for factions whose most expensive augmentation is <20% of the donation rep required
+    if (!forceRep && forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) {
         ns.print(`The last "${factionName}" aug is only ${mostExpensiveAugByFaction[factionName].toLocaleString('en')} rep, ` +
             `not worth grinding ${favorRepRequired.toLocaleString('en')} rep to unlock donations.`);
         forceUnlockDonations = false;
@@ -893,7 +918,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             `(Current rep: ${Math.round(currentReputation).toLocaleString('en')}). Skipping working for faction...`)
 
     ns.print(`Faction "${factionName}" Highest Aug Req: ${highestRepAug?.toLocaleString('en')}, Current Favor (` +
-        `${startingFavor?.toFixed(2)}/${repToDonate?.toFixed(2)}) Req: ${Math.round(favorRepRequired).toLocaleString('en')}`);
+        `${startingFavor?.toFixed(2)}/${favorToDonate?.toFixed(2)}) Req: ${Math.round(favorRepRequired).toLocaleString('en')}`);
     if (options['invites-only'])
         return ns.print(`--invites-only Skipping working for faction...`);
     if (options['prioritize-invites'] && !forceUnlockDonations && !forceBestAug && !forceRep)
@@ -954,7 +979,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
                 log(ns, `ERROR: WTF... getCurrentFactionFavour returned 'undefined' for factionName: ${factionName}`, true, 'error');
             else if (currentFavor > startingFavor) {
                 startingFavor = dictFactionFavors[factionName] = currentFavor;
-                favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
+                favorRepRequired = Math.max(0, repToFavour(favorToDonate) - repToFavour(startingFavor));
                 factionRepRequired = forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
             }
         }
