@@ -342,13 +342,13 @@ async function mainLoop(ns) {
     // Strategy 6: Revisit all factions until each has enough rep to unlock donations - so if we can't afford all augs this reset, at least we don't need to grind for rep on the next reset
     // For this, we reverse the order (ones with augs costing the most-rep to least) since these will take the most time to re-grind rep for if we can't buy them this reset.
     for (const faction of allIncompleteFactions.reverse())
-        if (breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
+        if (!breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
             await workForSingleFaction(ns, faction, true);
     if (scope <= 6 || breakToMainLoop()) return;
 
-    // Strategy 7:  Next, revisit all factions and grind XP until we can afford the most expensive aug, even if we could just buy the required rep next reset
+    // Strategy 7: Next, revisit all factions and grind XP until we can afford the most expensive aug on this install, even if we are slated to unlock donations on the next reset
     for (const faction of allIncompleteFactions.reverse()) // Re-reverse the sort order so we start with the easiest (cheapest) faction augs to complete
-        if (breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
+        if (!breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
             await workForSingleFaction(ns, faction, true, true);
     if (scope <= 7 || breakToMainLoop()) return;
 
