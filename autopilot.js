@@ -624,6 +624,12 @@ async function maybeDoCasino(ns, player) {
         log(ns, `INFO: Skipping running casino.js, as we've previously earned ${formatMoney(casinoEarnings)} and been kicked out.`);
         return ranCasino = true;
     }
+    // If we already have more than 1t money but hadn't run casino.js yet, don't bother. Another 10b won't move the needle much.
+    const playerWealth = player.money + (await getStocksValue(ns));
+    if (playerWealth >= 1e12) {
+        log(ns, `INFO: Skipping running casino.js, since we're already ridiculously wealthy (${formatMoney(playerWealth)} > 1t).`);
+        return ranCasino = true;
+    }
 
     // If we're making more than ~5b / minute from the start of the BN, there's no need to run casino.
     // In BN8 this is impossible, so in that case we don't even check and head straight to the casino.
@@ -633,13 +639,13 @@ async function maybeDoCasino(ns, player) {
             return;
         // Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
         const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
-        const playerWealth = player.money + (await getStocksValue(ns)) - (cashRootBought ? 1e6 : 0);
-        const incomePerMinute = playerWealth / getTimeInAug();
+        const incomePerMinute = (playerWealth - (cashRootBought ? 1e6 : 0)) / getTimeInAug();
         if (incomePerMinute > 5e9 / 60000) {
             log(ns, `INFO: Skipping running casino.js this augmentation, since our income (${formatMoney(incomePerMinute)}/min) >= 5b/min`);
             return ranCasino = true;
         }
     }
+
     // If we aren't in Aevum already, wait until we have the 200K required to travel (plus some extra buffer to actually spend at the casino)
     if (player.city != "Aevum" && player.money < 250000)
         return;
