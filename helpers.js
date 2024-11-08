@@ -530,22 +530,37 @@ export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode =
 export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, includeLevelsFromCurrentBitnode = true, silent = true) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
     // Find out what source files the user has unlocked
-    let dictSourceFiles;
+    let dictSourceFiles = (/**@returns{{[bitNodeN: number]: number;}}*/() => { currentNode: 0 })();
     try {
         dictSourceFiles = await fnGetNsDataThroughFile(ns,
             `Object.fromEntries(ns.singularity.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`,
-            '/Temp/owned-source-files.txt', null, null, null, null, silent);
-    } catch { dictSourceFiles = {}; } // If this fails (e.g. presumably due to low RAM or no singularity access), return an empty dictionary
-    // If the user is currently in a given bitnode, they will have its features unlocked
-    // TODO: This is true of BN4, but not BN14.2, Check them all!
-    if (includeLevelsFromCurrentBitnode) {
-        try {
-            const currentNode = (await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', '/Temp/reset-info.txt', null, null, null, null, silent)).currentNode;
-            // In some Bitnodes, we get the *effects* of source file level 3 just by being in the bitnode.
-            let effectiveSfLevel = [4, 8].includes(currentNode) ? 3 : 1;
-            dictSourceFiles[currentNode] = Math.max(effectiveSfLevel, dictSourceFiles[currentNode] || 0);
-        } catch { /* We are expected to be fault-tolerant in low-ram conditions */ }
+            '/Temp/getOwnedSourceFiles-asDict.txt', null, null, null, null, silent);
+    } catch { } // If this fails (e.g. presumably due to low RAM or no singularity access), default to an empty dictionary
+    //ns.tprint(JSON.stringify(dictSourceFiles));
+
+    // Try to get reset info
+    let resetInfo = (/**@returns{ResetInfo}*/() => { currentNode: 0 })();
+    try {
+        resetInfo = await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', null, null, null, null, null, silent);
+    } catch { } // As above, suppress any errors and use a fall-back to survive low ram conditions.
+    //ns.tprint(JSON.stringify(resetInfo));
+
+    // If the user is currently in a given bitnode, they will have its features unlocked. Include these "effective" levels if requested;
+    if (includeLevelsFromCurrentBitnode && resetInfo.currentNode != 0) {
+        // In some Bitnodes, we get the *effects* of source file level 3 just by being in the bitnode
+        // TODO: This is true of some BNs (BN4), but not others (BN14.2), Check them all!
+        let effectiveSfLevel = [4, 8].includes(resetInfo.currentNode) ? 3 : 1;
+        dictSourceFiles[resetInfo.currentNode] = Math.max(effectiveSfLevel, dictSourceFiles[resetInfo.currentNode] || 0);
     }
+
+    // If any bitNodeOptions were set, it might reduce our source file levels for gameplay purposes,
+    // but the game currently has a bug where getOwnedSourceFiles won't reflect this, so we must do it ourselves.
+    if ((resetInfo?.bitNodeOptions?.sourceFileOverrides?.length ?? 0) > 0) {
+        resetInfo.bitNodeOptions.sourceFileOverrides.forEach((sfLevel, bn) => dictSourceFiles[bn] = sfLevel);
+        // Completely remove keys whose override level is 0
+        Object.keys(dictSourceFiles).filter(bn => dictSourceFiles[bn] == 0).forEach(bn => delete dictSourceFiles[bn]);
+    }
+
     return dictSourceFiles;
 }
 
