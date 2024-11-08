@@ -369,9 +369,6 @@ export async function main(ns) {
                     && 7 in dictSourceFiles && bitNodeMults.BladeburnerRank != 0 // Don't run bladeburner in BN's where it can't rank up (currently just BN8)
             },
         ];
-        asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
-        // Fix the file path for each tool if this script was cloned to a sub-directory
-        asynchronousHelpers.forEach(helper => helper.name = getFilePath(helper.name));
         // Add any additional scripts to be run provided by --run-script arguments
         options['run-script'].forEach(s => asynchronousHelpers.push({ name: s }));
         // Set these helper functions to not be marked as "temporary" when they are run (save their execution state)
@@ -416,7 +413,6 @@ export async function main(ns) {
             // Check if any new servers can be backdoored. If there are many, this can eat up a lot of RAM, so make this the last script scheduled at startup.
             { interval: 33000, name: "/Tasks/backdoor-all-servers.js", shouldRun: () => 4 in dictSourceFiles && playerHackSkill() > 10 }, // Don't do this until we reach hack level 10. If we backdoor too early, it's very slow and eats up RAM for a long time,
         ];
-        periodicScripts.forEach(tool => tool.name = getFilePath(tool.name));
         periodicScripts.forEach(tool => tool.ignoreReservedRam = true);
         if (verbose) // In verbose mode, have periodic sripts persist their logs.
             periodicScripts.forEach(tool => tool.runOptions = { temporary: false });
@@ -428,7 +424,6 @@ export async function main(ns) {
             { name: "/Remote/manualhack-target.js", shortName: "manualhack" },
             { name: "/Remote/share.js", shortName: "share", threadSpreadingAllowed: true },
         ];
-        hackTools.forEach(tool => tool.name = getFilePath(tool.name));
         hackTools.forEach(tool => tool.ignoreReservedRam = false);
 
         await buildToolkit(ns, [...asynchronousHelpers, ...periodicScripts, ...hackTools]); // build toolkit
@@ -2256,8 +2251,12 @@ export async function main(ns) {
      * @param {({name: string; shortName: string; shouldRun: () => Promise<boolean>; args: string[]; shouldTail: boolean; threadSpreadingAllowed: boolean; ignoreReservedRam: boolean; minRamReq: number, runOptions: RunOptions; })[]} allTools **/
     async function buildToolkit(ns, allTools) {
         log(ns, "buildToolkit");
+        // Fix the file path for each tool if this script was cloned to a sub-directory
+        allTools.forEach(script => script.name = getFilePath(script.name));
+        // Get the cost (RAM) of each tool from the API
         let toolCosts = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(s => [s, ns.getScriptRam(s, 'home')]))`,
             '/Temp/script-costs.txt', allTools.map(t => t.name));
+        // Construct a Tool class instance for each configured item
         const toolsTyped = allTools.map(toolConfig => new Tool(toolConfig, toolCosts[toolConfig.name]));
         toolsByShortName = Object.fromEntries(toolsTyped.map(tool => [tool.shortName || hashToolDefinition(tool), tool]));
         await updatePortCrackers(ns);
