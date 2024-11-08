@@ -387,8 +387,9 @@ async function checkIfBnIsComplete(ns, player) {
     if (pid) await waitForProcessToComplete(ns, pid);
 
     // Use the new special singularity function to automate entering a new BN
-    pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1])`, null, [nextBn, ns.getScriptName(),
-        { sourceFileOverrides: new Map() }]); // Work around a long-standing bug on bitburner-official.github.io TODO: Remove
+    pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
+        `, { sourceFileOverrides: new Map() }` + // Work around a long-standing bug on bitburner-official.github.io TODO: Remove
+        `)`, null, [nextBn, ns.getScriptName()]);
     if (pid) {
         log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
         await waitForProcessToComplete(ns, pid);
