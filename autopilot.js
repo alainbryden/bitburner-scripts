@@ -49,8 +49,8 @@ const defaultBnOrder = [ // The order in which we intend to play bitnodes
     2.1,  // Easy.   Unlocks gangs, which reduces the need to grind faction and company rep for getting access to most augmentations, speeding up all BNs
 
     // 2nd Priority: More new features, from Harder BNs. Things will slow down for a while, but the new features should pay in dividends for all future BNs
-    8.2,  // Hard.   8.1 immediately unlocks stocks, 8.2 doubles stock earning rate with shorts. Stocks are never nerfed in any BN (4S can be made too pricey though), and we have a good pre-4S stock script.
     10.1, // Hard.   Unlock Sleeves (which tremendously speed along gangs outside of BN2) and grafting (can speed up slow rep-gain BNs). // TODO: Buying / upgrading sleeve mem has no API, requires manual interaction. Can we automate this with UI clicking like casino.js?
+    8.2,  // Hard.   8.1 immediately unlocks stocks, 8.2 doubles stock earning rate with shorts. Stocks are never nerfed in any BN (4S can be made too pricey though), and we have a good pre-4S stock script.
     13.1, // Hard.   Unlock Stanek's Gift. We've put a lot of effort into min/maxing the Tetris, so we should try to get it early, even though it's a hard BN. I might change my mind and push this down if it proves too slow.
     7.1,  // Hard.   Unlocks the bladeburner API (TODO: Can we still play bladeburner in other BNs without 6.1?) Many recommend it before BN9 since it may end up being a faster win condition in some of the tougher bitnodes ahead. I'm on the fence.
     9.1,  // Hard.   Unlocks hacknet servers. Hashes can be earned and spent on cash very early in a tough BN to help kick-start things. Hacknet productin/costs improved by 12%
@@ -75,10 +75,11 @@ const defaultBnOrder = [ // The order in which we intend to play bitnodes
     3.3,  // Hard.   Corporations. I have no corp scripts, maybe one day I will. The history here is: in 2021, corps were too exploity and broke the game (inf. money). Also the APIs were buggy and new, so I skipped it. Autopilot will win normally while ignoring corps.
     12.9999 // Easy. Keep playing forever. Only stanek scales very well here, there is much work to be done to be able to climb these faster.
 ];
+const augTRP = "The Red Pill";
 
 let playerInGang = false, rushGang = false; // Tells us whether we're should be trying to work towards getting into a gang
 let playerInBladeburner = false; // Whether we've joined bladeburner
-let wdHack = 0; // If the WD server is available (i.e. TRP is installed), caches the required hack level
+let wdHack = (/**@returns{null|number}*/() => null); // If the WD server is available (i.e. TRP is installed), caches the required hack level
 let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
 let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
 let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
@@ -87,12 +88,14 @@ let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
 let homeRam = 0; // Amount of RAM on the home server, last we checked
 let killScripts = []; // A list of scripts flagged to be restarted due to changes in priority
 let dictOwnedSourceFiles = [], unlockedSFs = [], nextBn = 0; // Info for the current bitnode
-let installedAugmentations = [], playerInstalledAugCount = 0, stanekLaunched = false; // Info for the current ascend
+let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
+let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // bitNode multipliers that can be automatically determined after SF-5
+let playerInstalledAugCount = (/**@returns{null|number}*/() => null); // Number of augs installed, or null if we don't have SF4 and can't tell.
+let installedAugmentations = [];
+let stanekLaunched = false;
 let daemonStartTime = 0; // The time we personally launched daemon.
 let installCountdown = 0; // Start of a countdown before we install augmentations.
 let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
-let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
-let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // bitNode multipliers that can be automatically determined after SF-5
 
 // Replacements for player properties deprecated since 2.3.0
 function getTimeInAug() { return Date.now() - resetInfo.lastAugReset; }
@@ -149,11 +152,15 @@ async function startUp(ns) {
     unlockedSFs = await getActiveSourceFiles(ns, true);
     homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
     try {
-        installedAugmentations = !(4 in unlockedSFs) ? [] :
-            await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
-        if (!(4 in unlockedSFs))
+        if (!(4 in unlockedSFs)) {
             log(ns, `WARNING: This script requires SF4 (singularity) functions to assess purchasable augmentations ascend automatically. ` +
                 `Some functionality will be disabled and you'll have to manage working for factions, purchasing, and installing augmentations yourself.`, true);
+            installedAugmentations = [];
+            playerInstalledAugCount = null; // 'null' is treated as 'Unknown'
+        } else {
+            installedAugmentations = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
+            playerInstalledAugCount = installedAugmentations.length;
+        }
     } catch (err) {
         if (unlockedSFs[4] || 0 == 3) throw err; // No idea why this failed, treat as temporary and allow auto-retry.
         log(ns, `WARNING: You only have SF4 level ${unlockedSFs[4]}. Without level 3, some singularity functions will be ` +
@@ -228,8 +235,10 @@ async function getPlayerInfo(ns) {
 async function checkOnDaedalusStatus(ns, player, stocksValue) {
     // Early exit conditions, if we Daedalus is not (or is no longer) a concern for this reset
     if (alreadyJoinedDaedalus || autoJoinDaedalusUnavailable) return;
-    // If we've already installed the red pill (w0r1d_d43m0n will have a non-zero hack) we no longer need this faction.
-    if ((wdHack || 0) > 0) return;
+    // If we've already installed the red pill we no longer need to try to join this faction.
+    // Even without SF4, we can "deduce" whether we've installed TRP by checking whether w0r1d_d43m0n has a non-zero hack level
+    if (installedAugmentations.includes(augTRP) || (wdHack != null && Number.isFinite(wdHack) && wdHack > 0))
+        return alreadyJoinedDaedalus = true; // Set up an early exit condition for future checks
     // See if we even have enough augmentations to attempt to join Daedalus (once we have a count of our augmentations)
     if (playerInstalledAugCount !== null && playerInstalledAugCount < bitNodeMults.DaedalusAugsRequirement)
         return autoJoinDaedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
@@ -806,11 +815,11 @@ async function shouldDelayInstall(ns, player, facmanOutput) {
             return true;
         }
     }
-    // In BN8, money is hard to come by, so if we're in Daedalus, but can't access TRP rep yet, wait until we have
-    // enough rep, or enough money to donate for rep to buy TRP (Reminder: donations always unlocked in BN8)
-    if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && (wdHack || 0) == 0) {
-        if (!facmanOutput.affordable_augs.includes("The Red Pill") && !facmanOutput.awaiting_install_augs.includes("The Red Pill")) {
-            setStatus(ns, `Not installing until we have enough Daedalus rep to install TRP on our next reset.`)
+    // In BN8, large sums of money are hard to accumulate, so if we've made it into Daedalus, but can't access TRP rep yet,
+    // remain in the BN until we have enough rep and/or money to buy TRP (Reminder: in BN8, donations are immediately unlocked for all factions)    
+    if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && !installedAugmentations.includes(augTRP)) {
+        if (!facmanOutput.affordable_augs.includes(augTRP) && !facmanOutput.awaiting_install_augs.includes(augTRP)) {
+            setStatus(ns, `Not installing until we have enough Daedalus rep to install "${augTRP}" on our next reset.`)
             return true;
         }
     }
