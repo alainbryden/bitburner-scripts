@@ -209,7 +209,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     // If an error occurs, it will write an empty file to avoid old results being misread.
     const commandToFile = `let r;try{r=JSON.stringify(\n` +
         `    ${command}\n` +
-        `);}catch(e){r="ERROR: "+(typeof e=='string'?e:e?.message??JSON.stringify(e));}\n` +
+        `, jsonReplacer);}catch(e){r="ERROR: "+(typeof e=='string'?e:e?.message??JSON.stringify(e));}\n` +
         `const f="${fName}"; if(ns.read(f)!==r) ns.write(f,r,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs, silent);
@@ -240,6 +240,11 @@ export function jsonReplacer(key, value) {
             type: 'bigint',
             value: value.toString()
         };
+    } else if (value instanceof Map) {
+        return {
+            dataType: 'Map',
+            value: Array.from(value.entries()),
+        };
     } else {
         return value;
     }
@@ -247,8 +252,13 @@ export function jsonReplacer(key, value) {
 
 /** Allows us to deserialize special values created by the above jsonReplacer */
 export function jsonReviver(key, value) {
-    if (value && value.type == 'bigint')
-        return BigInt(value.value);
+    if (typeof value === 'object' && value !== null) {
+        if (value && value.type == 'bigint')
+            return BigInt(value.value);
+        else if (value.dataType === 'Map') {
+            return new Map(value.value);
+        }
+    }
     return value;
 }
 
@@ -389,7 +399,9 @@ export async function waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbos
 
 /** If the argument is an Error instance, returns it as is, otherwise, returns a new Error instance. */
 function asError(error) {
-    return error instanceof Error ? error : new Error(typeof error === 'string' ? error : JSON.stringify(error));
+    return error instanceof Error ? error :
+        new Error(typeof error === 'string' ? error :
+            JSON.stringify(error, jsonReplacer)); // TODO: jsonReplacer to support ScriptDeath objects and other custom Bitburner throws
 }
 
 /** Helper to retry something that failed temporarily (can happen when e.g. we temporarily don't have enough RAM to run)
@@ -530,20 +542,20 @@ export async function getActiveSourceFiles(ns, includeLevelsFromCurrentBitnode =
 export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, includeLevelsFromCurrentBitnode = true, silent = true) {
     checkNsInstance(ns, '"getActiveSourceFiles"');
     // Find out what source files the user has unlocked
-    let dictSourceFiles = (/**@returns{{[bitNodeN: number]: number;}}*/() => { currentNode: 0 })();
+    let dictSourceFiles = (/**@returns{{[bitNodeN: number]: number;}}*/() => null)();
     try {
         dictSourceFiles = await fnGetNsDataThroughFile(ns,
             `Object.fromEntries(ns.singularity.getOwnedSourceFiles().map(sf => [sf.n, sf.lvl]))`,
             '/Temp/getOwnedSourceFiles-asDict.txt', null, null, null, null, silent);
     } catch { } // If this fails (e.g. presumably due to low RAM or no singularity access), default to an empty dictionary
-    //ns.tprint(JSON.stringify(dictSourceFiles));
+    dictSourceFiles ??= {};
 
     // Try to get reset info
-    let resetInfo = (/**@returns{ResetInfo}*/() => { currentNode: 0 })();
+    let resetInfo = (/**@returns{ResetInfo}*/() => null)();
     try {
         resetInfo = await fnGetNsDataThroughFile(ns, 'ns.getResetInfo()', null, null, null, null, null, silent);
     } catch { } // As above, suppress any errors and use a fall-back to survive low ram conditions.
-    //ns.tprint(JSON.stringify(resetInfo));
+    resetInfo ??= { currentNode: 0 }
 
     // If the user is currently in a given bitnode, they will have its features unlocked. Include these "effective" levels if requested;
     if (includeLevelsFromCurrentBitnode && resetInfo.currentNode != 0) {
@@ -555,7 +567,7 @@ export async function getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile, in
 
     // If any bitNodeOptions were set, it might reduce our source file levels for gameplay purposes,
     // but the game currently has a bug where getOwnedSourceFiles won't reflect this, so we must do it ourselves.
-    if ((resetInfo?.bitNodeOptions?.sourceFileOverrides?.length ?? 0) > 0) {
+    if ((resetInfo?.bitNodeOptions?.sourceFileOverrides?.size ?? 0) > 0) {
         resetInfo.bitNodeOptions.sourceFileOverrides.forEach((sfLevel, bn) => dictSourceFiles[bn] = sfLevel);
         // Completely remove keys whose override level is 0
         Object.keys(dictSourceFiles).filter(bn => dictSourceFiles[bn] == 0).forEach(bn => delete dictSourceFiles[bn]);

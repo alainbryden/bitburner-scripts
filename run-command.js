@@ -31,7 +31,9 @@ export async function main(ns) {
         command = `{ ${command} }`;
     }
     // Wrapping the command in a lambda that can capture and print its output.
-    command = `ns.tprint(JSON.stringify(await (async () => ${command})() ?? "(no output)", null, 2))`;
+    command = `ns.tprint(JSON.stringify(await (async () => ${command})() ?? "(no output)", jsonReplacer, 2)` +
+        // While we're using pretty formatting, "condence" formatting for any objects nested more than 2 layers deep
+        `.replaceAll(/\\n      +/gi,""))`;
     await ns.write(`/Temp/terminal-command.js`, "", "w"); // Clear the previous command file to avoid a warning about re-using temp script names. This is the one exception.
     return await runCommand(ns, command, `/Temp/terminal-command.js`, (escaped ? args.slice(1) : undefined), !silent);
 }
