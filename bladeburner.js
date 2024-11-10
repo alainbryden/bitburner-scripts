@@ -446,10 +446,12 @@ async function beingInBladeburner(ns) {
     }
     log(ns, "INFO: We are in Bladeburner. Starting main loop...")
     // If not disabled, launch an external script to spend hashes on bladeburner rank
-    if (options['disable-spending-hashes'] || !(9 in ownedSourceFiles)) return;
+    if (!(9 in ownedSourceFiles)) return; // Hacknet not unlocked
+    if (options['disable-spending-hashes'])
+        return log(ns, `INFO: Not spending hashes on bladeburner (--disable-spending-hashes flag is set)`);
     const fPath = getFilePath('spend-hacknet-hashes.js');
     const args = ['--spend-on', 'Exchange_for_Bladeburner_Rank', '--spend-on', 'Exchange_for_Bladeburner_SP', '--liquidate'];
-    if (ns.run(fPath, 1, ...args))
+    if (ns.run(fPath, { preventDuplicates: true }, ...args))
         log(ns, `INFO: Launched '${fPath}' to gain Bladeburner Rank and Skill Points more quickly (Can be disabled with --disable-spending-hashes)`)
     else
         log(ns, `WARNING: Failed to launch '${fPath}' (already running?)`)
