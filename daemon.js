@@ -344,10 +344,9 @@ export async function main(ns) {
         const reqRam = (ram) => homeServer.totalRam(/*ignoreReservedRam:*/true) >= ram;
         // Helper to decide whether we should launch one of the hacknet upgrade manager scripts.
         const shouldUpgradeHacknet = () =>
-            bitNodeMults.HacknetNodeMoney != 0 && // Ensure hacknet is not disabled in this BN
+            bitNodeMults.HacknetNodeMoney > 0 && // Ensure hacknet is not disabled in this BN
             reqRam(homeReservedRam + 6.1) && // These scripts consume 6.1 GB and keep running a long time, so we want to ensure we have more than the home reservered RAM amount available
-            reservedMoney(ns) < getPlayerMoney(ns) && // Player money exceeds the reserve (otherwise it will sit there buying nothing)
-            (whichServerIsRunning(ns, "hacknet-upgrade-manager.js", false)[0] === null) // No other hacknet-upgrade-manager script is running
+            reservedMoney(ns) < getPlayerMoney(ns); // Player money exceeds the reserve (otherwise it will sit there buying nothing)
 
         // ASYNCHRONOUS HELPERS
         // Set up "asynchronous helpers" - standalone scripts to manage certain aspacts of the game. daemon.js launches each of these once when ready (but not again if they are shut down)
@@ -355,7 +354,7 @@ export async function main(ns) {
             { name: "stats.js", shouldRun: () => reqRam(64), shouldTail: false }, // Adds stats not usually in the HUD (nice to have)
             { name: "go.js", shouldRun: () => reqRam(64), minRamReq: 20.2 }, // Play go.js (various multipliers, but large dynamic ram requirements)
             { name: "stockmaster.js", shouldRun: () => reqRam(64), args: openTailWindows ? ["--show-market-summary"] : [] }, // Start our stockmaster
-            { name: "hacknet-upgrade-manager.js", shouldRun: () => shouldUpgradeHacknet(), args: ["-c", "--max-payoff-time", "1h"], shouldTail: false }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
+            { name: "hacknet-upgrade-manager.js", shouldRun: () => shouldUpgradeHacknet(), args: ["-c", "--max-payoff-time", "1h", "--interval", "0"], shouldTail: false }, // One-time kickstart of hash income by buying everything with up to 1h payoff time immediately
             { name: "spend-hacknet-hashes.js", shouldRun: () => reqRam(64) && 9 in dictSourceFiles, args: [], shouldTail: false }, // Always have this running to make sure hashes aren't wasted
             { name: "sleeve.js", shouldRun: () => reqRam(64) && 10 in dictSourceFiles }, // Script to create manage our sleeves for us
             { name: "gangs.js", shouldRun: () => reqRam(64) && 2 in dictSourceFiles }, // Script to create manage our gang for us
@@ -695,7 +694,9 @@ export async function main(ns) {
                 await buildServerList(ns, true); // Check if any new servers have been purchased by the external host_manager process
                 await updateCachedServerData(ns); // Update server data that only needs to be refreshed once per loop
                 await updatePortCrackers(ns); // Check if any new port crackers have been purchased
-                await getPlayerInfo(ns); // Force an update of _cachedPlayerInfo
+                await getPlayerInfo(ns); // Force an update of _cachedPlayerInfo               
+                if (!allHelpersRunning && loops % 60 == 0) // If we have not yet launched all helpers see if any are now ready to be run (launch may have been postponed while e.g. awaiting more home ram, or TIX API to be purchased)
+                    allHelpersRunning = await runStartupScripts(ns);
                 // Run some auxilliary processes that ease the ram burden of this daemon and add additional functionality (like managing hacknet or buying servers)
                 await runPeriodicScripts(ns);
                 if (stockMode) await updateStockPositions(ns); // In stock market manipulation mode, get our current position in all stocks, as it affects targetting order
@@ -715,8 +716,6 @@ export async function main(ns) {
                 }
 
                 if (loops % 60 == 0) { // For more expensive updates, only do these every so often
-                    // If we have not yet launched all helpers (e.g. awaiting more home ram, or TIX API to be purchased) see if any are now ready to be run
-                    if (!allHelpersRunning) allHelpersRunning = await runStartupScripts(ns);
                     // Pull additional data about servers that infrequently changes
                     await refreshDynamicServerData(ns);
                     // Occassionally print our current targetting order (todo, make this controllable with a flag or custom UI?)
@@ -732,8 +731,8 @@ export async function main(ns) {
                         ns.write("/Temp/targets.txt", targetsLog, "w");
                     }
                 }
-            // Processed servers will be split into various lists for generating a summary at the end
-            /**@returns{Server[]}*/const n = () => []; // Trick to initialize new arrays with a strong type
+                // Processed servers will be split into various lists for generating a summary at the end
+                const n = (/**@returns{Server[]}*/() => []); // Trick to initialize new arrays with a strong type
                 const prepping = n(), preppedButNotTargeting = n(), targeting = n(), notRooted = n(), cantHack = n(),
                     cantHackButPrepped = n(), cantHackButPrepping = n(), noMoney = n(), failed = n(), skipped = n();
                 let lowestUnhackable = 99999;
