@@ -40,6 +40,21 @@ export async function main(ns) {
     else
         ns.disableLog("ALL");
 
+    let abort = false;
+    /*// TODO:
+    // Let the user know what's going on and give them an easy way to kill casino.js
+    function showDialog(onCancel) {
+        const dlg = doc.createElement('div');
+        dlg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);padding:20px;';
+        dlg.innerHTML = `<p>casino.js is running until it wins \$10b. It will reload the save if it loses too much.<br/>` +
+            `It should only take a minute or two, but you can cancel by clicking the button below.</p>` +
+            `<button>Cancel</button>`;
+        dlg.querySelector('button').onclick = () => { onCancel(); doc.body.removeChild(dlg); };
+        doc.body.appendChild(dlg);
+    }
+    showDialog(() => abort = true);
+    //*/
+
     /** Helper function to detect if focus was stolen by (e.g.) faction|company work|studying|training and send that work to the background
      * @param {boolean} throwError (default true) If true, and we were doing focus work, throws an Error.
      *                  If false, it will log a warning, try to stop any focus work (up to `retries` times), then return true.
@@ -231,6 +246,7 @@ export async function main(ns) {
     try {
         let startGameRetries = 0, netWinnings = 0, peakWinnings = 0;
         while (true) {
+            if (abort) return;
             // Step 4.1: Bet the maximum amount (we save scum to avoid losing, so no risk of going broke)
             const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
             if (bet < 0) return await reload(ns); // If somehow we have no money, we can't continue
