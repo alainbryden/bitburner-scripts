@@ -111,7 +111,7 @@ export async function main(ns) {
     await checkForKickedOut(3);
 
     // Step 1: Find the button used to save the game. (Lots of retries because it can take a while after reloading the page)
-    const btnSaveGame = await findRequiredElement(ns, "//button[@aria-label = 'save game']", 15,
+    const btnSaveGame = await findRequiredElement(ns, "//button[@aria-label = 'save game']", 100,
         `Sorry, couldn't find the Overview Save (💾) button. Is your \"Overview\" panel collapsed or modded?`, true);
     async function saveGame() {
         if (saveSleepTime) await ns.sleep(saveSleepTime);
@@ -229,7 +229,7 @@ export async function main(ns) {
 
     // Step 4: Play until we lose or are kicked out
     try {
-        let startGameRetries = 0;
+        let startGameRetries = 0, netWinnings = 0, peakWinnings = 0;
         while (true) {
             // Step 4.1: Bet the maximum amount (we save scum to avoid losing, so no risk of going broke)
             const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
@@ -330,15 +330,25 @@ export async function main(ns) {
                 case "tie": // Nothing gained or lost, we can immediately start a new game.
                     continue;
                 case "win": // We want to "lock in" our wins by saving the game after each one
-                    if (saveSleepTime) await ns.sleep(saveSleepTime);
-                    await click(ns, btnSaveGame); // Save if we won
-                    if (saveSleepTime) await ns.sleep(saveSleepTime);
+                    netWinnings += bet;
+                    // Keep tabs of our best winnings, and save the game each time we top it
+                    if (netWinnings > peakWinnings) {
+                        peakWinnings = netWinnings
+                        if (netWinnings > 0)
+                            if (saveSleepTime) await ns.sleep(saveSleepTime);
+                        await click(ns, btnSaveGame); // Save if we won
+                        if (saveSleepTime) await ns.sleep(saveSleepTime);
+                    }
                     // Quick pre-emptive test after each win to see if we've been kicked out
-                    if (await checkForKickedOut(5)) // Only 5 retries should be very fast
+                    if (await checkForKickedOut(1)) // Only 1 retry should be very fast
                         return await onCompletion(ns);
                     continue;
-                case "lose": // We want to reload the game (save scum) to undo our loss :)
-                    return await reload(ns);
+                case "lose":
+                    netWinnings -= bet;
+                    // To avoid reloading too often, only reload if we're losing really badly (almost broke, or down by 10 games)
+                    if (ns.getPlayer().money < 1E8 || netWinnings <= peakWinnings - 10 * 1E8)
+                        return await reload(ns); // We want to reload the game (save scum) to undo our loss :)
+                    continue;
                 default:
                     throw new Error(`winLoseTie was set to \"${(winLoseTie === undefined ? 'undefined' :
                         winLoseTie === null ? 'null' : winLoseTie)}\", which shouldn't be possible`);
@@ -528,9 +538,12 @@ async function internalfindWithRetry(ns, xpath, expectFailure, maxRetries, custo
         if (expectFailure) {
             if (verbose)
                 log(ns, `INFO: Element doesn't appear to be present, moving on...`, false);
-        } else
-            throw new Error(customErrorMessage ?? `Could not find the element with xpath: \"${logSafeXPath}\"\n` +
-                `Something may have stolen focus or otherwise routed the UI away from the Casino.`, true, 'error');
+        } else {
+            const errMessage = customErrorMessage ?? `Could not find the element with xpath: \"${logSafeXPath}\"\n` +
+                `Something may have stolen focus or otherwise routed the UI away from the Casino.`;
+            log(ns, 'ERROR: ' + errMessage, true, 'error')
+            throw new Error(errMessage, true, 'error');
+        }
     } catch (e) {
         if (!expectFailure) throw e;
     }
