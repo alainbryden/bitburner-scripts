@@ -4,11 +4,6 @@ import {
     tail
 } from './helpers.js'
 
-// Default sripts called at startup and shutdown of stanek
-const defaultStartupScript = getFilePath('daemon.js');
-const defaultStartupArgs = ['--reserved-ram', 1E100];
-const defaultCompletionScript = getFilePath('daemon.js');
-const defaultCompletionArgs = [];
 // Name of the external script that will be created and called to generate charges
 const chargeScript = "/Temp/stanek.js.charge.js";
 let awakeningRep = 1E6, serenityRep = 100E6; // Base reputation cost - can be scaled by bitnode multipliers
@@ -19,11 +14,11 @@ const argsSchema = [
     ['max-charges', 120], // Stop charging when all fragments have this many charges (diminishing returns - num charges is ^0.07 )
     // By default, starting an augmentation with stanek.js will still spawn daemon.js, but will instruct it not to schedule any hack cycles against home by 'reserving' all its RAM
     // TODO: Set these defaults in some way that the user can explicitly specify that they want to run **no** startup script and **no** completion script
-    ['on-startup-script', null], // (Defaults in code) Spawn this script when stanek is launched WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek
-    ['on-startup-script-args', []], // Args for the above (Defaults in code) WARNING: This argument may go away in the future since autopilot.js will orchestrate stanek
+    ['on-startup-script', null], // Spawn this script when stanek is launched
+    ['on-startup-script-args', []], // Args for the above
     // When stanek completes, it will run daemon.js again (which will terminate the initial ram-starved daemon that is running)
-    ['on-completion-script', null], // (Default in code) Spawn this script when max-charges is reached
-    ['on-completion-script-args', []], // (Default in code) Optional args to pass to the script when launched
+    ['on-completion-script', null], // Spawn this script when max-charges is reached
+    ['on-completion-script-args', []], // Optional args to pass to the script when launched
     ['no-tail', false], // By default, keeps a tail window open, because it's pretty important to know when this script is running (can't use home for anything else)
     ['reputation-threshold', 0.2], // By default, if we are this close to the rep needed for an unowned stanek upgrade (e.g. "Stanek's Gift - Serenity"), we will keep charging despite the 'max-charges' setting
 ];
@@ -61,25 +56,21 @@ export async function main(ns) {
     idealReservedRam = 32; // Reserve this much RAM, if it wouldnt make a big difference anyway. Leaves room for other temp-scripts to spawn.
     let startupScript = options['on-startup-script'];
     let startupArgs = unEscapeArrayArgs(options['on-startup-script-args']);
-    if (!startupScript) { // Apply defaults if not present.
-        startupScript = defaultStartupScript;
-        if (startupArgs.length == 0) startupArgs = defaultStartupArgs;
+    if (startupScript) {
+        // If so configured, launch the start-up script to run alongside stanek and let it consume the RAM it needs before initiating stanek loops.
+        if (ns.run(startupScript, 1, ...startupArgs)) {
+            log(ns, `INFO: Stanek.js is launching accompanying 'on-startup-script': ${startupScript}...`, false, 'info');
+            await ns.sleep(1000); // Give time for the accompanying script to start up and consume its required RAM footprint.
+        } else
+            log(ns, `WARNING: Stanek.js has started successfully, but failed to launch accompanying 'on-startup-script': ${startupScript}...`, false, 'warning');
     }
-    // If so configured, launch the start-up script to run alongside stanek and let it consume the RAM it needs before initiating stanek loops.
-    if (ns.run(startupScript, 1, ...startupArgs)) {
-        log(ns, `INFO: Stanek.js is launching accompanying 'on-startup-script': ${startupScript}...`, false, 'info');
-        await ns.sleep(1000); // Give time for the accompanying script to start up and consume its required RAM footprint.
-    } else
-        log(ns, `WARNING: Stanek.js has started successfully, but failed to launch accompanying 'on-startup-script': ${startupScript}...`, false, 'warning');
     chargeAttempts = {}; // We keep track of how many times we've charged each segment, to work around a placement bug where fragments can overlap, and then don't register charge
 
     const chargeScriptBody = "export async function main(ns) { await ns.stanek.chargeFragment(ns.args[0], ns.args[1]); }";
-    const checkOnChargeScript = async () => { // We must use this periodically since cleanup might be run while we're charging.
+    const checkOnChargeScript = () => { // We must use this periodically since cleanup might be run while we're charging.
         // Check if our charge script exists. If not, we can create it (facilitates copying stanek.js to a new server to run)
-        if (ns.read(chargeScript) != chargeScriptBody) {
-            await ns.write(chargeScript, chargeScriptBody, "w");
-            await ns.sleep(100); // To be safe, there have been bugs with ns.write not waiting long enough
-        }
+        if (ns.read(chargeScript) != chargeScriptBody)
+            ns.write(chargeScript, chargeScriptBody, "w");
     }
 
     // Check what augs we own and establish the theshold to continue grinding REP if we're close to one.
@@ -111,7 +102,7 @@ export async function main(ns) {
         lastLoopSuccessful = false;
         try {
             if (!options['no-tail']) tail(ns); // Keep a tail window open unless otherwise configured
-            await checkOnChargeScript();
+            checkOnChargeScript();
             const fragmentsToCharge = await getFragmentsToCharge(ns);
             if (fragmentsToCharge === undefined) continue;
             if (fragmentsToCharge.length == 0) break; // All fragments at max desired charge
@@ -123,19 +114,18 @@ export async function main(ns) {
         }
     }
     log(ns, `SUCCESS: All stanek fragments at desired charge ${maxCharges}`, true, 'success');
+
     // Run the completion script before shutting down
     let completionScript = options['on-completion-script'];
     let completionArgs = unEscapeArrayArgs(options['on-completion-script-args']);
-    if (!completionScript) { // Apply defaults if not present.
-        completionScript = defaultCompletionScript;
-        if (completionArgs.length == 0) completionArgs = defaultCompletionArgs;
+    if (completionScript) {
+        if (ns.run(completionScript, 1, ...completionArgs)) {
+            log(ns, `INFO: Stanek.js shutting down and launching ${completionScript}...`, false, 'info');
+            if (!options['no-tail'])
+                ns.closeTail(); // Close the tail window if we opened it
+        } else
+            log(ns, `WARNING: Stanek.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
     }
-    if (ns.run(completionScript, 1, ...completionArgs)) {
-        log(ns, `INFO: Stanek.js shutting down and launching ${completionScript}...`, false, 'info');
-        if (!options['no-tail'])
-            ns.closeTail(); // Close the tail window if we opened it
-    } else
-        log(ns, `WARNING: Stanek.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
 }
 
 /** Get Fragments to Charge
@@ -193,7 +183,7 @@ async function tryChargeAllFragments(ns, fragmentsToCharge) {
                 `(${formatRam(availableRam)} free - ${formatRam(reservedRam)} reserved). Will try again later...`);
             continue;
         }
-        const pid = ns.run(chargeScript, threads, fragment.x, fragment.y);
+        const pid = ns.run(chargeScript, { threads: threads, temporary: true }, fragment.x, fragment.y);
         if (!pid) {
             log(ns, `WARNING: Failed to charge Stanek with ${threads} threads thinking there was ${formatRam(availableRam)} free on ${currentServer}. ` +
                 `Check if another script is fighting stanek.js for RAM. Will try again later...`);

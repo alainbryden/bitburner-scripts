@@ -556,12 +556,15 @@ async function checkOnRunningScripts(ns, player) {
         launchScriptHelper(ns, 'stanek.js', stanekArgs);
         stanekRunning = true;
     }
+    // If stanek is running, tell daemon to reserve all home RAM for it.
+    if (stanekRunning)
+        daemonArgs.push("--reserved-ram", 1E100);
 
-    // Launch (or re-launch) daemon if it is not already running with all our desired args - so long as stanek isn't charging
+    // Launch (or re-launch) daemon if it is not already running with all our desired args
     let launchDaemon = !existingDaemon || daemonArgs.some(arg => !existingDaemon.args.includes(arg)) ||
         // Special cases: We also must relaunch daemon if it is running with certain flags we wish to remove
         (["--xp-only"].some(arg => !daemonArgs.includes(arg) && existingDaemon.args.includes(arg)))
-    if (!stanekRunning && launchDaemon) {
+    if (launchDaemon) {
         if (existingDaemon) {
             daemonRelaunchMessage ??= `Relaunching daemon.js with new arguments since the current instance doesn't include all the args we want.`;
             log(ns, daemonRelaunchMessage);
@@ -638,9 +641,10 @@ async function maybeAcceptStaneksGift(ns, player) {
     if (installedAugmentations.length > 1)
         log(ns, `WARNING: We think it's a good idea to accept Stanek's Gift, but it appears to be too late - other augmentations have been installed. Trying Anyway...`);
     // Use the API to accept Stanek's gift
-    if (await getNsDataThroughFile(ns, 'ns.stanek.acceptGift()'))
+    if (await getNsDataThroughFile(ns, 'ns.stanek.acceptGift()')) {
         log(ns, `SUCCESS: Accepted Stanek's Gift!`, true, 'success');
-    else
+        installedAugmentations.push(augStanek); // Manually add Genesis to installed augmentations so checkOnRunningScripts picks up on the change.
+    } else
         log(ns, `WARNING: autopilot.js tried to accepted Stanek's Gift, but was denied.`, true, 'warning');
     // Whether we succeded or failed, don't try again - if we're denied entry (due to having an augmentation) we will never be allowed in
     acceptedStanek = true;
