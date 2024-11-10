@@ -474,13 +474,15 @@ async function checkOnRunningScripts(ns, player) {
             const dictServerHackReqs = await getNsDataThroughFile(ns, 'Object.fromEntries(ns.args.map(server => [server, ns.getServerRequiredHackingLevel(server)]))',
                 '/Temp/servers-hack-req.txt', incomeByServer.map(s => s.hostname));
             const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
-                .reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, 0]);
-            if (bestServer) {
+                .reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, -1]);
+            if (bestServer && gain > 1) {
                 log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
                 launchScriptHelper(ns, 'spend-hacknet-hashes.js',
                     ["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
-            } else
-                log(ns, `WARNING: strServerIncomeInfo was not empty, but could not determine best server:\n${strServerIncomeInfo}`)
+            } else if (gain <= 1)
+                log(ns, `INFO: Hack income is currently too severely penalized to merit launching spend-hacknet-hashes.js to boost servers.`);
+            else
+                log(ns, `WARNING: strServerIncomeInfo was not empty, but could not determine best server:\n${strServerIncomeInfo}`);
         }
     }
 

@@ -140,8 +140,8 @@ export async function main(ns) {
             // We will need to fake the hacking skill to get the numbers for when this server will first be unlocked, but to keep the comparison
             // fair, we will need to scale down the gain by the amount current best server gains now, verses what it would gain at that hack level.
             const [bestUnlockedScaledGainRate, _, bestUnlockedScaledExpRate] = getRatesAtHackLevel(best_unlocked_server, player, server.requiredHackingSkill);
-            const gainRateScaleFactor = best_unlocked_server.theoreticalGainRate / bestUnlockedScaledGainRate;
-            const expRateScaleFactor = best_unlocked_server.expRate / bestUnlockedScaledExpRate;
+            const gainRateScaleFactor = bestUnlockedScaledGainRate ? best_unlocked_server.theoreticalGainRate / bestUnlockedScaledGainRate : 1;
+            const expRateScaleFactor = bestUnlockedScaledExpRate ? best_unlocked_server.expRate / bestUnlockedScaledExpRate : 1;
             const [theoreticalGainRate, cappedGainRate, expRate] = getRatesAtHackLevel(server, player, server.requiredHackingSkill);
             // Apply the scaling factors, as well as the same cap as above
             server.theoreticalGainRate = theoreticalGainRate * gainRateScaleFactor;
