@@ -76,6 +76,7 @@ const defaultBnOrder = [ // The order in which we intend to play bitnodes
     12.9999 // Easy. Keep playing forever. Only stanek scales very well here, there is much work to be done to be able to climb these faster.
 ];
 const augTRP = "The Red Pill";
+const augStanek = `Stanek's Gift - Genesis`;
 
 let playerInGang = false, rushGang = false; // Tells us whether we're should be trying to work towards getting into a gang
 let playerInBladeburner = false; // Whether we've joined bladeburner
@@ -92,7 +93,7 @@ let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information abou
 let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // bitNode multipliers that can be automatically determined after SF-5
 let playerInstalledAugCount = (/**@returns{null|number}*/() => null); // Number of augs installed, or null if we don't have SF4 and can't tell.
 let installedAugmentations = [];
-let stanekLaunched = false;
+let acceptedStanek = false, stanekLaunched = false;
 let daemonStartTime = 0; // The time we personally launched daemon.
 let installCountdown = 0; // Start of a countdown before we install augmentations.
 let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
@@ -139,7 +140,7 @@ async function startUp(ns) {
     playerInGang = rushGang = playerInBladeburner = ranCasino =
         alreadyJoinedDaedalus = autoJoinDaedalusUnavailable = reservingMoneyForDaedalus =
         prioritizeHackForDaedalus = prioritizeHackForWd =
-        bnCompletionSuppressed = stanekLaunched = false;
+        bnCompletionSuppressed = acceptedStanek = stanekLaunched = false;
     playerInstalledAugCount = wdHack = null;
     installCountdown = daemonStartTime = lastScriptsCheck = homeRam = reservedPurchase = 0;
     lastStatusLog = "";
@@ -216,6 +217,7 @@ async function mainLoop(ns) {
     manageReservedMoney(ns, player, stocksValue);
     await checkOnDaedalusStatus(ns, player, stocksValue);
     await checkIfBnIsComplete(ns, player);
+    await maybeAcceptStaneksGift(ns, player);
     await checkOnRunningScripts(ns, player);
     await maybeDoCasino(ns, player);
     await maybeInstallAugmentations(ns, player);
@@ -545,7 +547,7 @@ async function checkOnRunningScripts(ns, player) {
 
     // Once stanek's gift is accepted, launch it once per reset before we launch daemon (Note: stanek's gift is auto-purchased by faction-manager.js on your first install)
     let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
-    if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
+    if ((13 in unlockedSFs) && !stanekLaunched && !stanekRunning && installedAugmentations.includes(augStanek)) {
         stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
         const stanekArgs = ["--on-completion-script", getFilePath('daemon.js')]
         if (daemonArgs.length >= 0) stanekArgs.push("--on-completion-script-args", JSON.stringify(daemonArgs)); // Pass in all the args we wanted to run daemon.js with
@@ -612,6 +614,34 @@ async function checkOnRunningScripts(ns, player) {
  * @returns {Promise<MoneySources>} */
 async function getPlayerMoneySources(ns) {
     return await getNsDataThroughFile(ns, 'ns.getMoneySources()');
+}
+
+/** Accept Stanek's gift immediately at the start of the BN (as opposed to just before the first install)
+ * if it looks like it will scale well.
+ * @param {NS} ns
+ * @param {Player} player */
+async function maybeAcceptStaneksGift(ns, player) {
+    // Look for any reason not to accept stanek's gift (do the quickest checks first)
+    if (acceptedStanek) return;
+    // Don't get Stanek's gift too early if its size is reduced in this BN
+    if (bitNodeMults.StaneksGiftExtraSize < 0) return;
+    // If Stanek's gift size isn't reduced, but is penalized, don't get it too early 
+    if (bitNodeMults.StaneksGiftExtraSize == 0 && bitNodeMults.StaneksGiftPowerMultiplier < 1) return;
+    // Otherwise, it is not penalized in any way, it's probably safe to get it immediately despite the 10% penalty to all stats
+    // If we won't have access to Stanek yet, skip this
+    if (!(13 in unlockedSFs)) return;
+    // If we've already accepted Stanek's gift (Genesis aug is installed), skip
+    if (installedAugmentations.includes(augStanek)) return acceptedStanek = true;
+    // If we have more than Neuroflux (aug) installed, we won't be allowed to accept the gift (but we can try)
+    if (installedAugmentations.length > 1)
+        log(ns, `WARNING: We think it's a good idea to accept Stanek's Gift, but it appears to be too late - other augmentations have been installed. Trying Anyway...`);
+    // Use the API to accept Stanek's gift
+    if (await getNsDataThroughFile(ns, 'ns.stanek.acceptGift()'))
+        log(ns, `SUCCESS: Accepted Stanek's Gift!`, true, 'success');
+    else
+        log(ns, `WARNING: autopilot.js tried to accepted Stanek's Gift, but was denied.`, true, 'warning');
+    // Whether we succeded or failed, don't try again - if we're denied entry (due to having an augmentation) we will never be allowed in
+    acceptedStanek = true;
 }
 
 /** Logic to steal 10b from the casino
