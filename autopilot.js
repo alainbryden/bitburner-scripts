@@ -212,6 +212,7 @@ async function initializeNewBitnode(ns) {
  * @param {NS} ns */
 async function mainLoop(ns) {
     const player = await getPlayerInfo(ns);
+    await updateCachedData(ns);
     let stocksValue = 0;
     try { stocksValue = await getStocksValue(ns); } catch { /* Assume if this fails (insufficient ram) we also have no stocks */ }
     manageReservedMoney(ns, player, stocksValue);
@@ -229,6 +230,20 @@ async function mainLoop(ns) {
  * @returns {Promise<Player>} */
 async function getPlayerInfo(ns) {
     return await getNsDataThroughFile(ns, `ns.getPlayer()`);
+}
+
+/** Update some information that can be safely cached for small periods of time
+ * @param {NS} ns */
+async function updateCachedData(ns) {
+    // Now that grafting is a thing, we need to check if new augmentations have been installed between resets
+    if ((4 in unlockedSFs)) { // Note: Installed augmentations can also be obtained from getResetInfo() (without SF4), but this seems unintended and will probably be removed from the game.
+        try {
+            installedAugmentations = await getNsDataThroughFile(ns, 'ns.singularity.getOwnedAugmentations()', '/Temp/player-augs-installed.txt');
+            playerInstalledAugCount = installedAugmentations.length;
+        } catch (err) {
+            log(ns, `WARNING: failed to update owned augmentations (low RAM?)`, true);
+        }
+    }
 }
 
 /** Logic run periodically to if there is anything we can do to speed along earning a Daedalus invite
