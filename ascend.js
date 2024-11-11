@@ -188,7 +188,8 @@ export async function main(ns) {
     pid = ns.run(getFilePath('faction-manager.js'), 1, ...facmanArgs);
     await waitForProcessToComplete(ns, pid, true); // Wait for the script to shut down, indicating it is done.
 
-    // Clean up our temp folder - it's good to do this once in a while to reduce the save footprint.
+    // Clean up our temp folder - it's good to do this once in a while to reduce the save footprint
+    // As well as to ensure that data written out on this bitnode don't confuse scripts in the next one.
     await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')), true);
 
     // FINALLY: If configured, soft reset
