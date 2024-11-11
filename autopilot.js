@@ -44,7 +44,7 @@ const defaultBnOrder = [ // The order in which we intend to play bitnodes
     4.3,  // Normal. Need singularity to automate everything, and need the API costs reduced from 16x -> 4x -> 1x reliably do so from the start of each BN
     1.2,  // Easy.   Big boost to all multipliers (16% -> 24%), and no penalties to slow us down. Should go quick.
     5.1,  // Normal. Unlock intelligence stat early to maximize growth, getBitNodeMultipliers + Formulas.exe for more accurate scripts, and +8% hack mults
-    14.2, // Normal. Boosts the powerful go.js bonuses quite a lot but note that we can automate IPvGO from the very start (BN1.1), no need to unlock it.
+    14.2, // Normal. Boosts go.js bonuses, but note that we can automate IPvGO from the very start (BN1.1), no need to unlock it. 14.1 doubles all bonuses. 14.2 unlocks the cheat API.
     1.3,  // Easy.   The last bonus is not as big a jump (24% -> 28%), but it's low-hanging fruit
     2.1,  // Easy.   Unlocks gangs, which reduces the need to grind faction and company rep for getting access to most augmentations, speeding up all BNs
 
