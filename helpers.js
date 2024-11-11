@@ -664,8 +664,8 @@ export async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile,
         ServerStartingSecurity: /*     */[1, 1, 1, 1, 2, 1.5, 1.5, 1, 2.5, 1, 1, 1.5, 3, 1.5],
         ServerWeakenRate: /*           */[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1],
         StrengthLevelMultiplier: /*    */[1, 1, 1, 1, 1, 1, 1, 1, 0.45, 0.4, 1, 1, 0.7, 0.5],
-        StaneksGiftPowerMultiplier: /* */[1,  2, 0.75, 1.5, 1.3, 0.5, 0.9,   1, 0.5, 0.75, 1, 1, 2, 0.5],
-        StaneksGiftExtraSize: /*       */[0, -6,   -2,   0,   0,   2,  -1, -99,   2,   -3, 0, 1, 1,  -1],
+        StaneksGiftPowerMultiplier: /* */[1, 2, 0.75, 1.5, 1.3, 0.5, 0.9, 1, 0.5, 0.75, 1, 1, 2, 0.5],
+        StaneksGiftExtraSize: /*       */[0, -6, -2, 0, 0, 2, -1, -99, 2, -3, 0, 1, 1, -1],
         WorldDaemonDifficulty: /*      */[1, 5, 2, 3, 1.5, 2, 2, 1, 2, 2, 1.5, 1, 3, 5]
     }).map(([mult, values]) => [mult, values[bn - 1]]));
 }
@@ -847,15 +847,18 @@ export function tail(ns, processId = undefined) {
     processId ??= ns.pid
     ns.tail(processId);
     // Don't move or resize tail windows that were previously opened and possibly moved by the player
-    if (tailedPids.has(processId))
+    const tailFile = '/Temp/helpers-tailed-pids.txt'; // Use a file so it can be wiped on reset
+    const fileContents = ns.read(tailFile);
+    const tailedPids = fileContents.length > 1 ? JSON.parse(fileContents) : [];
+    if (tailedPids.includes(processId))
         return //ns.tprint(`PID was previously moved ${processId}`);
     // By default, make all tail windows take up 75% of the width, 25% of the height available
     const [width, height] = ns.ui.windowSize();
     ns.resizeTail(width * 0.60, height * 0.25, processId);
     // Cascade windows: After each tail, shift the window slightly down and over so that they don't overlap
-    let offsetPct = ((((tailedPids.size % 30.0) / 30.0) + tailedPids.size) % 6.0) / 6.0;
+    let offsetPct = ((((tailedPids.length % 30.0) / 30.0) + tailedPids.length) % 6.0) / 6.0;
+    ns.print(width, ' ', height, ' ', processId, ' ', offsetPct, ' ', tailedPids)
     ns.moveTail(offsetPct * (width * 0.25 - 300) + 250, offsetPct * (height * 0.75 - 100) + 50, processId);
-    tailedPids.add(processId);
+    tailedPids.push(processId);
+    ns.write(tailFile, JSON.stringify(tailedPids), 'w');
 }
-// TODO: PIDs are reset on install, but this cache isn't, so this isn't a good long term solution
-const tailedPids = new Set([-1]); // The pids we previously configured a tail window for
