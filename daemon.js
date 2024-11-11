@@ -39,8 +39,8 @@ const argsSchema = [
     ['reserved-ram', 32], // Keep this much home RAM free when scheduling hack/grow/weaken cycles on home.
     ['double-reserve-threshold', 512], // in GB of RAM. Double our home RAM reserve once there is this much home max RAM.
 
-    ['share', false], // Enable sharing free ram to increase faction rep gain (enabled automatically once RAM is sufficient)
-    ['no-share', false], // Disable sharing free ram to increase faction rep gain
+    ['share', undefined], // Enable sharing free ram to increase faction rep gain (by default, is enabled automatically once RAM is sufficient)
+    ['no-share', false],  // Disable sharing free ram to increase faction rep gain
     ['share-cooldown', 5000], // Wait before attempting to schedule more share threads (e.g. to free RAM to be freed for hack batch scheduling first)
     ['share-max-utilization', 0.8], // Set to 1 if you don't care to leave any RAM free after sharing. Will use up to this much of the available RAM
 
@@ -50,7 +50,7 @@ const argsSchema = [
     ['max-purchased-server-spend', 0.50], // Percentage of total hack income earnings we're willing to re-invest in new hosts (extra RAM in the current aug only)
 
     // Batch script fine-tuning flags
-    ['initial-max-targets', 2], // Initial number of servers to target / prep (TODO: Scale this as BN progression increases)
+    ['initial-max-targets', undefined], // Initial number of servers to target / prep (default is 2 + 1 for every 500 TB of RAM on the network)
     ['cycle-timing-delay', 16000], // (ms) Length of a hack cycle. The smaller this is, the more batches (HWGW) we can schedule before the first cycle fires, but the greater the chance of a misfire
     ['queue-delay', 1000], // (ms) Delay before the first script begins, to give time for all scripts to be scheduled
     ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
@@ -309,7 +309,7 @@ export async function main(ns) {
         queueDelay = options['queue-delay'];
         maxBatches = options['max-batches'];
         homeReservedRam = options['reserved-ram']
-        maxTargets = options['initial-max-targets'];
+        maxTargets = options['initial-max-targets'] ?? 0;
         if (stockFocus) // If the user explicitly requested to focus on stocks, ensure we start with as many targets as there are stock symbols
             maxTargets = Math.max(maxTargets, Object.keys(serverStockSymbols).length);
 
@@ -443,6 +443,13 @@ export async function main(ns) {
             await runStartupScripts(ns);
             await runPeriodicScripts(ns);
             await kickstartHackXp(ns);
+        }
+
+        // Default the initial maximum number of targets of none was specified.
+        if (maxTargets == 0) {
+            const networkStats = getNetworkStats();
+            maxTargets = 2 + Math.round(networkStats.totalMaxRam / (500 * 1024));
+            log(ns, `Defaulting --initial-max-targets to ${maxTargets} since total ram available is ${formatRam(networkStats.totalMaxRam)}`);
         }
 
         // Start the main targetting loop
@@ -860,7 +867,12 @@ export async function main(ns) {
                 highUtilizationIterations = utilizationPercent >= maxUtilization ? highUtilizationIterations + 1 : 0;
                 lowUtilizationIterations = utilizationPercent <= lowUtilizationThreshold ? lowUtilizationIterations + 1 : 0;
 
-                // If we've been at low utilization for longer than the cycle of all our targets, we can add a target
+                // If we've been at low utilization for longer than the max hack cycle out of all our targets, we can add a target.
+                // 
+                // TODO: Make better use of RAM by prepping more targets. Try not scheduling batches way in advance with a sleep, but instead
+                //       witholding batches until they're closer to when they need to be kicked off.
+                //       We can add logic to kill lower priority tasks using RAM (such as share, and scripts targetting low priority targets)
+                //       if necessary to free up ram for new high-priority target batches.
                 let intervalsPerTargetCycle = targeting.length == 0 ? 120 :
                     Math.ceil((targeting.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
                 //log(ns, `intervalsPerTargetCycle: ${intervalsPerTargetCycle} lowUtilizationIterations: ${lowUtilizationIterations} loopInterval: ${loopInterval}`);
@@ -899,7 +911,8 @@ export async function main(ns) {
                 const maxShareUtilization = options['share-max-utilization']
                 if (failed.length <= 0 && utilizationPercent < maxShareUtilization && // Only share RAM if we have succeeded in all hack cycle scheduling and have RAM to space
                     (Date.now() - lastShareTime) > options['share-cooldown'] && // Respect the share rate-limit if configured to leave gaps for scheduling
-                    !options['no-share'] && (options['share'] || network.totalMaxRam > 1024)) // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
+                    options['share'] !== false && options['no-share'] !== true &&
+                    (options['share'] === true || network.totalMaxRam > 1024)) // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
                 {
                     // Figure out if the player is currently working (no point in RAM share if we aren't currently working for a faction)
                     // Getting work info requires sinularity (SF4) - if we don't have it yet, we can still share, but we can only assume we're currently doing faction work.
