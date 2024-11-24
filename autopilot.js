@@ -85,7 +85,7 @@ export async function main(ns) {
     let options; // The options used at construction time
     let playerInGang = false, rushGang = false; // Tells us whether we're should be trying to work towards getting into a gang
     let playerInBladeburner = false; // Whether we've joined bladeburner
-    let wdHack = (/**@returns{null|number}*/() => null); // If the WD server is available (i.e. TRP is installed), caches the required hack level
+    let wdHack = (/**@returns{null|number}*/() => null)(); // If the WD server is available (i.e. TRP is installed), caches the required hack level
     let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
     let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
     let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
@@ -97,7 +97,7 @@ export async function main(ns) {
     let unlockedSFs = [], nextBn = 0; // Info for the current bitnode
     let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
     let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // bitNode multipliers that can be automatically determined after SF-5
-    let playerInstalledAugCount = (/**@returns{null|number}*/() => null); // Number of augs installed, or null if we don't have SF4 and can't tell.
+    let playerInstalledAugCount = (/**@returns{null|number}*/() => null)(); // Number of augs installed, or null if we don't have SF4 and can't tell.
     let installedAugmentations = [];
     let acceptedStanek = false, stanekLaunched = false;
     let daemonStartTime = 0; // The time we personally launched daemon.
