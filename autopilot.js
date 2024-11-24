@@ -699,20 +699,21 @@ export async function main(ns) {
         }
 
         // If we aren't in Aevum already, wait until we have the 200K required to travel (plus some extra buffer to actually spend at the casino)
-        if (player.city != "Aevum" && player.money < 250000)
-            return log_once(ns, `INFO: Waiting until we have ${formatMoney(250000)} to travel to Aevum and run casino.js`);
+        if (player.city != "Aevum" && player.money < 300000)
+            return log_once(ns, `INFO: Waiting until we have ${formatMoney(300000)} to travel to Aevum and run casino.js`);
 
         // Run casino.js (and expect this script to get killed in the process)
         // Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
         await killScript(ns, 'work-for-factions.js');
+        await killScript(ns, 'daemon.js'); // We also have to kill daemon which can make us study.
         // Kill any action, in case we are studying or working out, as it might steal focus or funds before we can bet it at the casino.
         if (4 in unlockedSFs) // No big deal if we can't, casino.js has logic to find the stop button and click it.
-            await getNsDataThroughFile(ns, `ns.singularity.stopAction()`);
+            _ = await getNsDataThroughFile(ns, `ns.singularity.stopAction()`);
 
         const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
         if (pid) {
             await waitForProcessToComplete(ns, pid);
-            await ns.sleep(1000); // Give time for this script to be killed if the game is being restarted by casino.js
+            await ns.sleep(10000); // Give time for this script to be killed if the game is being restarted by casino.js
             // Otherwise, something went wrong
             log(ns, `ERROR: Something went wrong. casino.js was run, but we haven't been killed. It must have run into a problem...`)
         }
