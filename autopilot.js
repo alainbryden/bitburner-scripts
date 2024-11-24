@@ -563,6 +563,7 @@ export async function main(ns) {
         if ((13 in unlockedSFs) && !stanekLaunched && !stanekRunning && installedAugmentations.includes(augStanek)) {
             stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
             const stanekArgs = ["--on-completion-script", getFilePath('daemon.js')]
+            if (options['no-tail-windows']) stanekArgs.push('--no-tail'); // Relay the option to suppress tail windows
             if (daemonArgs.length >= 0) stanekArgs.push("--on-completion-script-args", JSON.stringify(daemonArgs)); // Pass in all the args we wanted to run daemon.js with
             launchScriptHelper(ns, 'stanek.js', stanekArgs);
             stanekRunning = true;
@@ -592,6 +593,8 @@ export async function main(ns) {
             "--fast-crimes-only", // Essentially means we do mug until we can do homicide, then stick to homicide
             "--get-invited-to-every-faction" // Join factions even we have all their augs. Good for having NeuroFlux providers
         ];
+        // Relay the options to suppress tail windows and ignore bladeburner
+        if (options['no-tail-windows']) workForFactionsArgs.push('--no-tail-windows');
         if (options['disable-bladeburner']) workForFactionsArgs.push("--no-bladeburner-check")
         // The following args are ideal when running 'work-for-factions.js' to rush unlocking gangs (earn karma)
         const rushGangsArgs = workForFactionsArgs.concat(...[ // Everything above, plus...
