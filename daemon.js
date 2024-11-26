@@ -47,7 +47,7 @@ const argsSchema = [
     ['disable-script', []], // The names of scripts that you do not want run by our scheduler
     ['run-script', []], // The names of additional scripts that you want daemon to run on home
 
-    ['max-purchased-server-spend', 0.50], // Percentage of total hack income earnings we're willing to re-invest in new hosts (extra RAM in the current aug only)
+    ['max-purchased-server-spend', 0.25], // Percentage of total hack income earnings we're willing to re-invest in new hosts (extra RAM in the current aug only)
 
     // Batch script fine-tuning flags
     ['initial-max-targets', undefined], // Initial number of servers to target / prep (default is 2 + 1 for every 500 TB of RAM on the network)
