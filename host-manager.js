@@ -13,6 +13,7 @@ let keepRunning = false;
 let minRamExponent;
 let absReservedMoney;
 let pctReservedMoney;
+let budget;
 
 let options;
 const argsSchema = [
@@ -62,6 +63,7 @@ export async function main(ns) {
     keepRunning = options.c || options['run-continuously'];
     pctReservedMoney = options['reserve-percent'];
     minRamExponent = options['min-ram-exponent'];
+    budget = options['budget'];
     // Log the command line options, for new users who don't know why certain decisions are/aren't being made
     if (minRamExponent > maxPurchasableServerRamExponent) {
         log(ns, `WARN: --min-ram-exponent was set to ${minRamExponent} (${formatRam(2 ** minRamExponent)}), ` +
@@ -152,7 +154,6 @@ async function tryToBuyBestServerPossible(ns) {
                 `${(options['reserve-percent'] * 100).toFixed(1)}% to ${(pctReservedMoney * 100).toFixed(1)}%`);
     }
 
-    let budget = options['budget'];
     let spendableMoney = Math.min(budget, cashMoney * (1.0 - pctReservedMoney), cashMoney - absReservedMoney);
     if (spendableMoney <= 0.01) {
         if (!keepRunning) // Show a more detailed log if we aren't running continuously
@@ -215,7 +216,7 @@ async function tryToBuyBestServerPossible(ns) {
 
     let purchasedServer,
         isUpgrade = false
-    // if we're at capacity, check to see if we can do better better than the current worst purchased server. If so, upgrade it.
+    // if we're at capacity, check to see if we can improve the current worst purchased server. If so, upgrade it.
     if (purchasedServers.length >= maxPurchasedServers) {
         if (worstServerRam == maxPurchasableServerRam) {
             keepRunning = false;
@@ -232,8 +233,11 @@ async function tryToBuyBestServerPossible(ns) {
             [purchasedServerName, maxRamPossibleToBuy]);
     }
     if (!purchasedServer)
-        setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
-            `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
-    else
-        log(ns, `SUCCESS: ${isUpgrade ? 'Upgraded' : 'Purchased'} server ${purchasedServer} with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
+        setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${formatRam(maxRamPossibleToBuy)} ` +
+            `RAM for ${formatMoney(cost)} with a budget of ${formatMoney(spendableMoney)}.`);
+    else {
+        log(ns, `SUCCESS: ${isUpgrade ? 'Upgraded' : 'Purchased'} server ${purchasedServer} with ${formatRam(maxRamPossibleToBuy)} ` +
+            `RAM for ${formatMoney(cost)} (budget was ${formatMoney(spendableMoney)})`, true, 'success');
+        budget -= cost;
+    }
 }
