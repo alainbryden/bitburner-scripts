@@ -150,7 +150,7 @@ async function tryToBuyBestServerPossible(ns) {
         const decayFactor = options['reserve-by-time-decay-factor'];
         pctReservedMoney = 1.0 - (1.0 - options['reserve-percent']) * Math.pow(1 - decayFactor, t);
         if (!keepRunning)
-            log(ns, `After spending ${formatDuration(timeSinceLastAug)} in this augmentatin, reserve % has grown from ` +
+            log(ns, `After spending ${formatDuration(timeSinceLastAug)} in this augmentation, reserve % has grown from ` +
                 `${(options['reserve-percent'] * 100).toFixed(1)}% to ${(pctReservedMoney * 100).toFixed(1)}%`);
     }
 
