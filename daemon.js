@@ -51,8 +51,8 @@ const argsSchema = [
 
     // Batch script fine-tuning flags
     ['initial-max-targets', undefined], // Initial number of servers to target / prep (default is 2 + 1 for every 500 TB of RAM on the network)
-    ['cycle-timing-delay', 16000], // (ms) Length of a hack cycle. The smaller this is, the more batches (HWGW) we can schedule before the first cycle fires, but the greater the chance of a misfire
-    ['queue-delay', 1000], // (ms) Delay before the first script begins, to give time for all scripts to be scheduled
+    ['cycle-timing-delay', 4000], // (ms) Length of a hack cycle. The smaller this is, the more batches (HWGW) we can schedule before the first cycle fires, but the greater the chance of a misfire
+    ['queue-delay', 100], // (ms) Delay before the first script begins, to give time for all scripts to be scheduled
     ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
     ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule mor
     ['max-steal-percentage', 0.75], // Don't steal more than this in case something goes wrong with timing or scheduling, it's hard to recover frome
@@ -747,6 +747,7 @@ export async function main(ns) {
                 const prepping = n(), preppedButNotTargeting = n(), targeting = n(), notRooted = n(), cantHack = n(),
                     cantHackButPrepped = n(), cantHackButPrepping = n(), noMoney = n(), failed = n(), skipped = n();
                 let lowestUnhackable = 99999;
+                let maxPossibleTargets = targetingOrder.filter(s => s.shouldHack()).length;
 
                 // Hack: We can get stuck and never improve if we don't try to prep at least one server to improve our future targeting options.
                 // So get the first un-prepped server that is within our hacking level, and move it to the front of the list.
@@ -831,10 +832,14 @@ export async function main(ns) {
                     }
 
                     // Hack: Quickly ramp up our max-targets without waiting for the next loop if we are far below the low-utilization threshold
-                    if (lowUtilizationIterations >= 5 && targeting.length == maxTargets && maxTargets < allHostNames.length - noMoney.length) {
+                    if (lowUtilizationIterations >= 5 && targeting.length == maxTargets && maxTargets < maxPossibleTargets) {
                         let network = getNetworkStats();
                         let utilizationPercent = network.totalUsedRam / network.totalMaxRam;
-                        if (utilizationPercent < lowUtilizationThreshold / 2) maxTargets++;
+                        if (utilizationPercent < lowUtilizationThreshold / 2) {
+                            maxTargets++;
+                            log(ns, `Increased max targets to ${maxTargets} since utilization (${formatNumber(utilizationPercent * 100, 3)}%) ` +
+                                `is less than ${lowUtilizationThreshold * 50}% after scheduling the first ${maxTargets - 1} targets.`);
+                        }
                     }
                 }
 
@@ -880,10 +885,22 @@ export async function main(ns) {
                 let intervalsPerTargetCycle = targeting.length == 0 ? 120 :
                     Math.ceil((targeting.reduce((max, t) => Math.max(max, t.timeToWeaken()), 0) + cycleTimingDelay) / loopInterval);
                 //log(ns, `intervalsPerTargetCycle: ${intervalsPerTargetCycle} lowUtilizationIterations: ${lowUtilizationIterations} loopInterval: ${loopInterval}`);
-                if (lowUtilizationIterations > intervalsPerTargetCycle && skipped.length > 0 && maxTargets < (targetingOrder.length - noMoney.length)) {
-                    maxTargets++;
-                    log(ns, `Increased max targets to ${maxTargets} since utilization (${formatNumber(utilizationPercent * 100, 3)}%) has been quite low for ${lowUtilizationIterations} iterations.`);
-                    lowUtilizationIterations = 0; // Reset the counter of low-utilization iterations
+                if (lowUtilizationIterations > intervalsPerTargetCycle) {
+                    // Increase max targets if to make use of additional RAM
+                    let actionTaken = null;
+                    if (skipped.length > 0 && maxTargets < maxPossibleTargets) {
+                        maxTargets++;
+                        actionTaken = `Increased max targets to ${maxTargets}`;
+                    } else if (maxTargets >= maxPossibleTargets && recoveryThreadPadding < 5) {
+                        // If we're already targetting every host and we have RAM to spare, increase the recovery padding 
+                        // to speed up our recovering from misfires (at the cost of "wasted" ram on every batch)
+                        recoveryThreadPadding = Math.min(5, recoveryThreadPadding * 1.5);
+                        actionTaken = `Increased recovery thread padding to ${formatNumber(recoveryThreadPadding, 2, 1)}`;
+                    }
+                    if (actionTaken) {
+                        log(ns, `${actionTaken} since utilization (${formatNumber(utilizationPercent * 100, 3)}%) has been quite low for ${lowUtilizationIterations} iterations.`);
+                        lowUtilizationIterations = 0; // Reset the counter of low-utilization iterations
+                    }
                 } else if (highUtilizationIterations > 60) { // Decrease max-targets by 1 ram utilization is too high (prevents scheduling efficient cycles)
                     if (maxTargets > 1) {
                         maxTargets -= 1;
@@ -891,7 +908,10 @@ export async function main(ns) {
                     }
                     highUtilizationIterations = 0; // Reset the counter of high-utilization iterations
                 }
-                maxTargets = Math.max(maxTargets, targeting.length - 1, 1); // Ensure that after a restart, maxTargets start off with no less than 1 fewer max targets
+                if (targeting.length - 1 > maxTargets) { // Ensure that after a restart, maxTargets start off with no less than 1 fewer max targets
+                    maxTargets = targeting.length - 1;
+                    log(ns, `Increased max targets to ${maxTargets} since we had previous scripts targetting ${targeting.length} servers at startup.`);
+                }
                 allTargetsPrepped = prepping.length == 0;
 
                 // If there is still unspent utilization, we can use a chunk of it it to farm XP
