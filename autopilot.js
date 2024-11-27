@@ -900,10 +900,10 @@ export async function main(ns) {
         if (currentWork?.type == "GRAFTING") {
             if (!wasGrafting) // Only log the first time we detect we've started grafting
                 log(ns, "Grafting in progress. autopilot.js will make sure to not install augmentations or otherwise interrupt it.");
-            wasGrafting = true;
+            return wasGrafting = true;
         }
         else
-            wasGrafting = false
+            return wasGrafting = false
     }
 
     /** Consolidated logic for all the times we want to reserve money
