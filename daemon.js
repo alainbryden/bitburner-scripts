@@ -1,5 +1,5 @@
 import {
-    formatMoney, formatRam, formatDuration, formatDateTime, formatNumber,
+    formatMoney, formatRam, formatDuration, formatDateTime, formatNumber, formatNumberShort,
     hashCode, disableLogs, log, getFilePath, getConfiguration,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
@@ -727,10 +727,14 @@ export async function main(ns) {
                     await refreshDynamicServerData(ns);
                     // Occassionally print our current targetting order (todo, make this controllable with a flag or custom UI?)
                     if (verbose || loops % 600 == 0) {
-                        const targetsLog = 'Targetting Order:\n  ' + targetingOrder.filter(s => s.shouldHack()).map(s =>
-                            `${s.isPrepped() ? '*' : ' '} ${s.canHack() ? '✓' : 'X'} Money: ${formatMoney(s.getMoney(), 4)} of ${formatMoney(s.getMaxMoney(), 4)} ` +
-                            `(${formatMoney(s.getMoneyPerRamSecond(), 4)}/ram.sec), Sec: ${formatNumber(s.getSecurity(), 3)} of ${formatNumber(s.getMinSecurity(), 3)}, ` +
-                            `TTW: ${formatDuration(s.timeToWeaken())}, Hack: ${s.requiredHackLevel} - ${s.name}` +
+                        const targetsLog = 'Targetting Order: (* = prepped, ✓ = hackable)\n  ' + targetingOrder.filter(s => s.shouldHack()).map(s =>
+                            `${s.isPrepped() ? '*' : ' '} ${s.canHack() ? '✓' : 'X'}` +
+                            ` Money: ${formatMoney(s.getMoney(), 4)} of ${formatMoney(s.getMaxMoney(), 4)} ` +
+                            // In Hack Exp mode, show estimated hack exp earned per second, otherwise show money per RAM-second.
+                            (xpOnly ? `Exp: ${formatNumberShort(s.getExpPerSecond(), 4)}/sec` : `(${formatMoney(s.getMoneyPerRamSecond(), 4)}/ram.sec),`) +
+                            ` Sec: ${formatNumber(s.getSecurity(), 3)} of ${formatNumber(s.getMinSecurity(), 3)},` +
+                            ` TTW: ${formatDuration(s.timeToWeaken())}, Hack: ${s.requiredHackLevel} - ${s.name}` +
+                            // In stock mode, show any associated stock symbol and whether we have shares to dictate stock manipulation direction
                             (!stockMode || !serverStockSymbols[s.name] ? '' : ` Sym: ${serverStockSymbols[s.name]} Owned: ${serversWithOwnedStock.includes(s.name)} ` +
                                 `Manip: ${shouldManipulateGrow[s.name] ? "grow" : shouldManipulateHack[s.name] ? "hack" : '(disabled)'}`))
                             .join('\n  ');
