@@ -52,7 +52,7 @@ const argsSchema = [
     // Batch script fine-tuning flags
     ['initial-max-targets', undefined], // Initial number of servers to target / prep (default is 2 + 1 for every 500 TB of RAM on the network)
     ['cycle-timing-delay', 4000], // (ms) Length of a hack cycle. The smaller this is, the more batches (HWGW) we can schedule before the first cycle fires, but the greater the chance of a misfire
-    ['queue-delay', 100], // (ms) Delay before the first script begins, to give time for all scripts to be scheduled
+    ['queue-delay', 1000], // (ms) Delay before the first script begins, to give time for all scripts to be scheduled
     ['recovery-thread-padding', 1], // Multiply the number of grow/weaken threads needed by this amount to automatically recover more quickly from misfires.
     ['max-batches', 40], // Maximum overlapping cycles to schedule in advance. Note that once scheduled, we must wait for all batches to complete before we can schedule mor
     ['max-steal-percentage', 0.75], // Don't steal more than this in case something goes wrong with timing or scheduling, it's hard to recover frome
@@ -234,11 +234,16 @@ export async function main(ns) {
     function reservedMoney(ns) {
         let shouldReserve = Number(ns.read("reserve.txt") || 0);
         let playerMoney = getPlayerMoney(ns);
+        // Conserve money if we get close to affording the last hack tool
         if (!ownedCracks.includes("SQLInject.exe") && playerMoney > 200e6)
             shouldReserve += 250e6; // Start saving at 200m of the 250m required for SQLInject
+        // Conserve money if we're close to being able to afford the Stock Market 4s API
         const fourSigmaCost = (bitNodeMults.FourSigmaMarketDataApiCost * 25000000000);
         if (!have4sApi && playerMoney >= fourSigmaCost / 2)
             shouldReserve += fourSigmaCost; // Start saving if we're half-way to buying 4S market access
+        // Conserve money if we're in BN10 and nearing the cost of the last last sleeve
+        if (bitNodeN == 10 && playerMoney >= 10e15) // 10q - 10% the cost of the last sleeve
+            shouldReserve = 100e15; // 100q, the cost of the 6th sleeve from The Covenant
         return shouldReserve;
     }
 
@@ -324,8 +329,8 @@ export async function main(ns) {
         if (stockFocus) log(ns, '--stock-manipulation-focus - Stock market manipulation is the main priority');
         if (loopingMode) {
             log(ns, '--looping-mode - scheduled remote tasks will loop themselves');
-            cycleTimingDelay = 0;
-            queueDelay = 0;
+            // cycleTimingDelay = 0;
+            // queueDelay = 0;
             if (recoveryThreadPadding == 1) recoveryThreadPadding = 10; // Default if not specified (TODO: Improve timings so we don't need so much padding)
             if (stockMode) stockFocus = true; // Need to actively kill scripts that go against stock because they will live forever
         }
@@ -891,10 +896,10 @@ export async function main(ns) {
                     if (skipped.length > 0 && maxTargets < maxPossibleTargets) {
                         maxTargets++;
                         actionTaken = `Increased max targets to ${maxTargets}`;
-                    } else if (maxTargets >= maxPossibleTargets && recoveryThreadPadding < 5) {
+                    } else if (maxTargets >= maxPossibleTargets && recoveryThreadPadding < 10) {
                         // If we're already targetting every host and we have RAM to spare, increase the recovery padding 
                         // to speed up our recovering from misfires (at the cost of "wasted" ram on every batch)
-                        recoveryThreadPadding = Math.min(5, recoveryThreadPadding * 1.5);
+                        recoveryThreadPadding = Math.min(10, recoveryThreadPadding * 1.5);
                         actionTaken = `Increased recovery thread padding to ${formatNumber(recoveryThreadPadding, 2, 1)}`;
                     }
                     if (actionTaken) {
@@ -1216,14 +1221,17 @@ export async function main(ns) {
             return Math.max(0, Math.ceil(((this.getSecurity() - this.getMinSecurity()) / actualWeakenPotency()).toPrecision(14)));
         }
         getGrowThreadsNeededAfterTheft() {
-            return Math.max(0, Math.ceil(Math.min(this.getMaxMoney(),
+            // Note: If recovery thread padding > 1.0, require a minimum of 2 recovery threads, no matter how scaled stats are
+            return Math.max(recoveryThreadPadding > 1 ? 2 : 1, Math.ceil(Math.min(this.getMaxMoney(),
                 this.cyclesNeededForGrowthCoefficientAfterTheft() / this.serverGrowthPercentage() * recoveryThreadPadding).toPrecision(14)));
         }
         getWeakenThreadsNeededAfterTheft() {
-            return Math.max(0, Math.ceil((this.getHackThreadsNeeded() * hackThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14)));
+            // Note: If recovery thread padding > 1.0, require a minimum of 2 recovery threads, no matter how scaled stats are
+            return Math.max(recoveryThreadPadding > 1 ? 2 : 1, Math.ceil((this.getHackThreadsNeeded() * hackThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14)));
         }
         getWeakenThreadsNeededAfterGrowth() {
-            return Math.max(0, Math.ceil((this.getGrowThreadsNeededAfterTheft() * growthThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14)));
+            // Note: If recovery thread padding > 1.0, require a minimum of 2 recovery threads, no matter how scaled stats are
+            return Math.max(recoveryThreadPadding > 1 ? 2 : 1, Math.ceil((this.getGrowThreadsNeededAfterTheft() * growthThreadHardening / actualWeakenPotency() * recoveryThreadPadding).toPrecision(14)));
         }
         hasRoot() { return this._hasRootCached ??= this.ns.hasRootAccess(this.name); }
         isHost() { return this.name == daemonHost; }

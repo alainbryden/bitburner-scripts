@@ -507,17 +507,20 @@ export async function main(ns) {
             daemonArgs = existingDaemon.args;
         else {
             // Determine the arguments we want to run daemon.js with. We will either pass these directly, or through stanek.js if we're running it first.
-            const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, run in "start-tight" mode
+            const hackThreshold = options['high-hack-threshold']; // If player.skills.hacking level is about 8000, tweak daemon to increase income rates
             // When our hack level gets sufficiently high, hack/grow/weaken go so fast that spawning new scripts for each cycle becomes very
             // expensive / laggy. To help with this, daemon.js supports "looping mode", to just spawn one long-lived script that does H/G/W in a loop.
             if (false /* TODO: LOOPING MODE DISABLED UNTIL WORKING BETTER */ && player.skills.hacking >= hackThreshold) {
-                daemonArgs = ["--looping-mode", "--cycle-timing-delay", 2000, "--queue-delay", "10", "--initial-max-targets", "63", "--silent-misfires", "--no-share",
-                    // Use recovery thread padding sparingly until our hack level is significantly higher (capped at 3x padding)
-                    "--recovery-thread-padding", 1.0 + Math.max(2, (player.skills.hacking - hackThreshold) / 1000.0)];
+                daemonArgs = ["--looping-mode", "--cycle-timing-delay", 40, "--queue-delay", 2000, "--initial-max-targets", 61, "--silent-misfires", "--no-share",
+                    "--recovery-thread-padding", 1.0 + Math.max(4, (player.skills.hacking - hackThreshold) / 1000.0)]; // Use more recovery thread padding as our hack level increases
                 // Log a special notice if we're going to be relaunching daemon.js for this reason
                 if (!existingDaemon || !(existingDaemon.args.includes("--looping-mode")))
                     daemonRelaunchMessage = `Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`;
-            } else if (homeRam < 32) { // If we're in early BN 1.1 (i.e. with < 32GB home RAM), avoid squandering RAM
+            } else if (player.skills.hacking >= hackThreshold) { // "tight" mode. Tighter batches to increase income rate, at the cost of more frequent misfires
+                daemonArgs = ["--cycle-timing-delay", 40, "--queue-delay", 50, "--silent-misfires",
+                    "--recovery-thread-padding", 1.0 + Math.max(4, (player.skills.hacking - hackThreshold) / 1000.0)]; // Use more recovery thread padding as our hack level increases
+            }
+            else if (homeRam < 32) { // If we're in early BN 1.1 (i.e. with < 32GB home RAM), avoid squandering RAM
                 daemonArgs.push("--no-share", "--initial-max-targets", 1);
             } else { // XP-ONLY MODE: We can shift daemon.js to this when we want to prioritize earning hack exp rather than money
                 // Only do this if we aren't in --looping mode because TODO: currently it does not kill it's loops on shutdown, so they'd be stuck in hack exp mode
@@ -879,10 +882,16 @@ export async function main(ns) {
         // remain in the BN until we have enough rep and/or money to buy TRP (Reminder: in BN8, donations are immediately unlocked for all factions)    
         if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && !installedAugmentations.includes(augTRP)) {
             if (!facmanOutput.affordable_augs.includes(augTRP) && !facmanOutput.awaiting_install_augs.includes(augTRP)) {
-                setStatus(ns, `Not installing until we have enough Daedalus rep to install "${augTRP}" on our next reset.`)
+                setStatus(ns, `Not installing until we have enough Daedalus rep to install "${augTRP}" on our next reset.`);
                 return true;
             }
         }
+        // In BN10, it takes a while to build up the 100q needed to purchase the last sleeve, so don't reset if we're close
+        if (resetInfo.currentNode == 10 && player.money >= 10e15) { // 10q - 10% the cost of the last sleeve
+            setStatus(ns, `Not installing anymore since we are nearing the 100q needed to purchase the 6th sleeve from the Covenant.`);
+            return true;
+        }
+
         // TODO: Bladeburner black-op in progress
         // TODO: Close to the rep needed for unlocking donations with a new faction?
         return false;
