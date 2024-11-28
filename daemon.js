@@ -1933,8 +1933,8 @@ export async function main(ns) {
 
             let now = Date.now();
             let scheduleTime = now + queueDelay;
-            let cycleTime = loopingMode ? expTime * 4.0 : expTime;
-            nextXpCycleEnd[server.name] = now + cycleTime; // Store when this server's next cycle is expected to end
+            let msToCycleEnd = queueDelay + (loopingMode ? expTime * 4.0 : expTime);
+            nextXpCycleEnd[server.name] = now + msToCycleEnd; // Store how many MS before when this server's next cycle is expected to end
             const allowLoop = advancedMode /*&& singleServer*/ && allTargetsPrepped; // Allow looping mode only once all targets are prepped
             //log(ns, `allowLoop: ${allowLoop} advancedMode: ${advancedMode} singleServer: ${singleServer} allTargetsPrepped: ${allTargetsPrepped}`);
             // Schedule the FarmXP threads first, ensuring that they are not split (if they our split, our hack threads above 'effectiveHackThreads' lose their free ride)
@@ -1947,9 +1947,9 @@ export async function main(ns) {
             if (success && allowLoop) loopsHackThreadsByServer[server.name] = threads;
 
             if (advancedMode) { // Need to keep server money above zero, and security at minimum to farm xp from hack();
-                const weakDesiredFireTime = (scheduleTime + expTime * 2 / 3); //  Time this to resolve at 2/3 * cycleTime after each hack fires
+                const weakDesiredFireTime = (scheduleTime + expTime * 2 / 3); //  Time this to resolve at 2/3 * time-to-hack after each hack fires
                 let scheduleWeak = weakDesiredFireTime - server.timeToWeaken();
-                const growDesiredFireTime = (scheduleTime + expTime * 1 / 3); // Time this to resolve at 1/3 * cycleTime after each hack fires
+                const growDesiredFireTime = (scheduleTime + expTime * 1 / 3); // Time this to resolve at 1/3 * time-to-hack after each hack fires
                 let scheduleGrow = growDesiredFireTime - server.timeToGrow(); // TODO: This first grow will run at increased security, so it will take longer to fire. How much longer?
                 // Scheduled times might be negative, because "grow" / "weaken" take longer to run than "hack"
                 // This is fine, it just means we'll have one hack misfire before recovery threads "catch up" to the loop
@@ -1967,7 +1967,7 @@ export async function main(ns) {
                     if (success && allowLoop && !allWeakLoopsScheduled)
                         loopsByServer_Weaken[server.name] = 1 + (loopsByServer_Weaken[server.name] ?? 0);
                     if (verbose) log(ns, `Looping ${weakenThreadsNeeded} x Weak starting in ${Math.round(scheduleWeak - now)}ms, ` +
-                        `Tick: ${Math.round(cycleTime)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
+                        `Tick: ${Math.round(msToCycleEnd)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
                     // The next loop (if any) we schedule needs to be offset by an additional +expTime
                     scheduleWeak += expTime;
                 } while (loopingMode); // In looping mode, set up additional recovery loops
@@ -1983,20 +1983,20 @@ export async function main(ns) {
                     if (success && allowLoop && !allGrowLoopsScheduled)
                         loopsByServer_Grow[server.name] = 1 + (loopsByServer_Grow[server.name] ?? 0);
                     if (verbose) log(ns, `Looping ${growThreadsNeeded} x Grow starting in ${Math.round(scheduleGrow - now)}ms, ` +
-                        `Tick: ${Math.round(cycleTime)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
+                        `Tick: ${Math.round(msToCycleEnd)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
                     // The next loop (if any) we schedule needs to be offset by an additional +expTime
                     scheduleGrow += expTime;
                 } while (loopingMode); // In looping mode, set up additional recovery loops
                 //log(ns, `XP Farm ${server.name} money available is ${formatMoney(server.getMoney())} and security is ` +
                 //    `${server.getSecurity().toPrecision(3)} of ${server.getMinSecurity().toPrecision(3)}`);
                 //log(ns, `Planned start: Hack: ${Math.round(scheduleTime - now)} Grow: ${Math.round(scheduleGrow - now)} ` +
-                //    `Weak: ${Math.round(scheduleWeak - now)} Tick: ${Math.round(cycleTime)} Cycle: ${threads} / ${growThreadsNeeded} / ${weakenThreadsNeeded}`);
+                //    `Weak: ${Math.round(scheduleWeak - now)} Tick: ${Math.round(msToCycleEnd)} Cycle: ${threads} / ${growThreadsNeeded} / ${weakenThreadsNeeded}`);
                 if (verbose) log(ns, `Exp Cycle: ${threads} x Hack in ${Math.round(scheduleTime - now + expTime)}ms, ` +
-                    `${growThreadsNeeded} x Grow in ${Math.round((scheduleGrow - now + server.timeToGrow()) % cycleTime)}ms, ` +
-                    `${weakenThreadsNeeded} x Weak in ${Math.round((scheduleWeak - now + server.timeToWeaken()) % cycleTime)}ms, ` +
-                    `Tick: ${Math.round(cycleTime)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
+                    `${growThreadsNeeded} x Grow in ${Math.round((scheduleGrow - now + server.timeToGrow()) % msToCycleEnd)}ms, ` + // TODO: This "in ...ms" time seems messed up. Need a comment at least
+                    `${weakenThreadsNeeded} x Weak in ${Math.round((scheduleWeak - now + server.timeToWeaken()) % msToCycleEnd)}ms, ` +
+                    `Tick: ${Math.round(msToCycleEnd)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
             } else if (verbose)
-                log(ns, `In ${formatDuration(cycleTime)}, ${threads} ${expTool.shortName} threads will fire against ${server.name} on ${allocatedServer?.name ?? '(any server)'} (for Hack Exp)`);
+                log(ns, `In ${formatDuration(msToCycleEnd)}, ${threads} ${expTool.shortName} threads will fire against ${server.name} on ${allocatedServer?.name ?? '(any server)'} (for Hack Exp)`);
             if (!success) { // If some aspect scheduling fails, we should try adjusting our future scheduling tactics to attempt to use less RAM
                 if (singleServerLimit >= maxTargets && maxTargets > 1)
                     maxTargets--;
@@ -2004,7 +2004,7 @@ export async function main(ns) {
                     singleServerLimit++;
             }
             // Note: Plan to wake up soon after our planned exp cycle has fired 
-            return success ? cycleTime + 10 : false; // TODO: In advance mode, we can probably return a longer delay, since there's no need to wake up often in looping mode
+            return success ? msToCycleEnd + 10 : false; // TODO: In advance mode, we can probably return a longer delay, since there's no need to wake up often in looping mode
         } finally {
             farmXpReentryLock[server.name] = false;
         }
