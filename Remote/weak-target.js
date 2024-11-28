@@ -1,14 +1,40 @@
 /** @param {NS} ns
  * Wait until an appointed time and then execute a weaken. */
 export async function main(ns) {
-    //args[0: target, 1: desired start time, 2: expected end, 3: expected duration, 4: description, 5: disable toast warnings, 6: loop]
-    let sleepDuration = ns.args[1] - Date.now();
-    const disableToastWarnings = ns.args.length > 5 ? ns.args[5] : false;
-    const loop = ns.args.length > 6 ? ns.args[6] : false;
-    if (sleepDuration > 0)
-        await ns.sleep(sleepDuration);
+    // Destructure the arguments (default values should never be used and should just provide type hints)
+    const [
+        /*args[0]*/ target = "",
+        /*args[1]*/ start_time = 0,
+        /*args[2]*/ end_time = 0,
+        /*args[3]*/ duration = 0,
+        /*args[4]*/ description = "",
+        // Note, unlike Grow / Hack, no stock manipulation arg here.
+        /*args[5]*/ silentMisfires = false,
+        /*args[6]*/ loopingMode = false
+    ] = ns.args;
+
+    // We may need to sleep before we start the operation to align ourselves properly with other batch cycle (HGW) operations
+    let sleepDuration = start_time - Date.now();
+    if (sleepDuration < 0) {
+        if (!silentMisfires)
+            ns.toast(`Misfire: Weaken started ${-sleepDuration} ms too late. ${JSON.stringify(ns.args)}`, 'warning');
+        sleepDuration = 0;
+    }
+    // We use the "additionalMsec" option to bundle the initial sleep time we require with the built-in operation timer
+    const hgwOptions = {
+        additionalMsec: sleepDuration
+    }
+
+    let firstLoop = true;
     do {
-        if (!await ns.weaken(ns.args[0]) && !disableToastWarnings)
-            ns.toast(`Warning, weaken reduced 0 security. Might be a misfire. ${JSON.stringify(ns.args)}`, 'warning');
-    } while (loop);
+        const weakAmt = await ns.weaken(target, hgwOptions);
+        // If enabled, warn of any misfires
+        if (weakAmt == 0 && !silentMisfires)
+            ns.toast(`Misfire: Weaken achieved no security reduction. ${JSON.stringify(ns.args)}`, 'warning');
+        // (looping mode only) After the first loop, remove the initial sleep time used to align our start with other HGW operations
+        if (firstLoop) {
+            hgwOptions.additionalMsec = 0;
+            firstLoop = false;
+        }
+    } while (loopingMode); // Keep going only if we were started in "looping mode"
 }

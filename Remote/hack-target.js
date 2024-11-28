@@ -1,19 +1,44 @@
 /** @param {NS} ns
  * Wait until an appointed time and then execute a hack. */
 export async function main(ns) {
-    //args[0: target, 1: desired start time, 2: expected end, 3: expected duration, 4: description, 5: manipulate stock, 6: disable toast warnings, 7: loop]
-    const sleepDuration = ns.args.length > 1 ? ns.args[1] - Date.now() : 0;
-    const expectedDuration = ns.args.length > 3 ? ns.args[3] : 0;
-    const manipulateStock = ns.args.length > 5 && ns.args[5] ? true : false;
-    const disableToastWarnings = ns.args.length > 6 ? ns.args[6] : false;
-    const loop = ns.args.length > 7 ? ns.args[7] : false;
-    let cycleTime = expectedDuration * 4;
-    if (cycleTime < 100) cycleTime = Math.max(1, Math.min(5, cycleTime * 2)); // For fast hacking loops, inject a delay on hack in case grow/weaken are running a bit slow.
-    if (sleepDuration > 0)
-        await ns.sleep(sleepDuration);
+    // Destructure the arguments (default values should never be used and should just provide type hints)
+    const [
+        /*args[0]*/ target = "",
+        /*args[1]*/ start_time = 0,
+        /*args[2]*/ end_time = 0,
+        /*args[3]*/ duration = 0,
+        /*args[4]*/ description = "",
+        /*args[5]*/ manipulateStock = false,
+        /*args[6]*/ silentMisfires = false,
+        /*args[7]*/ loopingMode = false
+    ] = ns.args;
+
+    // We may need to sleep before we start the operation to align ourselves properly with other batch cycle (HGW) operations
+    let sleepDuration = start_time - Date.now();
+    if (sleepDuration < 0) {
+        if (!silentMisfires)
+            ns.toast(`Misfire: Hack started ${-sleepDuration} ms too late. ${JSON.stringify(ns.args)}`, 'warning');
+        sleepDuration = 0;
+    }
+    // We use the "additionalMsec" option to bundle the initial sleep time we require with the built-in operation timer
+    const hgwOptions = {
+        stock: manipulateStock,
+        additionalMsec: sleepDuration
+    }
+    // In looping mode, we want increase the run time to match the time-to-weaken, so that we fire once per cycle
+    if (loopingMode)
+        hgwOptions.additionalMsec += duration * 3.0 // (duration * 4.0 (time-to-weaken) - duration)
+
+    let firstLoop = true;
     do {
-        if (!await ns.hack(ns.args[0], { stock: manipulateStock }) && !disableToastWarnings)
-            ns.toast(`Warning, hack stole 0 money. Might be a misfire. ${JSON.stringify(ns.args)}`, 'warning');
-        if (loop) await ns.sleep(cycleTime - expectedDuration);
-    } while (loop);
+        const stolen = await ns.hack(target, hgwOptions);
+        // If enabled, warn of any misfires
+        if (stolen == 0 && !silentMisfires)
+            ns.toast(`Misfire: Hack stole 0 money. ${JSON.stringify(ns.args)}`, 'warning');
+        // (looping mode only) After the first loop, remove the initial sleep time used to align our start with other HGW operations
+        if (firstLoop) {
+            hgwOptions.additionalMsec -= sleepDuration;
+            firstLoop = false;
+        }
+    } while (loopingMode); // Keep going only if we were started in "looping mode"
 }

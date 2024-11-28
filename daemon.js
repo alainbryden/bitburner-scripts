@@ -1454,11 +1454,12 @@ export async function main(ns) {
     /** Produce additional args based on the hack tool name and command line flags set */
     function getFlagsArgs(toolName, target, allowLooping = true) {
         const args = []
+        const silentMisfires = options['silent-misfires'] ||
+            // Must disable misfire alerts in BNs where hack income is disabled because the money gained will always return 0
+            (toolName == "hack" && (bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0));
         if (["hack", "grow"].includes(toolName)) // Push an arg used by remote hack/grow tools to determine whether it should manipulate the stock market
             args.push(stockMode && (toolName == "hack" && shouldManipulateHack[target] || toolName == "grow" && shouldManipulateGrow[target]) ? 1 : 0);
-        if (["hack", "weak"].includes(toolName))
-            args.push(options['silent-misfires'] || // Optional arg to disable toast warnings about a failed hack if hacking money gain is disabled
-                (toolName == "hack" && (bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0)) ? 1 : 0); // Disable automatically in BN8 and other BNs where hack income is disabled
+        args.push(silentMisfires ? 1 : 0); // Optional arg to disable toast warnings about e.g. a failed hack or early grow/weaken
         args.push(allowLooping && loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
         return args;
     }
