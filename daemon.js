@@ -315,8 +315,10 @@ export async function main(ns) {
         maxBatches = options['max-batches'];
         homeReservedRam = options['reserved-ram']
         maxTargets = options['initial-max-targets'] ?? 0;
-        if (stockFocus) // If the user explicitly requested to focus on stocks, ensure we start with as many targets as there are stock symbols
+        if (stockFocus) { // If the user explicitly requested to focus on stocks, ensure we start with as many targets as there are stock symbols
             maxTargets = Math.max(maxTargets, Object.keys(serverStockSymbols).length);
+            log(ns, `Defaulting --initial-max-targets to ${maxTargets} so that we may manipulate every stock (due to --stock-manipulation-focus flag)`);
+        }
 
         // Log which flaggs are active
         if (hackOnly) log(ns, '-h - Hack-Only mode activated!');
