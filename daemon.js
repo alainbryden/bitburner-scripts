@@ -1147,16 +1147,16 @@ export async function main(ns) {
             return count ? total : false;
         }
         async isPrepping(useCache = true) {
-            this._isPrepping ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4] == "prep", useCache);
+            this._isPrepping ??= await this.isSubjectOfRunningScript(process => process.args.length > 3 && process.args[3] == "prep", useCache);
             return this._isPrepping;
         }
         async isTargeting(useCache = true) {
-            this._isTargeting ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 && process.args[4].startsWith('Batch'), useCache);
+            this._isTargeting ??= await this.isSubjectOfRunningScript(process => process.args.length > 3 && process.args[3].startsWith('Batch'), useCache);
             return this._isTargeting;
         }
         async isXpFarming(useCache = true) {
-            this._isXpFarming ??= await this.isSubjectOfRunningScript(process => process.args.length > 4 &&
-                (['FarmXP', 'weakenForXp', 'growForXp'].includes(process.args[4])), useCache);
+            this._isXpFarming ??= await this.isSubjectOfRunningScript(process => process.args.length > 3 &&
+                (['FarmXP', 'weakenForXp', 'growForXp'].includes(process.args[3])), useCache);
             return this._isXpFarming;
         }
         serverGrowthPercentage() {
@@ -1435,7 +1435,7 @@ export async function main(ns) {
             for (const schedItem of schedObj.scheduleItems) {
                 const discriminationArg = `Batch ${schedObj.batchNumber}-${schedItem.description}`;
                 // Args spec: [0: Target, 1: DesiredStartTime (used to delay tool start), 2: ExpectedEndTime (informational), 3: Duration (informational), 4: DoStockManipulation, 5: DisableWarnings]
-                const args = [currentTarget.name, schedItem.start.getTime(), schedItem.end.getTime(), schedItem.end - schedItem.start, discriminationArg];
+                const args = [currentTarget.name, schedItem.start.getTime(), schedItem.end - schedItem.start, discriminationArg];
                 args.push(...getFlagsArgs(schedItem.toolShortName, currentTarget.name));
                 if (options.i && currentTerminalServer?.name == currentTarget.name && schedItem.toolShortName == "hack")
                     schedItem.toolShortName = "manualhack";
@@ -1462,14 +1462,14 @@ export async function main(ns) {
             `\n  Weak2- End: ${formatDateTime(schedule.secondWeakenEnd)}  Start: ${formatDateTime(schedule.secondWeakenStart)}  Time: ${formatDuration(currentTarget.timeToWeaken())}`);
 
     /** Produce additional args based on the hack tool name and command line flags set */
-    function getFlagsArgs(toolName, target, allowLooping = true) {
+    function getFlagsArgs(toolName, target, allowLooping = true, overrideSilentMisfires = undefined) {
         const args = []
         const silentMisfires = options['silent-misfires'] ||
             // Must disable misfire alerts in BNs where hack income is disabled because the money gained will always return 0
             (toolName == "hack" && (bitNodeMults.ScriptHackMoneyGain * bitNodeMults.ScriptHackMoney == 0));
         if (["hack", "grow"].includes(toolName)) // Push an arg used by remote hack/grow tools to determine whether it should manipulate the stock market
             args.push(stockMode && (toolName == "hack" && shouldManipulateHack[target] || toolName == "grow" && shouldManipulateGrow[target]) ? 1 : 0);
-        args.push(silentMisfires ? 1 : 0); // Optional arg to disable toast warnings about e.g. a failed hack or early grow/weaken
+        args.push(overrideSilentMisfires ?? (silentMisfires ? 1 : 0)); // Optional arg to disable toast warnings about e.g. a failed hack or early grow/weaken
         args.push(allowLooping && loopingMode ? 1 : 0); // Argument to indicate whether the cycle should loop perpetually
         return args;
     }
@@ -1732,14 +1732,15 @@ export async function main(ns) {
                     `prep weaken threads needed to lower the target from current security (${formatNumber(currentTarget.getSecurity())}) ` +
                     `to min security (${formatNumber(currentTarget.getMinSecurity())}) (${currentTarget.name})`);
             prepSucceeding = await arbitraryExecution(ns, weakenTool, weakenThreadsScheduled,
-                [currentTarget.name, now.getTime(), now.getTime(), 0, "prep", ...getFlagsArgs("weak", currentTarget.name, false)]);
+                // Note: Because we are scheduling prep tasks to fire ASAP, we should override the "silent misfires" (last arg) to true
+                [currentTarget.name, now.getTime(), currentTarget.timeToWeaken(), "prep", ...getFlagsArgs("weak", currentTarget.name, false, true)]);
             if (prepSucceeding == false)
                 log(ns, `WARN: Failed to schedule ${weakenThreadsScheduled} prep weaken threads despite there ostensibly being room for ${weakenThreadsAllowable} (${currentTarget.name})`);
         }
         // Schedule any prep grow threads next
         if (prepSucceeding && growThreadsScheduled > 0) {
             prepSucceeding = await arbitraryExecution(ns, growTool, growThreadsScheduled,
-                [currentTarget.name, now.getTime(), now.getTime(), 0, "prep", ...getFlagsArgs("grow", currentTarget.name, false)],
+                [currentTarget.name, now.getTime(), currentTarget.timeToGrow(), "prep", ...getFlagsArgs("grow", currentTarget.name, false, true)],
                 undefined, undefined, /*allowThreadSplitting*/ true); // Special case: for prep we allow grow threads to be split
             if (prepSucceeding == false)
                 log(ns, `WARN: Failed to schedule ${growThreadsScheduled} prep grow threads despite there ostensibly being room for ${growThreadsAllowable} (${currentTarget.name})`);
@@ -1930,47 +1931,62 @@ export async function main(ns) {
                 }
             }
 
-            let scheduleDelay = 10; // Assume it will take this long a script fired immediately to start running
             let now = Date.now();
-            let scheduleTime = now + scheduleDelay;
-            let cycleTime = scheduleDelay + expTime + 10; // Wake up this long after a hack has fired (to ensure we don't wake up too early)
+            let scheduleTime = now + queueDelay;
+            let cycleTime = loopingMode ? expTime * 4.0 : expTime;
             nextXpCycleEnd[server.name] = now + cycleTime; // Store when this server's next cycle is expected to end
             const allowLoop = advancedMode /*&& singleServer*/ && allTargetsPrepped; // Allow looping mode only once all targets are prepped
             //log(ns, `allowLoop: ${allowLoop} advancedMode: ${advancedMode} singleServer: ${singleServer} allTargetsPrepped: ${allTargetsPrepped}`);
             // Schedule the FarmXP threads first, ensuring that they are not split (if they our split, our hack threads above 'effectiveHackThreads' lose their free ride)
             let success = true;
-            if (!loopRunning) { // In looping mode, we only schedule one FarmXp loop, so skip this if one is already running
-                const farmXpArgs = [server.name, scheduleTime, 0, expTime, "FarmXP"].concat(getFlagsArgs(expTool.shortName, server.name, allowLoop));
+            if (!loopRunning) { // In looping mode, we only schedule one FarmXp (hack) loop, so skip this if one is already running
+                const farmXpArgs = [server.name, scheduleTime, expTime, "FarmXP", ...getFlagsArgs(expTool.shortName, server.name, allowLoop)];
                 if (verbose) log(ns, `Scheduling ${threads}x ${expTool.shortName} on ${allocatedServer?.name ?? "(any)"} targetting ${server.name}`);
                 success = await arbitraryExecution(ns, expTool, threads, farmXpArgs, allocatedServer?.name);
             }
             if (success && allowLoop) loopsHackThreadsByServer[server.name] = threads;
 
             if (advancedMode) { // Need to keep server money above zero, and security at minimum to farm xp from hack();
-                const scheduleGrow = scheduleTime + cycleTime * 2 / 15 - scheduleDelay; // Time this to resolve at 1/3 * cycleTime after each hack fires
-                const scheduleWeak = scheduleTime + cycleTime * 2 / 3 - scheduleDelay; //  Time this to resolve at 2/3 * cycleTime after each hack fires
-
-                // We can set these up in looping mode as well as long as we keep track and spawn no more than 4 running instances.
-                const allWeakLoopsScheduled = loopingMode && (loopsByServer_Weaken[server.name] ?? 0) >= 4;
-                //log(ns, `allowLoop: ${allowLoop} allWeakLoopsScheduled: ${allWeakLoopsScheduled} for ${server.name} (loops: ${loopsByServer_Weaken[server.name]})`);
-                if (!allWeakLoopsScheduled) {
+                const weakDesiredFireTime = (scheduleTime + expTime * 2 / 3); //  Time this to resolve at 2/3 * cycleTime after each hack fires
+                let scheduleWeak = weakDesiredFireTime - server.timeToWeaken();
+                const growDesiredFireTime = (scheduleTime + expTime * 1 / 3); // Time this to resolve at 1/3 * cycleTime after each hack fires
+                let scheduleGrow = growDesiredFireTime - server.timeToGrow(); // TODO: This first grow will run at increased security, so it will take longer to fire. How much longer?
+                // Scheduled times might be negative, because "grow" / "weaken" take longer to run than "hack"
+                // This is fine, it just means we'll have one hack misfire before recovery threads "catch up" to the loop
+                while (scheduleWeak < queueDelay) scheduleWeak += expTime;
+                while (scheduleGrow < queueDelay) scheduleGrow += expTime;
+                // Hack runs 4 times per weaken, so in looping mode we need to schedule 4 weaken loops to keep up with one hack loop.
+                do {
+                    const allWeakLoopsScheduled = loopingMode && (loopsByServer_Weaken[server.name] ?? 0) >= 4;
+                    //log(ns, `allowLoop: ${allowLoop} allWeakLoopsScheduled: ${allWeakLoopsScheduled} for ${server.name} (loops: ${loopsByServer_Weaken[server.name]})`);
+                    if (allWeakLoopsScheduled) break;
                     if (verbose) log(ns, `Scheduling ${weakenThreadsNeeded}x weak on ${allocatedServer?.name ?? "(any)"} targetting ${server.name}`);
                     success &&= await arbitraryExecution(ns, getTool("weak"), weakenThreadsNeeded,
-                        [server.name, scheduleWeak, 0, server.timeToWeaken(), "weakenForXp"].concat(getFlagsArgs("weak", server.name, allowLoop)),
+                        [server.name, scheduleWeak, server.timeToWeaken(), "weakenForXp", ...getFlagsArgs("weak", server.name, allowLoop)],
                         singleServer ? allocatedServer?.name : null, !singleServer);
                     if (success && allowLoop && !allWeakLoopsScheduled)
                         loopsByServer_Weaken[server.name] = 1 + (loopsByServer_Weaken[server.name] ?? 0);
-                }
-                const allGrowLoopsScheduled = loopingMode && (loopsByServer_Grow[server.name] ?? 0) >= 4;
-                //log(ns, `allowLoop: ${allowLoop} allGrowLoopsScheduled: ${allGrowLoopsScheduled} for ${server.name} (loops: ${loopsByServer_Grow[server.name]})`);
-                if (!allGrowLoopsScheduled) {
+                    if (verbose) log(ns, `Looping ${weakenThreadsNeeded} x Weak starting in ${Math.round(scheduleWeak - now)}ms, ` +
+                        `Tick: ${Math.round(cycleTime)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
+                    // The next loop (if any) we schedule needs to be offset by an additional +expTime
+                    scheduleWeak += expTime;
+                } while (loopingMode); // In looping mode, set up additional recovery loops
+                // Schedule 4 grow loops to fire after each hack/weaken
+                do {
+                    const allGrowLoopsScheduled = loopingMode && (loopsByServer_Grow[server.name] ?? 0) >= 4;
+                    //log(ns, `allowLoop: ${allowLoop} allGrowLoopsScheduled: ${allGrowLoopsScheduled} for ${server.name} (loops: ${loopsByServer_Grow[server.name]})`);
+                    if (allGrowLoopsScheduled) break;
                     if (verbose) log(ns, `Scheduling ${growThreadsNeeded}x grow on ${allocatedServer?.name ?? "(any)"} targetting ${server.name}`);
                     success &&= await arbitraryExecution(ns, getTool("grow"), growThreadsNeeded,
-                        [server.name, scheduleGrow, 0, server.timeToGrow(), "growForXp"].concat(getFlagsArgs("grow", server.name, allowLoop)),
+                        [server.name, scheduleGrow, server.timeToGrow(), "growForXp", ...getFlagsArgs("grow", server.name, allowLoop)],
                         singleServer ? allocatedServer?.name : null, !singleServer);
                     if (success && allowLoop && !allGrowLoopsScheduled)
                         loopsByServer_Grow[server.name] = 1 + (loopsByServer_Grow[server.name] ?? 0);
-                }
+                    if (verbose) log(ns, `Looping ${growThreadsNeeded} x Grow starting in ${Math.round(scheduleGrow - now)}ms, ` +
+                        `Tick: ${Math.round(cycleTime)}ms on ${allocatedServer?.name ?? '(any server)'} targeting "${server.name}"`);
+                    // The next loop (if any) we schedule needs to be offset by an additional +expTime
+                    scheduleGrow += expTime;
+                } while (loopingMode); // In looping mode, set up additional recovery loops
                 //log(ns, `XP Farm ${server.name} money available is ${formatMoney(server.getMoney())} and security is ` +
                 //    `${server.getSecurity().toPrecision(3)} of ${server.getMinSecurity().toPrecision(3)}`);
                 //log(ns, `Planned start: Hack: ${Math.round(scheduleTime - now)} Grow: ${Math.round(scheduleGrow - now)} ` +
@@ -1987,8 +2003,8 @@ export async function main(ns) {
                 else
                     singleServerLimit++;
             }
-            // Note: Next time we tick, Hack will have *just* fired, so for the moment we will be at 0 money and above min security. Trust that all is well
-            return success ? cycleTime : false; // Ideally we wake up right after hack has fired so we can schedule another immediately
+            // Note: Plan to wake up soon after our planned exp cycle has fired 
+            return success ? cycleTime + 10 : false; // TODO: In advance mode, we can probably return a longer delay, since there's no need to wake up often in looping mode
         } finally {
             farmXpReentryLock[server.name] = false;
         }
@@ -2040,9 +2056,9 @@ export async function main(ns) {
     // Kills all scripts running the specified tool and targeting one of the specified servers if stock market manipulation is enabled
     async function terminateScriptsManipulatingStock(ns, servers, toolName) {
         const processes = await Promise.all(allHostNames.flatMap(hostname => processList(ns, hostname, false)));
-        // TODO: This is unmaintanable AF
+        const stockManipArgIdx = 4; // TODO: This is unmaintanable AF
         const problematicProcesses = processes.filter(process => servers.includes(process.args[0]) &&
-            (loopingMode || toolName == process.filename && process.args.length > 5 && process.args[5]));
+            (loopingMode || toolName == process.filename && process.args.length > stockManipArgIdx && process.args[stockManipArgIdx]));
         const problematicProcessesIds = problematicProcesses.map(process => process.pid);
         if (problematicProcessesIds.length > 0) {
             log(ns, `INFO: Killing ${problematicProcessesIds.length} pids running ${toolName} with stock manipulation in the wrong direction.`);
@@ -2052,13 +2068,13 @@ export async function main(ns) {
         if (!loopingMode) return;
         const strGrow = getTool("grow").name, strWeak = getTool("weak").name, strHack = getTool("hack").name;
         problematicProcesses.forEach(process => {
-            // The "loop mode" flag is the 7th argument for grow and weaken scripts
-            if (toolName == strGrow && 1 == (process.args.length < 8 ? 0 : process.args[7]))
+            // The "loop mode" flag is at index [6] hack and grow scripts
+            if (toolName == strGrow && 1 == (process.args.length > 6 ? process.args[6] : 0))
                 loopsByServer_Grow[process.args[0]] -= 1;
-            else if (toolName == strWeak && 1 == (process.args.length < 8 ? 0 : process.args[7]))
+            else if (toolName == strWeak && 1 == (process.args.length > 6 ? process.args[6] : 0))
                 loopsByServer_Weaken[process.args[0]] -= 1;
-            // Hack's "loop mode" arg is the 8th arg TODO: This is annoying. Make args consistent
-            else if (toolName == strHack && 1 == (process.args.length < 8 ? 0 : process.args[7]))
+            // Weaken's "loop mode" arg is at index [5] TODO: This is annoying. Make args consistent
+            else if (toolName == strHack && 1 == (process.args.length > 5 ? process.args[5] : 0))
                 loopsHackThreadsByServer[process.args[0]] -= process.threads;
         });
         loopsByServer_Grow

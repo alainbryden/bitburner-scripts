@@ -5,12 +5,11 @@ export async function main(ns) {
     const [
         /*args[0]*/ target = "",
         /*args[1]*/ start_time = 0,
-        /*args[2]*/ end_time = 0,
-        /*args[3]*/ duration = 0,
-        /*args[4]*/ description = "",
+        /*args[2]*/ duration = 0,
+        /*args[3]*/ description = "",
         // Note, unlike Grow / Hack, no stock manipulation arg here.
-        /*args[5]*/ silentMisfires = false,
-        /*args[6]*/ loopingMode = false
+        /*args[4]*/ silentMisfires = false,
+        /*args[5]*/ loopingMode = false
     ] = ns.args;
 
     // We may need to sleep before we start the operation to align ourselves properly with other batch cycle (HGW) operations
