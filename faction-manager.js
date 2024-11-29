@@ -73,6 +73,7 @@ const stat_multis = ["agility_exp", "agility", "charisma_exp", "charisma", "comp
     "bladeburner_analysis", "bladeburner_max_stamina", "bladeburner_stamina_gain", "bladeburner_success_chance",
     "hacknet_node_core_cost", "hacknet_node_level_cost", "hacknet_node_money", "hacknet_node_purchase_cost", "hacknet_node_ram_cost"];
 const statShortcuts = ["agi_exp", "agi", "cha_exp", "cha", "cmp_rep", "crm_$", "crm_prob", "def_exp", "def", "dex_exp", "dex", "fac_rep", "hack_prob", "hack_exp", "hack_grow", "hack_$", "hack", "hack_speed", "str_exp", "str", "work_$", 'bladeburner', 'hacknet'];
+const statPlayer = ["hacking", "strength", "defense", "dexterity", "agility", "charisma"]; // Since these are substrings of other stats, we can specifically request this stat with e.g. "hacking_level"
 const allFactions = ["Illuminati", "Daedalus", "The Covenant", "ECorp", "MegaCorp", "Bachman & Associates", "Blade Industries", "NWO", "Clarke Incorporated", "OmniTek Incorporated",
     "Four Sigma", "KuaiGong International", "Fulcrum Secret Technologies", "BitRunners", "The Black Hand", "NiteSec", "Aevum", "Chongqing", "Ishima", "New Tokyo", "Sector-12",
     "Volhaven", "Speakers for the Dead", "The Dark Army", "The Syndicate", "Silhouette", "Tetrads", "Slum Snakes", "Netburners", "Tian Di Hui", "CyberSec", "Bladeburners", "Church of the Machine God", "Shadows of Anarchy"];
@@ -84,7 +85,7 @@ export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
     if (lastFlag == "--sort" || lastFlag == "--stat-desired" || lastFlag == "--hide-stat")
-        return statShortcuts.concat(stat_multis);
+        return statShortcuts.concat(stat_multis).concat(statPlayer.map(s => `${s}_level`));
     if (lastFlag == "--ignore-faction" || lastFlag == "--after-faction")
         return allFactions.map(f => f.replaceAll(" ", "_")).sort(); // Command line doesn't like spaces
     if (lastFlag == "--omit-aug" || lastFlag == "--aug-desired" || lastFlag == "--priority-aug")
@@ -273,11 +274,12 @@ function unshorten(strMult) {
     if (!strMult) return strMult;
     if (stat_multis.includes(strMult)) return strMult; // They just omitted the "_mult" suffix shared by all
     if (stat_multis.includes(strMult.replace("_mult", ""))) return strMult.replace("_mult", ""); // _mult suffix no longer appears
+    if (stat_multis.includes(strMult.replace("_level", ""))) return strMult.replace("_level", ""); // Users can explicitly request just the base mult (and not all mults that include it) by specifying the _level suffix
     if (strMult == "*") return "hacking"; // Default if no one stat was provided (* is the wildcard)
     let match = stat_multis.find(m => m == strMult || shorten(m) == strMult) || // Match exactly on the short-form of a multiplier
         stat_multis.find(m => m.startsWith(strMult)) || // Otherwise match on the first multiplier that starts with the provided string
         stat_multis.find(m => m.includes(strMult)); // Otherwise match on the first multiplier that contains the provided string
-    if (find !== undefined) return match;
+    if (match !== undefined) return match;
     throw `The specified stat name '${strMult}' does not match any of the known stat names: ${stat_multis.join(', ')}`;
 }
 
@@ -412,6 +414,14 @@ async function updateAugmentationData(ns) {
     allAugStats = allAugmentations.flatMap(aug => Object.keys(aug.stats)).filter((v, i, a) => a.indexOf(v) === i).sort();
 }
 
+/** Helper function to determine if the specified stat matches one of the requested desired stats.
+ * @param {string} stat_name The name of the player multiplier affected */
+function isStatDesired(stat_name) {
+    return desiredStatsFilters.includes('*') || desiredStatsFilters.includes('_') || // Wildcards - if all stats are desired, always return true (_ is for backwards compatibility when all stat names ended with '_mult')
+        desiredStatsFilters.some(filter => stat_name.includes(filter) || // A stat is desired if any "desired stat" string appears anywhere in the stat name
+            stat_name == filter.replace("_level", "")); // Users can explicitly request just the base mult (and not all mults that include it as a substring) by specifying the _level suffix
+}
+
 /** Custom class with all augmentation data we care to gather, plus some helper functions. */
 class AugmentationData {
     /** @param {string} aug The augmentation name
@@ -428,9 +438,9 @@ class AugmentationData {
         /** The stats for this augmentation, except that all properties with a value of 1.0 have been stripped out. @type {Multipliers} */
         this.stats = Object.fromEntries(Object.entries(augmentationStats).filter(([k, v]) => v != 1));
         this.prereqs = augmentationPrereqs || [];
-        this.desired = desiredAugs.includes(aug) ||  // Mark as "desired" augs explicitly requested, or those with stats in the 'stat-desired' command line options
+        this.desired = desiredAugs.includes(aug) || // Mark as "desired" augs explicitly requested, or those with stats in the 'stat-desired' command line options
             desiredStatsFilters.includes('*') || desiredStatsFilters.includes('_') || // Wildcards - all stats are desired (_ is for backwards compatibility when all stat names ended with '_mult')
-            Object.entries(augmentationStats).some(([k, v]) => v != 1 && desiredStatsFilters.some(filter => k.includes(filter)));
+            Object.keys(this.stats).some(stat => isStatDesired(stat));
         // Get the name of the "most-early-game" faction from which we can buy this augmentation. Estimate this by cost of the most expensive aug the offer
         this.getFromAny = factionNames.map(f => factionData[f]).sort((a, b) => a.mostExpensiveAugCost - b.mostExpensiveAugCost)
             .filter(f => f.augmentations.includes(aug))[0]?.name ?? "(unknown)";
@@ -470,8 +480,10 @@ class AugmentationData {
     toString() {
         const factionColWidth = 16, augColWidth = 40, statsColWidth = 60;
         const statKeys = Object.keys(this.stats);
-        const statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + (statKeys.length == 0 ? '' :
-            ` { ${statKeys.map(prop => shorten(prop) + ': ' + Math.round((this.stats[prop] + Number.EPSILON) * 100) / 100).join(', ')} }`);
+        const statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + (statKeys.length == 0 ? '' : (` { ` +
+            // Display a summary of stats (capped at a maximum length). Prioritize showing desired stats, then those with the largest mult
+            statKeys.sort((a, b) => (isStatDesired(b) - isStatDesired(a)) || (this.stats[b] - this.stats[a]))
+                .map(prop => shorten(prop) + ': ' + Math.round((this.stats[prop] + Number.EPSILON) * 100) / 100).join(', ') + ` }`));
         const factionName = this.getFromJoined() || this.getFromAny;
         const fCreep = Math.max(0, factionName.length - factionColWidth);
         const budget = playerData.money + stockValue;
