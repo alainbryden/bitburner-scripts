@@ -392,7 +392,7 @@ async function updateAugmentationData(ns) {
      * Note when --all-factions mode is not enabled, it's possible some prereqs will be missing from our list
      * @param {AugmentationData} aug */
     function propagateDesired(aug) {
-        if (!aug.desired && !aug.prereqs) return;
+        if (!aug.desired || !aug.prereqs) return;
         aug.prereqs.forEach(prereqName => {
             let pa = augmentationData[prereqName];
             if (!pa) return log(ns, `WARNING: Missing info about aug ${aug.name} prerequisite ${prereqName}. We likely don't have access.`);
