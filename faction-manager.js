@@ -120,7 +120,9 @@ export async function main(ns) {
 
     // Determine which source files are active, which, for one, lets us determine how the cost of augmentations will scale
     playerData = await getPlayerInfo(ns);
-    bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`)).currentNode;
+    let resetInfo = (/**@returns{ResetInfo}*/() => null)(); // Hack to get type hints despite use of ram-dodging
+    resetInfo = await getNsDataThroughFile(ns, `ns.getResetInfo()`);
+    bitNode = resetInfo.currentNode;
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
     const sf4Level = bitNode == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
@@ -154,10 +156,15 @@ export async function main(ns) {
     desiredAugs = desiredAugs.filter(name => !simulatedOwnedAugmentations.includes(name));
     // Determine the set of desired augmentation stats. If not specified by the user, it's based on our situation
     desiredStatsFilters = options['stat-desired'];
-    if ((desiredStatsFilters?.length ?? 0) == 0) // If the user does has not specified stats or augmentations to prioritize, use sane defaults
-        desiredStatsFilters = ownedAugmentations.length > 40 ? ['*'] : // Once we have more than N augs, switch to buying up anything and everything
-            bitNode == 6 || bitNode == 7 || playerData.factions.includes("Bladeburners") ? ['*'] : // If doing bladeburners, combat augs matter too, so just get everything
+    if ((desiredStatsFilters?.length ?? 0) == 0) { // If the user does has not specified stats or augmentations to prioritize, use sane defaults
+        // There are some situations where we will accept any augmentation whatsoever...
+        const willTakeAnyAug = (ownedAugmentations.length > 40) || // Once we have more than N augs, switch to buying up anything and everything
+            (bitNode == 6 || bitNode == 7 || playerData.factions.includes("Bladeburners")) || // If doing bladeburners, combat augs matter too, so just get everything
+            ((Date.now() - resetInfo.lastAugReset) < 20 * 60 * 1000); // If we've been in the bitnode for less than 20 minutes, autopilot is configured to "quick-install", any aug is worthwhile in this time window 
+        desiredStatsFilters = willTakeAnyAug ? ['*'] : // Take any aug if one of the above criteria is met
+            bitNode == 8 ? ['hacking_level', 'hacking_exp'] : // In BN8, we only want to install if we will be boosting our hack level (to unlock Daedalus). We don't need rep as much, since it can be purchased immediately.
                 ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']; // Otherwise get hacking + rep boosting, etc. for unlocking augs more quickly
+    }
     log(ns, 'Desired stats filter: ' + JSON.stringify(desiredStatsFilters));
 
     // Prepare global data sets of faction and augmentation information

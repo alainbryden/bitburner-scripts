@@ -253,8 +253,8 @@ export async function main(ns) {
         if (installedAugmentations.includes(augTRP) || (wdHack != null && Number.isFinite(wdHack) && wdHack > 0))
             return alreadyJoinedDaedalus = true; // Set up an early exit condition for future checks
         // See if we even have enough augmentations to attempt to join Daedalus (once we have a count of our augmentations)
-        if (playerInstalledAugCount !== null && playerInstalledAugCount < bitNodeMults.DaedalusAugsRequirement)
-            return autoJoinDaedalusUnavailable = true; // Won't be able to unlock daedalus this ascend
+        if (playerInstalledAugCount !== null && playerInstalledAugCount < bitNodeMults.DaedalusAugsRequirement && !(10 in unlockedSFs))
+            return autoJoinDaedalusUnavailable = true; // Won't be able to unlock daedalus this ascend if we can't graft augs and have to install for them
 
         // See if we've already joined this faction
         if (player.factions.includes("Daedalus")) {
@@ -878,6 +878,11 @@ export async function main(ns) {
                 return true;
             }
         }
+        // If we're reserving money because we're close to getting an invite to Daedalus don't reset.
+        if (reservingMoneyForDaedalus) {
+            setStatus(ns, `Not installing since we are close to earning an invite from Daedalus.`);
+            return true;
+        }
         // In BN8, large sums of money are hard to accumulate, so if we've made it into Daedalus, but can't access TRP rep yet,
         // remain in the BN until we have enough rep and/or money to buy TRP (Reminder: in BN8, donations are immediately unlocked for all factions)    
         if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && !installedAugmentations.includes(augTRP)) {
@@ -886,6 +891,22 @@ export async function main(ns) {
                 return true;
             }
         }
+        // If we've been in BN8 for more than 4 hours note that it takes so long to build up money again that we shouldn't reset unless we're making significant progress towards winning
+        if (resetInfo.currentNode == 8 && getTimeInAug() > 4 * 60 * 60 * 1000) {
+            // If we have enough augmentations installed to get into Daedalus already, and a decent hack level just wait it out.
+            if (playerInstalledAugCount >= bitNodeMults.DaedalusAugsRequirement && player.skills.hacking >= (2500 * 0.75)) {
+                setStatus(ns, `Not installing because we're in BN8 and we have enough augs and hack level to eventually unlock Daedalus.`);
+                return true;
+            }
+            // Otherwise, don't install unless we would be getting outselves a minimum of 10 more augs, regardless of time in bitnode
+            const augsReadyToInstall = facmanOutput.awaiting_install_count_ex_nf + facmanOutput.affordable_count_ex_nf;
+            if (augsReadyToInstall < 10) {
+                setStatus(ns, `Not installing because we've in BN8 for more than 4 hours (${formatDuration(getTimeInAug())}), ` +
+                    `and so our threshold is at least 10 new augs installed to merit resetting (currently at ${augsReadyToInstall}).`);
+                return true;
+            }
+        }
+
         // In BN10, it takes a while to build up the 100q needed to purchase the last sleeve, so don't reset if we're close
         if (resetInfo.currentNode == 10 && player.money >= 10e15) { // 10q - 10% the cost of the last sleeve
             setStatus(ns, `Not installing anymore since we are nearing the 100q needed to purchase the 6th sleeve from the Covenant.`);
