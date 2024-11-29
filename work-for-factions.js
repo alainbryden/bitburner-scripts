@@ -934,7 +934,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         let factionJob = currentWork.factionWorkType;
         // Detect if faction work was interrupted and log a warning
         if (workAssigned && currentWork.factionName != factionName) {
-            if (await isValidInterruption(ns, currentWork)) return;
+            if (await isValidInterruption(ns, currentWork)) return false;
             log(ns, `Work for faction ${factionName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
             workAssigned = false;
             if (!options['no-tail-windows']) tail(ns); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
@@ -1244,6 +1244,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // If not studying, ensure we are working for this company
         if (!isStudying && (!isWorking || currentWork.companyName != companyName)) {
             if (isWorking) { // Log a warning if we discovered that work we previously began was disrupted
+                if (await isValidInterruption(ns, currentWork)) return false;
                 log(ns, `Work for company ${companyName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
                 isWorking = false;
                 if (!options['no-tail-windows']) tail(ns); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
