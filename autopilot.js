@@ -785,7 +785,8 @@ export async function main(ns) {
 
         // If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
         // but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
-        if (player.factions.includes("Daedalus") && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
+        // (doesn't apply in BN8, since we can immediately donate to all factions)
+        if (player.factions.includes("Daedalus") && bitNodeMults.RepToDonateToFaction !== 0 && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
             shouldReset = true;
             resetStatus = `We have enough reputation with Daedalus to unlock donations on our next reset.\n${resetStatus}`;
             if (totalCost == 0) totalCost = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
@@ -794,6 +795,7 @@ export async function main(ns) {
         // Heuristic: if we can afford 4 or more augs in the first ~20 minutes, it's usually worth doing a "quick install"
         // For example, in BN8, we get a big cash influx on each reset and can buy reputation immediately, so it's worth
         //     doing an few immediate installs to purchse upgrades, then reset for more free cash.
+        // Heuristic: In BN8, reinstall repeatedly for the first 10 minutes to purchase every little thing we can with our flat 10B casino winnings
         if ((getTimeInAug() < 20 * 60 * 1000 && pendingAugInclNfCount >= 4) || (resetInfo.currentNode == 8 && getTimeInBitnode() < 10 * 60 * 1000)) {
             shouldReset = true;
             resetStatus = `We haven't been in this reset for long. We can do a quick reset immediately for a quick stat boost.\n${resetStatus}`;
@@ -884,32 +886,33 @@ export async function main(ns) {
             setStatus(ns, `Not installing since we are close to earning an invite from Daedalus.`);
             return true;
         }
-        // In BN8, large sums of money are hard to accumulate, so if we've made it into Daedalus, but can't access TRP rep yet,
-        // remain in the BN until we have enough rep and/or money to buy TRP (Reminder: in BN8, donations are immediately unlocked for all factions)    
-        if (resetInfo.currentNode == 8 && player.factions.includes("Daedalus") && !installedAugmentations.includes(augTRP)) {
-            if (!facmanOutput.affordable_augs.includes(augTRP) && !facmanOutput.awaiting_install_augs.includes(augTRP)) {
-                setStatus(ns, `Not installing until we have enough Daedalus rep to install "${augTRP}" on our next reset.`);
-                return true;
-            }
-        }
-        // If we've been in BN8 for more than 4 hours note that it takes so long to build up money again that we shouldn't reset unless we're making significant progress towards winning
-        if (resetInfo.currentNode == 8 && getTimeInAug() > 4 * 60 * 60 * 1000) {
-            // If we have enough augmentations installed to get into Daedalus already, and a decent hack level just wait it out.
-            if (playerInstalledAugCount >= bitNodeMults.DaedalusAugsRequirement && player.skills.hacking >= (2500 * 0.75)) {
-                setStatus(ns, `Not installing because we're in BN8 and we have enough augs and hack level to eventually unlock Daedalus.`);
-                return true;
-            }
-            // Otherwise, don't install unless we would be getting outselves a minimum of 10 more augs, regardless of time in bitnode
-            const augsReadyToInstall = facmanOutput.awaiting_install_count_ex_nf + facmanOutput.affordable_count_ex_nf;
-            if (augsReadyToInstall < 10) {
-                setStatus(ns, `Not installing because we've in BN8 for more than 4 hours (${formatDuration(getTimeInAug())}), ` +
-                    `and so our threshold is at least 10 new augs installed to merit resetting (currently at ${augsReadyToInstall}).`);
-                return true;
+        if (resetInfo.currentNode == 8) { // Many special rules for this special Bitnode
+            if (player.factions.includes("Daedalus")) { // If we've already joined Daedalus
+                // In BN8, large sums of money are hard to accumulate, so if we've made it into Daedalus, but can't purchase TRP rep yet,
+                // remain in the BN until we have enough rep and/or money to buy TRP (Reminder: in BN8, donations are immediately unlocked for all factions)    
+                if (!installedAugmentations.includes(augTRP) && !facmanOutput.affordable_augs.includes(augTRP) && !facmanOutput.awaiting_install_augs.includes(augTRP)) {
+                    setStatus(ns, `We're in Daedalus, so we won't install until we can afford to purchase "${augTRP}".`);
+                    return true;
+                }
+            } else if (getTimeInAug() > 4 * 60 * 60 * 1000) { // 4 hours = 4hrs/min * 60mins/sec * 60secs/ms * 1000ms
+                // If we've been in BN8 for more than 4 hours we shouldn't reset unless we're making significant progress towards unlocking Daedalus.
+                // because it takes so long to build up money, and nothing we install will accellerate our earnings in the next augmentation.
+                const augsReadyToInstall = facmanOutput.awaiting_install_count_ex_nf + facmanOutput.affordable_count_ex_nf;
+                if (augsReadyToInstall < 10) { // Heuristic: 10 augs per install means max 3 installs before we meet the Daedalus aug requirement
+                    setStatus(ns, `Not installing because we've in BN8 for more than 4 hours (${formatDuration(getTimeInAug())}) and aren't in Daedalus yet, ` +
+                        `so our threshold is at least 10 new augs installed to merit resetting (currently at ${augsReadyToInstall}).`);
+                    return true;
+                }
+                // If we meet the Daedalus aug count requirement and at least 90% of the required hack level, wait to earn the invite
+                if (playerInstalledAugCount >= bitNodeMults.DaedalusAugsRequirement && player.skills.hacking >= (2500 * 0.9)) {
+                    setStatus(ns, `Not installing because we're in BN8 and we have enough augs and nearly enough hack level to get invited to Daedalus.`);
+                    return true;
+                }
             }
         }
 
         // In BN10, it takes a while to build up the 100q needed to purchase the last sleeve, so don't reset if we're close
-        if (resetInfo.currentNode == 10 && player.money >= 10e15) { // 10q - 10% the cost of the last sleeve
+        if (resetInfo.currentNode == 10 && player.money >= 10e15) { // Heuristic: If we hit 10q (10% the cost of the last sleeve) before an install, we can probably go all the way
             setStatus(ns, `Not installing anymore since we are nearing the 100q needed to purchase the 6th sleeve from the Covenant.`);
             return true;
         }
