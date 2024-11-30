@@ -899,7 +899,7 @@ export async function main(ns) {
                 // because it takes so long to build up money, and nothing we install will accellerate our earnings in the next augmentation.
                 const augsReadyToInstall = facmanOutput.awaiting_install_count_ex_nf + facmanOutput.affordable_count_ex_nf;
                 if (augsReadyToInstall < 10) { // Heuristic: 10 augs per install means max 3 installs before we meet the Daedalus aug requirement
-                    setStatus(ns, `Not installing because we've in BN8 for more than 4 hours (${formatDuration(getTimeInAug())}) and aren't in Daedalus yet, ` +
+                    setStatus(ns, `Not installing because we've in BN8 for more than 4 hours (~${Math.round(getTimeInAug() / 1000 / 60 / 60)}h) and aren't in Daedalus yet, ` +
                         `so our threshold is at least 10 new augs installed to merit resetting (currently at ${augsReadyToInstall}).`);
                     return true;
                 }
