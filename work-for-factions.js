@@ -306,7 +306,7 @@ async function mainLoop(ns) {
         }
     } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
     // If we're in BN 10, we can purchase special Sleeve-related things from the Covenant, so we should always try join it
-    if (resetInfo.currentNode == 10 && !priorityFactions.includes("The Covenant")) {
+    if (currentBitnode == 10 && !priorityFactions.includes("The Covenant")) {
         priorityFactions.push("The Covenant");
         ns.print(`We're in BN10, which means we should add The Covenant to our priority faction list, so you can purchase sleeves and sleeve memory.`);
     }
