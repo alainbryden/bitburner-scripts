@@ -512,13 +512,13 @@ export async function main(ns) {
             // expensive / laggy. To help with this, daemon.js supports "looping mode", to just spawn one long-lived script that does H/G/W in a loop.
             if (false /* TODO: LOOPING MODE DISABLED UNTIL WORKING BETTER */ && player.skills.hacking >= hackThreshold) {
                 daemonArgs = ["--looping-mode", "--cycle-timing-delay", 40, "--queue-delay", 2000, "--initial-max-targets", 61, "--silent-misfires", "--no-share",
-                    "--recovery-thread-padding", 1.0 + Math.max(4, (player.skills.hacking - hackThreshold) / 1000.0)]; // Use more recovery thread padding as our hack level increases
+                    "--recovery-thread-padding", Math.min(5.0, player.skills.hacking / hackThreshold)]; // Use more recovery thread padding as our hack level increases
                 // Log a special notice if we're going to be relaunching daemon.js for this reason
                 if (!existingDaemon || !(existingDaemon.args.includes("--looping-mode")))
                     daemonRelaunchMessage = `Hack level (${player.skills.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`;
             } else if (player.skills.hacking >= hackThreshold) { // "tight" mode. Tighter batches to increase income rate, at the cost of more frequent misfires
                 daemonArgs = ["--cycle-timing-delay", 40, "--queue-delay", 50, "--silent-misfires",
-                    "--recovery-thread-padding", 1.0 + Math.max(4, (player.skills.hacking - hackThreshold) / 1000.0)]; // Use more recovery thread padding as our hack level increases
+                    "--recovery-thread-padding", Math.min(5.0, player.skills.hacking / hackThreshold)]; // Use more recovery thread padding as our hack level increases
             }
             else if (homeRam < 32) { // If we're in early BN 1.1 (i.e. with < 32GB home RAM), avoid squandering RAM
                 daemonArgs.push("--no-share", "--initial-max-targets", 1);
@@ -575,8 +575,9 @@ export async function main(ns) {
         if (stanekRunning)
             daemonArgs.push("--reserved-ram", 1E100);
 
-        // Launch (or re-launch) daemon if it is not already running with all our desired args
-        let launchDaemon = !existingDaemon || daemonArgs.some(arg => !existingDaemon.args.includes(arg)) ||
+        // Launch (or re-launch) daemon if it is not already running with all our desired args.
+        // Hack: Ignore numeric arguments in the comparison, since we e.g. tweak --recovery-thread-padding over time
+        let launchDaemon = !existingDaemon || daemonArgs.some(arg => !existingDaemon.args.includes(arg) && !Number.isFinite(arg)) ||
             // Special cases: We also must relaunch daemon if it is running with certain flags we wish to remove
             (["--xp-only"].some(arg => !daemonArgs.includes(arg) && existingDaemon.args.includes(arg)))
         if (launchDaemon) {
