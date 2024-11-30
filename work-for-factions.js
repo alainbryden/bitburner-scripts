@@ -9,6 +9,7 @@ const argsSchema = [
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
     ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
+    ['desired-augs', []], // The augmentations will keep a faction in our 'early-faction-order' regardless of whether they have any --desired-stats
     ['no-tail-windows', false], // Set to true to prevent the default behaviour of opening a tail window any time we initiate focused player work.
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying.
@@ -25,6 +26,9 @@ const argsSchema = [
     ['disable-treating-gang-as-sole-provider-of-its-augs', false], // Set to true if you still want to grind for rep with factions that only have augs your gang provides
     ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
 ];
+
+// By default, consider these augs worth working towards regardless of whether they match one of the '--desired-stats'
+const default_desired_augs = ["The Red Pill", "CashRoot Starter Kit", "The Blade's Simulacrum", "Neuroreceptor Management Implant"];
 
 // Note: The way the game source encodes job requirements is: [1, 26, 49, 149] (for example), and all then all faction-related
 //       companies get a stat modifier of "+224", except a few which have "+249". Rather than replicate those gross numbers,
@@ -100,7 +104,7 @@ const waitForFactionInviteTime = 30 * 1000; // The game will only issue one new 
 
 let shouldFocus; // Whether we should focus on work or let it be backgrounded (based on whether "Neuroreceptor Management Implant" is owned, or "--no-focus" is specified)
 // And a bunch of globals because managing state and encapsulation is hard.
-let hasFocusPenalty, hasSimulacrum, favorToDonate, fulcrumHackReq, notifiedAboutDaedalus, playerInBladeburner, wasGrafting;
+let hasFocusPenalty, hasSimulacrum, favorToDonate, fulcrumHackReq, notifiedAboutDaedalus, playerInBladeburner, wasGrafting, currentBitnode;
 let dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
 let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // Trick to get strong typing in mono
@@ -124,7 +128,7 @@ export async function main(ns) {
     disableLogs(ns, ['sleep']);
 
     // Reset globals whose value can persist between script restarts in weird situations
-    lastTravel = crimeCount = 0;
+    lastTravel = crimeCount = currentBitnode = 0;
     notifiedAboutDaedalus = playerInBladeburner = wasGrafting = false;
 
     // Process configuration options
@@ -134,9 +138,13 @@ export async function main(ns) {
     if (options['desired-stats'].length == 0)
         options['desired-stats'] = options['crime-focus'] ? ['str', 'def', 'dex', 'agi', 'faction_rep', 'hacknet', 'crime'] :
             ['hacking', 'faction_rep', 'company_rep', 'charisma', 'hacknet', 'crime_money']
+    // Default desired-augs if none were specified
+    if (options['desired-augs'].length == 0)
+        options['desired-augs'] = default_desired_augs;
 
     // Log some of the options in effect
     ns.print(`--desired-stats matching: ${options['desired-stats'].join(", ")}`);
+    ns.print(`--desired-augs: ${options['desired-augs'].join(", ")}`);
     if (firstFactions.length > 0) ns.print(`--first factions: ${firstFactions.join(", ")}`);
     if (options.skip.length > 0) ns.print(`--skip factions: ${options.skip.join(", ")}`);
     if (options['fast-crimes-only']) ns.print(`--fast-crimes-only`);
@@ -212,6 +220,7 @@ async function loadStartupData(ns) {
     // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
     mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
         dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug) && (
+            options['desired-augs'].includes(aug) ||
             Object.keys(dictAugStats[aug]).length == 0 || options['desired-stats'].length == 0 ||
             Object.keys(dictAugStats[aug]).some(key => options['desired-stats'].some(stat => key.includes(stat)))
         )).reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
@@ -249,6 +258,7 @@ async function mainLoop(ns) {
     // Update information that may have changed since our last loop
     const player = await getPlayerInfo(ns);
     const resetInfo = await getResetInfoRd(ns);
+    currentBitnode = resetInfo.currentNode;
     if (player.factions.length > numJoinedFactions) { // If we've recently joined a new faction, reset our work scope
         scope = 1; // Back to basics until we've satisfied all highest-priority work
         numJoinedFactions = player.factions.length;
@@ -331,33 +341,39 @@ async function mainLoop(ns) {
     await workForAllMegacorps(ns, megacorpFactions, true);
     if (scope <= 4 || breakToMainLoop()) return;
 
-    // Strategies 5+ now work towards getting an invite to *all factions in the game* (sorted by least-expensive final aug (correlated to easiest faction-invite requirement))
+    // Strategies 5+ now work towards getting an invite to *all factions in the game*
     let joinedFactions = player.factions; // In case our hard-coded list of factions is missing anything, merge it with the list of all factions
     let knownFactions = factions.concat(joinedFactions.filter(f => !factions.includes(f)));
-    let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f)).sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]);
+    let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f))
+        .sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]); // sort by least-expensive final aug (correlated to easiest faction-invite requirement)
+    // Preserve the faction work order we've decided on previously, and only use the above sort order for every other faction added on to the end
+    let allFactionsWorkOrder = factionWorkOrder.filter(f => allIncompleteFactions.includes(f))
+        .concat(allIncompleteFactions.filter(f => !factionWorkOrder.includes(f)));
     // Strategy 5: For *all factions in the game*, try to earn an invite and work for rep until we can afford the most-expensive *desired* aug (or unlock donations, whichever comes first)
-    for (const faction of allIncompleteFactions.filter(f => !softCompletedFactions.includes(f)))
+    for (const faction of allFactionsWorkOrder.filter(f => !softCompletedFactions.includes(f)))
         if (!breakToMainLoop()) await workForSingleFaction(ns, faction);
     if (scope <= 5 || breakToMainLoop()) return;
 
     // Strategy 6: Revisit all factions until each has enough rep to unlock donations - so if we can't afford all augs this reset, at least we don't need to grind for rep on the next reset
-    // For this, we reverse the order (ones with augs costing the most-rep to least) since these will take the most time to re-grind rep for if we can't buy them this reset.
-    for (const faction of allIncompleteFactions.reverse())
+    // For this, we reverse the order of non-priority factions (ones with augs costing the most-rep to least) since these will take the most time to re-grind rep for if we can't buy them this reset.
+    let allFactionsWorkOrderReversed = factionWorkOrder.filter(f => allIncompleteFactions.includes(f))
+        .concat(allIncompleteFactions.reverse().filter(f => !factionWorkOrder.includes(f)));
+    for (const faction of allFactionsWorkOrderReversed)
         if (!breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
-            await workForSingleFaction(ns, faction, true);
+            await workForSingleFaction(ns, faction, true); // ForceUnlockDonations = true
     if (scope <= 6 || breakToMainLoop()) return;
 
     // Strategy 7: Next, revisit all factions and grind XP until we can afford the most expensive aug on this install, even if we are slated to unlock donations on the next reset
-    for (const faction of allIncompleteFactions.reverse()) // Re-reverse the sort order so we start with the easiest (cheapest) faction augs to complete
+    for (const faction of allFactionsWorkOrder)
         if (!breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
-            await workForSingleFaction(ns, faction, true, true);
+            await workForSingleFaction(ns, faction, true, true); // ForceBestAug = true
     if (scope <= 7 || breakToMainLoop()) return;
 
     // Strategy 8: Everything up until now will skip factions that we've *already* unlocked donations with (can donate in the current install), since we can just throw money at them for aug reputation
     // But in some BNs, money might be hard to come by, so now we should proceed to grind reputation the old-fasioned way so we don't have to waste money on donations
-    for (const faction of allIncompleteFactions)
+    for (const faction of allFactionsWorkOrder)
         if (!breakToMainLoop()) // Only continue on to the next faction if it isn't time for a high-level update.
-            await workForSingleFaction(ns, faction, false, true, true);
+            await workForSingleFaction(ns, faction, false, true, true); // ForceRep = true
     if (scope <= 8 || breakToMainLoop()) return;
 
     // Strategy 9: Busy ourselves for a while longer, then loop to see if there anything more we can do for the above factions
@@ -811,10 +827,10 @@ async function getServerRequiredHackLevel(ns, serverName) {
 async function daedalusSpecialCheck(ns, favorRepRequired, currentReputation) {
     if (favorRepRequired == 0 || currentReputation < favorRepRequired) return false;
     // If we would be unlocking donations, but actually, we're pretty close to just being able to afford TRP, no impetus to reset.
-    if (currentReputation >= 0.9 * 2.500e6) return false;
+    if (currentReputation >= 0.9 * 2.500e6 * bitNodeMults.AugmentationRepCost) return false;
     log(ns, `INFO: You have enough reputation with Daedalus (have ${formatNumberShort(currentReputation)}) that you will ` +
         `unlock donations (needed ${formatNumberShort(favorRepRequired)}) with them on your next reset.`, !notifiedAboutDaedalus, "info");
-    await ns.write("/Temp/Daedalus-donation-rep-attained.txt", "True", "w"); // HACK: To notify autopilot that we can reset for rep now.
+    ns.write("/Temp/Daedalus-donation-rep-attained.txt", "True", "w"); // HACK: To notify autopilot that we can reset for rep now.
     notifiedAboutDaedalus = true;
 }
 
