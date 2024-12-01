@@ -894,18 +894,18 @@ export async function main(ns) {
                     setStatus(ns, `We're in Daedalus, so we won't install until we can afford to purchase "${augTRP}".`);
                     return true;
                 }
+            } else if (playerInstalledAugCount >= bitNodeMults.DaedalusAugsRequirement && player.skills.hacking >= (2500 * 0.9)) {
+                // If we meet the Daedalus aug count requirement and at least 90% of the required hack level, wait to earn the invite
+                setStatus(ns, `Not installing because we're in BN8 and we have enough augs and ` + (player.skills.hacking < 2500 ? 'nearly ' : '')
+                    + 'enough hack level to get invited to Daedalus once we hit $100b.');
+                return true;
             } else if (getTimeInAug() > 4 * 60 * 60 * 1000) { // 4 hours = 4hrs/min * 60mins/sec * 60secs/ms * 1000ms
-                // If we've been in BN8 for more than 4 hours we shouldn't reset unless we're making significant progress towards unlocking Daedalus.
+                // If we've been in BN8 for more than 4 hours, we shouldn't reset unless we're making significant progress towards unlocking Daedalus.
                 // because it takes so long to build up money, and nothing we install will accellerate our earnings in the next augmentation.
                 const augsReadyToInstall = facmanOutput.awaiting_install_count_ex_nf + facmanOutput.affordable_count_ex_nf;
                 if (augsReadyToInstall < 10) { // Heuristic: 10 augs per install means max 3 installs before we meet the Daedalus aug requirement
                     setStatus(ns, `Not installing because we've in BN8 for more than 4 hours (~${Math.round(getTimeInAug() / 1000 / 60 / 60)}h) and aren't in Daedalus yet, ` +
                         `so our threshold is at least 10 new augs installed to merit resetting (currently at ${augsReadyToInstall}).`);
-                    return true;
-                }
-                // If we meet the Daedalus aug count requirement and at least 90% of the required hack level, wait to earn the invite
-                if (playerInstalledAugCount >= bitNodeMults.DaedalusAugsRequirement && player.skills.hacking >= (2500 * 0.9)) {
-                    setStatus(ns, `Not installing because we're in BN8 and we have enough augs and nearly enough hack level to get invited to Daedalus.`);
                     return true;
                 }
             }
