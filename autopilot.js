@@ -104,6 +104,7 @@ export async function main(ns) {
     let daemonStartTime = 0; // The time we personally launched daemon.
     let installCountdown = 0; // Start of a countdown before we install augmentations.
     let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
+    let sleevesMaxedOut = false; // Flag used only when the player is replaying BN 10 with all sleeves but has suppressed auto-destroying the BN, to allow continued auto-installs
 
     // Replacements for player properties deprecated since 2.3.0
     function getTimeInAug() { return Date.now() - resetInfo.lastAugReset; }
@@ -386,11 +387,13 @@ export async function main(ns) {
                 if (sleeveInfo.some(s => s.memory < 100))
                     reasonToStay = `Detected that you have ${numSleeves}/${shouldHaveSleeveCount} sleeves, but they do not all have the maximum memory of 100:\n  ` +
                         sleeveInfo.map((s, i) => `- Sleeve ${i} has ${s.memory}/100 memory`).join('\n  ');
+                else
+                    sleevesMaxedOut = true; // Flag is used elsewhere to allow continued installs
             }
             if (reasonToStay) {
-                log(ns, `WARNING: ${reasonToStay}\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
+                log_once(ns, `WARNING: ${reasonToStay}\nTry not to leave BN10 before buying all you can from the faction "The Covenant", especially sleeve memory!` +
                     `\nNOTE: You can ONLY buy sleeves & memory from The Covenant in BN10, which is why it's important to do this before you leave.`, true);
-                return bnCompletionSuppressed = true;
+                return true; // Return true, but do not set `bnCompletionSuppressed = true` so we can auto-reset once the user intervenes.
             }
         }
         if (options['disable-auto-destroy-bn']) {
@@ -943,7 +946,7 @@ export async function main(ns) {
         }
 
         // In BN10, it takes a while to build up the 100q needed to purchase the last sleeve, so don't reset if we're close
-        if (resetInfo.currentNode == 10 && player.money >= 10e15) { // Heuristic: If we hit 10q (10% the cost of the last sleeve) before an install, we can probably go all the way
+        if (resetInfo.currentNode == 10 && player.money >= 10e15 && !sleevesMaxedOut) { // Heuristic: If we hit 10q (10% the cost of the last sleeve) before an install, we can probably go all the way
             setStatus(ns, `Not installing anymore since we are nearing the 100q needed to purchase the 6th sleeve from the Covenant.`);
             return true;
         }
