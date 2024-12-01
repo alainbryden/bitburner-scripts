@@ -234,32 +234,35 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
 }
 
 /** Allows us to serialize types not normally supported by JSON.serialize */
-export function jsonReplacer(key, value) {
-    if (typeof value === 'bigint') {
-        return {
-            type: 'bigint',
-            value: value.toString()
-        };
-    } else if (value instanceof Map) {
-        return {
-            dataType: 'Map',
-            value: Array.from(value.entries()),
-        };
-    } else {
-        return value;
-    }
+export function jsonReplacer(key, val) {
+    if (val === Infinity)
+        return { $type: 'number', $value: 'Infinity' };
+    if (val === -Infinity)
+        return { $type: 'number', $value: '-Infinity' };
+    if (Number.isNaN(val))
+        return { $type: 'number', $value: 'NaN' };
+    if (typeof val === 'bigint')
+        return { $type: 'bigint', $value: val.toString() };
+    if (val instanceof Map)
+        return { $type: 'Map', $value: [...val] };
+    if (val instanceof Set)
+        return { $type: 'Set', $value: [...val] };
+    return val;
 }
 
 /** Allows us to deserialize special values created by the above jsonReplacer */
-export function jsonReviver(key, value) {
-    if (typeof value === 'object' && value !== null) {
-        if (value && value.type == 'bigint')
-            return BigInt(value.value);
-        else if (value.dataType === 'Map') {
-            return new Map(value.value);
-        }
-    }
-    return value;
+export function jsonReviver(key, val) {
+    if (val == null || typeof val !== 'object' || val.$type == null)
+        return val;
+    if (val.$type == 'number')
+        return Number.parseFloat(val.$value);
+    if (val.$type == 'bigint')
+        return BigInt(val.$value);
+    if (val.$type === 'Map')
+        return new Map(val.$value);
+    if (val.$type === 'Set')
+        return new Set(val.$value);
+    return val;
 }
 
 /** Evaluate an arbitrary ns command by writing it to a new script and then running or executing it.
