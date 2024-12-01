@@ -87,8 +87,8 @@ export async function main(ns) {
     let playerInBladeburner = false; // Whether we've joined bladeburner
     let wdHack = (/**@returns{null|number}*/() => null)(); // If the WD server is available (i.e. TRP is installed), caches the required hack level
     let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
-    let reservedPurchase = 0; // Flag to indicate whether we've reservedPurchase money and can still afford augmentations
-    let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
+    let reservedPurchase = 0; // The amount of player money that has been reserved to purchase augmentations
+    let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false, disableStockmasterForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
     let prioritizeHackForDaedalus = false, prioritizeHackForWd = false;
     let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
     let homeRam = 0; // Amount of RAM on the home server, last we checked
@@ -253,12 +253,16 @@ export async function main(ns) {
         if (installedAugmentations.includes(augTRP) || (wdHack != null && Number.isFinite(wdHack) && wdHack > 0))
             return alreadyJoinedDaedalus = true; // Set up an early exit condition for future checks
         // See if we even have enough augmentations to attempt to join Daedalus (once we have a count of our augmentations)
-        if (playerInstalledAugCount !== null && playerInstalledAugCount < bitNodeMults.DaedalusAugsRequirement && !(10 in unlockedSFs))
-            return autoJoinDaedalusUnavailable = true; // Won't be able to unlock daedalus this ascend if we can't graft augs and have to install for them
+        if (playerInstalledAugCount !== null && playerInstalledAugCount < bitNodeMults.DaedalusAugsRequirement) {
+            if (!(10 in unlockedSFs))
+                autoJoinDaedalusUnavailable = true; // Won't be able to unlock daedalus this ascend if we can't graft augs and have to install for them
+            return; // Either way, for now we can't get into Daedalus without more augmentations
+        }
 
         // See if we've already joined this faction
         if (player.factions.includes("Daedalus")) {
             alreadyJoinedDaedalus = true;
+            disableStockmasterForDaedalus = false;
             // If we previously took any action to "rush" Daedalus, keep the momentum going by restarting work-for-factions.js
             // so that it immediately re-assesses priorities and sees there's a new priority faction to earn reputation for.
             if (prioritizeHackForDaedalus || reservingMoneyForDaedalus) {
@@ -297,7 +301,8 @@ export async function main(ns) {
             return reservingMoneyForDaedalus = false; // Don't reserve money until hack level suffices
         }
         // If we have sufficient augs and hacking, the only requirement left is the money (100b)
-        if (totalWorth > moneyReq && player.money < moneyReq) {
+        // If our net worth is sufficient, reserve our money and liquidate stocks if necessary until we get the invite
+        if (player.money < moneyReq && totalWorth > moneyReq * 1.001 /* slight buffer to account for timing issues */) {
             // Note: Without SF4, we have no way of knowing how many augmentations we own, so we should probably
             //       never reserve money in case this requirement is not met, or we're potentially just wasting money
             if (!(4 in unlockedSFs)) {
@@ -309,12 +314,18 @@ export async function main(ns) {
             }
             reservingMoneyForDaedalus = true; // Flag to pause all spending (set reserve.txt) until we've gotten the Daedalus invite
             if (player.money < moneyReq) { // Only liquidate stocks if we don't have enough cash lying around.
+                disableStockmasterForDaedalus = true; // Flag to keep stockmaster offline until we've gotten a daedalus invite
                 log(ns, "INFO: Temporarily liquidating stocks to earn an invite to Daedalus...", true, 'info');
                 launchScriptHelper(ns, 'stockmaster.js', ['--liquidate']);
             } // else if we don't liquidate stocks, and our money dips below 100E9 again, we can always do it on the next loop
-        }
-        else if (reservingMoneyForDaedalus && totalWorth < moneyReq) { // Other scripts not respecting the reserve, or stocks lost value
-            reservingMoneyForDaedalus = false; // Cancel the hold on funds, wait for total worth to increase again
+        } else if (resetInfo.currentNode == 8) {
+            // In BN8, there is nothing worth spending money on when we've met all other Daedalus requirements except the $100b money.
+            // We should immediately set the reserve and wait until we have enough wealth to liquidate stocks and get the invite.
+            reservingMoneyForDaedalus = true;
+        } // Cancel the reserve if our money drops below the threshold before getting an invite (due to other scripts not respecting the reserve?)
+        else if (reservingMoneyForDaedalus && totalWorth < moneyReq * 0.999 /* slight buffer to let cash recover */) {
+            reservingMoneyForDaedalus = false; // Cancel the hold on funds, and wait for total worth to increase again
+            disableStockmasterForDaedalus = false; // Allow stockmaster to be relaunched
             log(ns, `WARN: We previously had sufficient wealth to earn a Daedalus invite (>=${formatMoney(moneyReq)}), ` +
                 `but our wealth somehow decreased (to ${formatMoney(totalWorth)}) before the invite was recieved, ` +
                 `so we'll need to wait for it to recover and try again later.`, false, 'warning');
@@ -458,9 +469,9 @@ export async function main(ns) {
         homeRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, null, ["home"]);
 
         // Launch stock-master in a way that emphasizes it as our main source of income early-on
-        if (!findScript('stockmaster.js') && !reservingMoneyForDaedalus && homeRam >= 32)
+        if (!findScript('stockmaster.js') && !disableStockmasterForDaedalus && homeRam >= 32)
             launchScriptHelper(ns, 'stockmaster.js', [
-                "--fracH", 0.1, // Increase the default proportion of money we're willing to hold as stock, it's often our best source of income
+                "--fracH", resetInfo.currentNode == 8 ? 0.001 : 0.1, // Fraction of wealth to keep as cash (10% - unless in BN8)
                 "--reserve", 0, // Override to ignore the global reserve.txt. Any money we reserve can more or less safely live as stocks
             ]);
 
@@ -881,11 +892,6 @@ export async function main(ns) {
                 return true;
             }
         }
-        // If we're reserving money because we're close to getting an invite to Daedalus don't reset.
-        if (reservingMoneyForDaedalus) {
-            setStatus(ns, `Not installing since we are close to earning an invite from Daedalus.`);
-            return true;
-        }
         if (resetInfo.currentNode == 8) { // Many special rules for this special Bitnode
             if (player.factions.includes("Daedalus")) { // If we've already joined Daedalus
                 // In BN8, large sums of money are hard to accumulate, so if we've made it into Daedalus, but can't purchase TRP rep yet,
@@ -909,6 +915,11 @@ export async function main(ns) {
                     return true;
                 }
             }
+        }
+        // If we're reserving money because we're close to getting an invite to Daedalus don't reset.
+        if (reservingMoneyForDaedalus) {
+            setStatus(ns, `Not installing since we are close to earning an invite from Daedalus.`);
+            return true;
         }
 
         // In BN10, it takes a while to build up the 100q needed to purchase the last sleeve, so don't reset if we're close
@@ -963,7 +974,7 @@ export async function main(ns) {
         //	 the global reserve, so this 8B is for stocks only. The 2B remaining is plenty to kickstart the rest.
         // - Once high-hack/gang income is achieved, this 8B will not be missed anyway.
         /*
-        if(!ranCasino) { // In practice,
+        if(!ranCasino) {
             ns.write("reserve.txt", 300000, "w"); // Prevent other scripts from spending our casino seed money
             return moneyReserved = true;
         }
