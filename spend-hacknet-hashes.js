@@ -69,7 +69,7 @@ export async function main(ns) {
 
 
     let lastHashBalance = -1; // Balance of hashes last time we woke up. If unchanged, we go back to sleep quickly (game hasn't ticked)
-    let capacityMaxed = false; // Flag indicating we've maxed our hash capacity, to avoid repeatedly logging this fact.
+    let notifiedMaxCapacity = false; // Flag indicating we've maxed our hash capacity, to avoid repeatedly logging this fact.
     // Function determines the current cheapest upgrade of all the upgrades we wish to keep purchasing
     const getMinCost = spendActions => Math.min(...spendActions.map(p => ns.hacknet.hashCost(p)));
     // Helper to format hashes in log message
@@ -83,7 +83,7 @@ export async function main(ns) {
             let currentHashes = ns.hacknet.numHashes();
             // Go back to sleep if the game hasn't ticket yet (given us more hashes) since our last loop.
             if (lastHashBalance != capacity && lastHashBalance == currentHashes) continue;
-            log(ns, `INFO: Waking up, last hash balance has changed from ${lastHashBalance} to ${currentHashes}`);
+            //log(ns, `INFO: Waking up, last hash balance has changed from ${lastHashBalance} to ${currentHashes}`);
             // Compute the total income rate of all hacknet nodes. We have to spend faster than this when near capacity.
             const nodes = ns.hacknet.numNodes();
             if (nodes == 0) {
@@ -158,7 +158,7 @@ export async function main(ns) {
                     `so we cannot increase our hash capacity. ${capacityMessage}`, false,
                     remaining < hashesEarnedNextTick ? 'warning' : undefined); // Only warn via toast if we are running out of capacity
             } else { // Otherwise, try to upgrade hacknet capacity so we can save up for more upgrades
-                if (!capacityMaxed) // Log that we want to increase hash capacity (unless we've previously seen that we are maxed out)
+                if (!notifiedMaxCapacity) // Log that we want to increase hash capacity (unless we've previously seen that we are maxed out)
                     log(ns, `INFO: ${capacityMessage}`);
                 let lowestLevel = Number.MAX_SAFE_INTEGER, lowestIndex = null;
                 for (let i = 0; i < nodes; i++)
@@ -167,7 +167,8 @@ export async function main(ns) {
                 const nextCacheUpgradeCost = lowestIndex == null ? Number.POSITIVE_INFINITY : ns.hacknet.getCacheUpgradeCost(lowestIndex, 1);
                 const nextNodeCost = ns.hacknet.getPurchaseNodeCost();
                 const reservedMoney = options['reserve'] ?? Number(ns.read("reserve.txt") || 0);
-                const spendableMoney = Math.max(0, ns.getServerMoneyAvailable('home') - reservedMoney);
+                const playerMoney = ns.getServerMoneyAvailable('home');
+                const spendableMoney = Math.max(0, playerMoney - reservedMoney);
                 // If it's cheaper to buy a new hacknet node than to upgrade the cache of an existing one, do so
                 if (nextNodeCost < nextCacheUpgradeCost && nextNodeCost < spendableMoney) {
                     if (ns.hacknet.purchaseNode())
@@ -185,23 +186,32 @@ export async function main(ns) {
                         log(ns, `WARNING: spend-hacknet-hashes.js attempted to spend ${formatMoney(nextCacheUpgradeCost)} to upgrade hacknet node ${lowestIndex} hash capacity, `
                             `but the purchase failed for an unknown reason (despite appearing to have ${formatMoney(spendableMoney)} to spend after reserves.)`, false, 'warning');
                 } else if (nodes > 0) {
+                    // Prepare a message about our inability to upgrade hash capacity
+                    let message = `Cannot upgrade hash capacity (currently ${formatHashes(capacity)} hashes max). `;
+                    const nextCheapestCacheIncreaseCost = Math.min(nextCacheUpgradeCost, nextNodeCost);
+                    const nextCheapestCacheIncrease = nextNodeCost < nextCacheUpgradeCost ? `buy hacknet node ${nodes + 1}` : `upgrade hacknet node ${lowestIndex} hash capacity`;
+                    if (!Number.isFinite(nextCheapestCacheIncreaseCost))
+                        message += `Hash Capacity is at its maximum and hacknet server limit is reached.`;
+                    else
+                        message += ` We cannot afford to increase our hash capacity (${formatMoney(nextCheapestCacheIncreaseCost)} to ${nextCheapestCacheIncrease}).` +
+                            (playerMoney < nextCheapestCacheIncreaseCost ? '' : // Don't bother mentioning budget if the cost exceeds all player money
+                                `on our budget of ${formatMoney(spendableMoney)}` + (reservedMoney > 0 ? ` (after respecting reserve of ${formatMoney(reservedMoney)}).` : '.'));
+                    // Include in the message information about what we are trying to spend hashes on
                     const nextPurchaseCost = getMinCost(toBuy);
-                    let message = `Failed to upgrade hash capacity (currently ${formatHashes(capacity)} hashes max) on budget of ${formatMoney(spendableMoney)}.`;
-                    message += (Number.isFinite(nextCacheUpgradeCost) ? ` We cannot afford to increase our hash capacity at this time` :
-                        ` Hash Capacity is at its maximum`) + ` (next cost is ${formatMoney(nextCacheUpgradeCost)}).`;
                     if (nextPurchaseCost > capacity)
                         message += ` We have insufficient hashes to buy any of the desired upgrades (${toBuy.join(", ")}) at our current hash capacity. ` +
                             `The next cheapest purchase costs ${formatHashes(nextPurchaseCost)} hashes.`;
-                    // Log a slightly different message about our failure to upgrade hash capacity depending on the root cause.
-                    if (nextPurchaseCost > capacity && !Number.isFinite(nextCacheUpgradeCost))
-                        return log(ns, `SUCCESS: We've maxed all purchases. ${message}`); // Shut down, because we won't be able to buy anything further.
-                    else if (!Number.isFinite(nextCacheUpgradeCost)) {
-                        if (!capacityMaxed) // Only inform the user of this the first time it happens.
-                            log(ns, `INFO: ${message}`, true, 'info');
-                        capacityMaxed = true; // Set a flag to no longer check or inform the user about this
+                    // If we don't have the budget for the upgrade, toast a warning so the user can decide whether they think it worth manually intervening
+                    if (Number.isFinite(nextCheapestCacheIncreaseCost)) {
+                        if (playerMoney > nextCheapestCacheIncreaseCost)
+                            message += ' Feel free to manually purchase this upgrade (despite the reserve/budget) if you deem it worthwhile.'
+                        log(ns, `WARNING: spend-hacknet-hashes.js ${message}`, false, 'warning');
+                    } else if (nextPurchaseCost > capacity) // If we can't afford anything, and have maxed our hash capacity, we may as well shut down.
+                        return log(ns, `SUCCESS: We've maxed all purchases. ${message}`); // Shut down, because we will never be able to buy anything further.
+                    else if (!notifiedMaxCapacity) { // The first time we discover we are at max hash capacity (infinite cost) notify the user
+                        log(ns, `INFO: spend-hacknet-hashes.js ${message}`, true, 'info'); // Only inform the user of this the first time it happens.
+                        notifiedMaxCapacity = true; // Set the flag to avoid repeated notifications
                     }
-                    else
-                        log(ns, `WARNING: ${message} `, false, 'warning');
                 }
             }
             // If for any of the above reasons, we weren't able to upgrade capacity, calling 'SpendHashes' once more

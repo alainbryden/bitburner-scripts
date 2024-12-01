@@ -93,7 +93,8 @@ export async function main(ns) {
     let lastScriptsCheck = 0; // Last time we got a listing of all running scripts
     let homeRam = 0; // Amount of RAM on the home server, last we checked
     let killScripts = []; // A list of scripts flagged to be restarted due to changes in priority
-    let dictOwnedSourceFiles = (/**@returns{{[k: number]: number;}}*/() => [])();
+    let dictOwnedSourceFiles = (/**@returns{{[k: number]: number;}}*/() => [])(); // Player owned source files
+    let dictServerHackReqs = (/**@returns{{[serverName: string]: number;}}*/() => undefined)(); // Hacking requirement for each server
     let unlockedSFs = [], nextBn = 0; // Info for the current bitnode
     let resetInfo = (/**@returns{ResetInfo}*/() => undefined)(); // Information about the current bitnode
     let bitNodeMults = (/**@returns{BitNodeMultipliers}*/() => undefined)(); // bitNode multipliers that can be automatically determined after SF-5
@@ -432,6 +433,7 @@ export async function main(ns) {
 
     /** Helper to get the first instance of a running script by name.
      * @param {NS} ns
+     * @param {string} baseScriptName The name of a script (before applying getFilePath)
      * @param {ProcessInfo[]} runningScripts - (optional) Cached list of running scripts to avoid repeating this expensive request
      * @param {(value: ProcessInfo, index: number, array: ProcessInfo[]) => unknown} filter - (optional) Filter the list of processes beyond just matching on the script name */
     function findScriptHelper(baseScriptName, runningScripts, filter = null) {
@@ -459,7 +461,8 @@ export async function main(ns) {
         if (lastScriptsCheck > Date.now() - options['interval-check-scripts']) return;
         lastScriptsCheck = Date.now();
         const runningScripts = await getRunningScripts(ns); // Cache the list of running scripts for the duration
-        const findScript = (baseScriptName, filter = null) => findScriptHelper(baseScriptName, runningScripts, filter);
+        const findScript = /** @param {(value: ProcessInfo, index: number, array: ProcessInfo[]) => unknown} filter @returns {ProcessInfo} */
+            (baseScriptName, filter = null) => findScriptHelper(baseScriptName, runningScripts, filter);
 
         // Kill any scripts that were flagged for restart
         while (killScripts.length > 0)
@@ -486,21 +489,38 @@ export async function main(ns) {
         }
 
         // Spend hacknet hashes on our boosting best hack-income server once established
-        const spendingHashesOnHacking = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
-        if ((9 in unlockedSFs) && !spendingHashesOnHacking && getTimeInAug() >= options['time-before-boosting-best-hack-server']
+        const existingSpendHashesProc = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
+        if ((9 in unlockedSFs) && getTimeInAug() >= options['time-before-boosting-best-hack-server']
             && 0 != bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain) // No point in boosting hack income if it's scaled to 0 in the current BN
         {
             const strServerIncomeInfo = ns.read('/Temp/analyze-hack.txt');	// HACK: Steal this file that Daemon also relies on
             if (strServerIncomeInfo) {
                 const incomeByServer = JSON.parse(strServerIncomeInfo);
-                const dictServerHackReqs = await getNsDataThroughFile(ns, 'Object.fromEntries(ns.args.map(server => [server, ns.getServerRequiredHackingLevel(server)]))',
-                    '/Temp/servers-hack-req.txt', incomeByServer.map(s => s.hostname));
+                dictServerHackReqs ??= await getNsDataThroughFile(ns, 'Object.fromEntries(ns.args.map(server => [server, ns.getServerRequiredHackingLevel(server)]))',
+                    '/Temp/getServerRequiredHackingLevel-all.txt', incomeByServer.map(s => s.hostname));
                 const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
                     .reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, -1]);
                 if (bestServer && gain > 1) {
-                    log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`)
-                    launchScriptHelper(ns, 'spend-hacknet-hashes.js',
-                        ["--liquidate", "--spend-on", "Increase_Maximum_Money", "--spend-on", "Reduce_Minimum_Security", "--spend-on-server", bestServer]);
+                    // Check whether we should be spending hashes to reduce minimum security
+                    const serverMinSecurity = await getNsDataThroughFile(ns, 'ns.getServerMinSecurityLevel(ns.args[0])', null, [bestServer]);
+                    const shouldReduceMinSecurity = serverMinSecurity > 2; // Each purchase reduces by 2%. Can't go below 1, but not worth the cost to keep going below 2.
+                    // If we were already spending hashes to boost a server, check to see if things have changed
+                    if (existingSpendHashesProc) {
+                        const currentBoostTarget = existingSpendHashesProc.args[1 + existingSpendHashesProc.args.indexOf("--spend-on-server")];
+                        const isReducingSecurity = existingSpendHashesProc.args.includes("Reduce_Minimum_Security");
+                        if (currentBoostTarget != bestServer || isReducingSecurity != shouldReduceMinSecurity) {
+                            log(ns, `Killing a prior spend-hacknet-hashes.js process targetting ${currentBoostTarget} because ` +
+                                (currentBoostTarget != bestServer ? `The new best income server is ${bestServer}.` : 'We no longer need to reduce minimum security.'), true);
+                            await killScript(ns, 'spend-hacknet-hashes.js', null, existingSpendHashesProc);
+                            existingSpendHashesProc = false;
+                        }
+                    }
+                    if (!existingSpendHashesProc) { // 
+                        log(ns, `Identified that the best hack income server is ${bestServer} worth ${formatMoney(gain)}/sec.`);
+                        const spendHashesArgs = ["--liquidate", "--spend-on-server", bestServer, "--spend-on", "Increase_Maximum_Money"];
+                        if (shouldReduceMinSecurity) spendHashesArgs.push("--spend-on", "Reduce_Minimum_Security");
+                        launchScriptHelper(ns, 'spend-hacknet-hashes.js', spendHashesArgs);
+                    }
                 } else if (gain <= 1)
                     log_once(ns, `INFO: Hack income is currently too severely penalized to merit launching spend-hacknet-hashes.js to boost servers.`);
                 else
