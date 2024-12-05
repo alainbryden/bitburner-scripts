@@ -10,6 +10,7 @@ const argsSchema = [
     ['spend-on-server', null], // The server to boost, for spend options that take a server argument: 'Reduce Minimum Security' and 'Increase Maximum Money'
     ['no-capacity-upgrades', false], // By default, we will attempt to upgrade the hacknet node capacity if we cannot afford any purchases. Set to true to disable this.
     ['reserve', null], // The amount of player money to leave unpent when considering buying capacity upgrades (defaults to the amount in reserve.txt on home)
+    ['ignore-reserve-if-upgrade-cost-less-than-pct', 0.01], // Hack to purchase capacity upgrades regardless of the curent global reserve if they cost less than this fraction of player money
     ['reserve-buffer', 1], // To avoid wasting hashes, spend if would be within this many hashes of our max capacity on the next tick.
     ['max-purchases-per-loop', 10000], // When we're producing hashes faster than we can spend them, this keeps things from getting hung up
 ];
@@ -152,11 +153,14 @@ export async function main(ns) {
                     `from capacity, but were only looking to reserve ${formatHashes(hashesEarnedNextTick)} hashes (earning ${formatHashes(globalProduction)} hashes/sec).`;
             else
                 continue; // Current hash capacity suffices, go back to sleep
-            // If we aren't allowed to purchase capacity upgrades by configuration, we may need to warn the user if we're running out of space
-            if (options['no-capacity-upgrades']) { // If we aren't allowed to purchase capacity upgrades by configuration, we may need to warn the user if we're running out of space
+
+            // If we aren't allowed to purchase capacity upgrades by configuration (or can't afford it),
+            // we may need to warn the player via toast notification so that they can intervene.
+            // Don't create a toast notification unless we're nearing our capacity limit and at risk of wasting hashes.
+            const warnToast = remaining < hashesEarnedNextTick ? 'warning' : undefined;
+            if (options['no-capacity-upgrades']) { // If we aren't allowed to purchase capacity upgrades by configuration, warn the user so they can intervene
                 log(ns, `WARNING: Upgrade your hacknet cache! spend-hacknet-hashes.js --no-capacity-upgrades is set, ` +
-                    `so we cannot increase our hash capacity. ${capacityMessage}`, false,
-                    remaining < hashesEarnedNextTick ? 'warning' : undefined); // Only warn via toast if we are running out of capacity
+                    `so we cannot increase our hash capacity. ${capacityMessage}`, false, warnToast);
             } else { // Otherwise, try to upgrade hacknet capacity so we can save up for more upgrades
                 if (!notifiedMaxCapacity) // Log that we want to increase hash capacity (unless we've previously seen that we are maxed out)
                     log(ns, `INFO: ${capacityMessage}`);
@@ -168,7 +172,9 @@ export async function main(ns) {
                 const nextNodeCost = ns.hacknet.getPurchaseNodeCost();
                 const reservedMoney = options['reserve'] ?? Number(ns.read("reserve.txt") || 0);
                 const playerMoney = ns.getServerMoneyAvailable('home');
-                const spendableMoney = Math.max(0, playerMoney - reservedMoney);
+                const spendableMoney = Math.max(0, playerMoney - reservedMoney,
+                    // Hack: Because managing global reserve is tricky. We tend to always want to purchase cheap upgrades
+                    playerMoney * options['ignore-reserve-if-upgrade-cost-less-than-pct']);
                 // If it's cheaper to buy a new hacknet node than to upgrade the cache of an existing one, do so
                 if (nextNodeCost < nextCacheUpgradeCost && nextNodeCost < spendableMoney) {
                     if (ns.hacknet.purchaseNode())
@@ -205,7 +211,8 @@ export async function main(ns) {
                     if (Number.isFinite(nextCheapestCacheIncreaseCost)) {
                         if (playerMoney > nextCheapestCacheIncreaseCost)
                             message += ' Feel free to manually purchase this upgrade (despite the reserve/budget) if you deem it worthwhile.'
-                        log(ns, `WARNING: spend-hacknet-hashes.js ${message}`, false, 'warning');
+                        log(ns, `WARNING: spend-hacknet-hashes.js ${message}`, false, warnToast);
+
                     } else if (nextPurchaseCost > capacity) // If we can't afford anything, and have maxed our hash capacity, we may as well shut down.
                         return log(ns, `SUCCESS: We've maxed all purchases. ${message}`); // Shut down, because we will never be able to buy anything further.
                     else if (!notifiedMaxCapacity) { // The first time we discover we are at max hash capacity (infinite cost) notify the user

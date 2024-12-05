@@ -1,7 +1,7 @@
 import {
     log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-    formatMoney, formatDuration, getErrorInfo, tail
+    formatMoney, formatDuration, formatNumber, getErrorInfo, tail
 } from './helpers.js'
 
 const argsSchema = [ // The set of all command line arguments
@@ -22,6 +22,7 @@ const argsSchema = [ // The set of all command line arguments
     ['disable-wait-for-4s', false], // If true, will doesn't wait for the 4S Tix API to be acquired under any circumstantes
     ['disable-rush-gangs', false], // Set to true to disable focusing work-for-faction on Karma until gangs are unlocked
     ['disable-casino', false], // Set to true to disable running the casino.js script automatically
+    ['spend-hashes-on-server-hacking-threshold', 0.1], // Threshold for how good hacking multipliers must be to merit spending hashes for boosting hack income. Set to a large number to disable this entirely.
     ['on-completion-script', null], // Spawn this script when we defeat the bitnode
     ['on-completion-script-args', []], // Optional args to pass to the script when we defeat the bitnode
     ['xp-mode-interval-minutes', 55], // Every time this many minutes has elapsed, toggle daemon.js to runing in --xp-only mode, which prioritizes earning hack-exp rather than money
@@ -503,7 +504,10 @@ export async function main(ns) {
                     '/Temp/getServerRequiredHackingLevel-all.txt', incomeByServer.map(s => s.hostname));
                 const [bestServer, gain] = incomeByServer.filter(s => dictServerHackReqs[s.hostname] <= player.skills.hacking)
                     .reduce(([bestServer, bestIncome], target) => target.gainRate > bestIncome ? [target.hostname, target.gainRate] : [bestServer, bestIncome], [null, -1]);
-                if (bestServer && gain > 1) {
+                const spendHashesMultThreshold = options['spend-hashes-on-server-hacking-threshold'];
+                // If hacking gain multipliers are too low, assume the bitnode is meant to be won a different way and don't bother wasting hashes on boosting hack income
+                // The exception is that in BN9, despite high penalties, we're definitely meant to spend hashes to boost hack income
+                if (bestServer && (gain > spendHashesMultThreshold || resetInfo.currentNode == 9)) {
                     // Check whether we should be spending hashes to reduce minimum security
                     const serverMinSecurity = await getNsDataThroughFile(ns, 'ns.getServerMinSecurityLevel(ns.args[0])', null, [bestServer]);
                     const shouldReduceMinSecurity = serverMinSecurity > 2; // Each purchase reduces by 2%. Can't go below 1, but not worth the cost to keep going below 2.
@@ -525,7 +529,8 @@ export async function main(ns) {
                         launchScriptHelper(ns, 'spend-hacknet-hashes.js', spendHashesArgs);
                     }
                 } else if (gain <= 1)
-                    log_once(ns, `INFO: Hack income is currently too severely penalized to merit launching spend-hacknet-hashes.js to boost servers.`);
+                    log_once(ns, `INFO: The best server (${bestServer})'s hack income multiplier (${formatNumber(gain)}) is currently too severely penalized ` +
+                        `(< ${spendHashesMultThreshold}) to merit launching spend-hacknet-hashes.js to boost servers. (Configure with --spend-hashes-on-server-hacking-threshold)`);
                 else
                     log(ns, `WARNING: strServerIncomeInfo was not empty, but could not determine best server:\n${strServerIncomeInfo}`);
             }
