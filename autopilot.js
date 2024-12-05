@@ -63,7 +63,7 @@ export async function main(ns) {
         2.3,  // Easy.   Boosts to crime success / money / CHA will speed along gangs, training and earning augmentations in the future
         5.3,  // Normal. Diminishing boost to hacking multipliers (8% -> 12% -> 14%), but relatively normal bitnode, especially with other features unlocked
         11.3, // Normal. Decrease augmentation cost scaling in a reset (4% -> 6% -> 7%) (can buy more augs per reset). Also boosts company salary/rep (32% -> 48% -> 56%), which we have little use for with gangs.)
-        14.3, // Normal: Makes go.js cheats slightly more successful, increases max go favour from (100->120) and not too difficult to get out of the way
+        14.3, // Hard.   Makes go.js cheats slightly more successful, increases max go favour from (100->120) and not too difficult to get out of the way
         13.3, // Hard.   Make stanek's gift bigger to get more/different boosts
         9.2,  // Hard.   Start with 128 GB home ram. Speeds up slow-starting new BNs, but less important with good ram-dodging scripts. Hacknet productin/costs improved by 12% -> 18%.
         9.3,  // Hard.   Start each new BN with an already powerful hacknet server, but *only until the first reset*, which is a bit of a damper. Hacknet productin/costs improved by 18% -> 21%
@@ -791,9 +791,17 @@ export async function main(ns) {
         }
         playerInstalledAugCount = facman.installed_count; // Augmentations bought *and installed* by the player (used for Daedalus requirement)
 
-        // Collect information about how many augmentations we need before it's worth resetting, based on the current configuration
+        // If we're in BN9 (where hacknet is most important) and we're still on our first reset (where we have an upgraded hacknet node), resist installing
+        const inFirstBn9Aug = resetInfo.currentNode == 9 && Math.abs(resetInfo.lastNodeReset - resetInfo.lastAugReset) < 1000;
+
+        // Reduce the augmentations required to reset over time, except in cetain situations. This is because in most situations,
+        // pefoming an ascention in a slow-going BN will let us lock in bonuses that will speed up overall pogression.
+        let reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * getTimeInAug() / 3.6E6);
+        // In our first BN9 augmentation and in BN8, use this mechanic to actually *increase* aug count requirements.
+        if (inFirstBn9Aug || resetInfo.currentNode == 8) // In BN8, no reset bonuses are possible, and we'd lose our stock progress
+            reducedAugReq = -2; // In our first BN9 augmentation, delay resetting as we'd lose our boosted hacknet server
+        // Collect additional information about how many augmentations we need before it's worth resetting, based on the current configuration
         const sf11Level = dictOwnedSourceFiles[11] ?? 0; // SF11 makes augs scale cheaper, so for each level, require +1 augs
-        const reducedAugReq = Math.floor(options['reduced-aug-requirement-per-hour'] * getTimeInAug() / 3.6E6);
         const augsNeeded = Math.max(1, options['install-at-aug-count'] + sf11Level - reducedAugReq);
         const augsNeededInclNf = Math.max(1, options['install-at-aug-plus-nf-count'] + sf11Level - reducedAugReq);
 
@@ -828,12 +836,16 @@ export async function main(ns) {
 
         // Heuristic: if we can afford 4 or more augs in the first ~20 minutes, it's usually worth doing a "quick install"
         // For example, in BN8, we get a big cash influx on each reset and can buy reputation immediately, so it's worth
-        //     doing an few immediate installs to purchse upgrades, then reset for more free cash.
-        // Heuristic: In BN8, reinstall repeatedly for the first 10 minutes to purchase every little thing we can with our flat 10B casino winnings
-        if ((getTimeInAug() < 20 * 60 * 1000 && pendingAugInclNfCount >= 4) || (resetInfo.currentNode == 8 && getTimeInBitnode() < 10 * 60 * 1000)) {
+        //     doing an few immediate installs to purchase upgrades, then reset for more free cash.
+        // When in a gang, require a more augs and don't countdown as quickly, since each reset reduces gang member ascention multipliers
+        const quickInstallThreshold = playerInGang ? 6 : 4;
+        if (!inFirstBn9Aug && (
+            (getTimeInAug() < 20 * 60 * 1000 && pendingAugInclNfCount >= quickInstallThreshold) ||
+            // Heuristic: In BN8, reinstall repeatedly for the first 10 minutes to purchase every little thing we can with our flat 10B casino winnings
+            (resetInfo.currentNode == 8 && getTimeInBitnode() < 10 * 60 * 1000))) {
             shouldReset = true;
             resetStatus = `We haven't been in this reset for long. We can do a quick reset immediately for a quick stat boost.\n${resetStatus}`;
-            if (options['install-countdown'] > 30 * 1000)
+            if (options['install-countdown'] > 30 * 1000 && !playerInGang)
                 options['install-countdown'] = 30 * 1000; // Install relatively quickly in this scenario (30s)
         }
 
