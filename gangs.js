@@ -28,10 +28,10 @@ let lastLoopTime = null;
 const crimes = ["Mug People", "Deal Drugs", "Strongarm Civilians", "Run a Con", "Armed Robbery", "Traffick Illegal Arms", "Threaten & Blackmail", "Human Trafficking", "Terrorism",
     "Ransomware", "Phishing", "Identity Theft", "DDoS Attacks", "Plant Virus", "Fraud & Counterfeiting", "Money Laundering", "Cyberterrorism"];
 let pctTraining = 0.20;
-let multGangSoftcap;
-let allTaskNames;
-let allTaskStats;
-let assignedTasks = {}; // Each member will independently attempt to scale up the crime they perform until they are ineffective or we start generating wanted levels
+let multGangSoftcap = 0.0;
+let allTaskNames = (/**@returns{string[]}*/() => undefined)();
+let allTaskStats = (/**@returns{{[taskName: string]: GangTaskStats;}}*/() => undefined)();
+let assignedTasks = (/**@returns{{[gangMemberName: string]: string;}}*/() => ({}))(); // Each member will independently attempt to scale up the crime they perform until they are ineffective or we start generating wanted levels
 let lastMemberReset = {}; // Tracks when each member last ascended
 
 // Global state
@@ -42,8 +42,8 @@ let isHackGang = false;
 let is4sBought = false;
 let strWantedReduction;
 let requiredRep = 0;
-let myGangMembers = [];
-let equipments = [];
+let myGangMembers = (/**@returns{string[]}*/() => [])();
+let equipments = (/**@returns{{name: string;type: string;cost: number;stats: EquipmentStats;}[]};*/() => [])();
 let importantStats = [];
 
 let options;
@@ -153,10 +153,15 @@ async function initialize(ns) {
     }
 
     // Initialize equipment information
-    const equipmentNames = await getNsDataThroughFile(ns, 'ns.gang.getEquipmentNames()');
-    const dictEquipmentTypes = await getGangInfoDict(ns, equipmentNames, 'getEquipmentType');
-    const dictEquipmentCosts = await getGangInfoDict(ns, equipmentNames, 'getEquipmentCost');
-    const dictEquipmentStats = await getGangInfoDict(ns, equipmentNames, 'getEquipmentStats');
+    // This is done in an extremely convoluted way so that we can ram-dodge while retaining type informatin
+    const equipmentNames = await (/**@returns{Promise<string[]>}*/() =>
+        getNsDataThroughFile(ns, 'ns.gang.getEquipmentNames()'))();
+    const dictEquipmentTypes = await (/**@returns{Promise<{[gangMember: string]: string;}>}*/() =>
+        getGangInfoDict(ns, equipmentNames, 'getEquipmentType'))();
+    const dictEquipmentCosts = await (/**@returns{Promise<{[gangMember: string]: number;}>}*/() =>
+        getGangInfoDict(ns, equipmentNames, 'getEquipmentCost'))();
+    const dictEquipmentStats = await (/**@returns{Promise<{[gangMember: string]: EquipmentStats;}>}*/() =>
+        getGangInfoDict(ns, equipmentNames, 'getEquipmentStats'))();
     equipments = equipmentNames.map((equipmentName) => ({
         name: equipmentName,
         type: dictEquipmentTypes[equipmentName],
@@ -169,7 +174,8 @@ async function initialize(ns) {
     allTaskStats = await getGangInfoDict(ns, allTaskNames, 'getTaskStats');
     multGangSoftcap = (await tryGetBitNodeMultipliers(ns)).GangSoftcap;
     myGangMembers = await getNsDataThroughFile(ns, 'ns.gang.getMemberNames()');
-    const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
+    const dictMembers = await (/**@returns{Promise<{[gangMember: string]: GangMemberInfo;}>}*/() =>
+        getGangInfoDict(ns, myGangMembers, 'getMemberInformation'))();
     for (const member of Object.values(dictMembers)) // Initialize the current activity of each member
         assignedTasks[member.name] = (member.task && member.task !== "Unassigned") ? member.task : ("Train " + (isHackGang ? "Hacking" : "Combat"));
     while (myGangMembers.length < 3) await doRecruitMember(ns); // We should be able to recruit our first three members immediately (for free)
@@ -246,6 +252,9 @@ async function onTerritoryTick(ns, myGangInfo) {
 }
 
 /** @param {NS} ns
+ * @param {{[gangMember: string]: GangMemberInfo;}} dictMemberInfo
+ * @param {string} forceTask
+ * @param {GangGenInfo} myGangInfo
  * Consolidated logic for telling members what to do **/
 async function updateMemberActivities(ns, dictMemberInfo = null, forceTask = null, myGangInfo = null) {
     const dictMembers = dictMemberInfo || (await getGangInfoDict(ns, myGangMembers, 'getMemberInformation'));
@@ -267,6 +276,7 @@ async function updateMemberActivities(ns, dictMemberInfo = null, forceTask = nul
 }
 
 /** @param {NS} ns
+ * @param {GangGenInfo} myGangInfo
  * Logic to assign tasks that maximize rep gain rate without wanted gain getting out of control **/
 async function optimizeGangCrime(ns, myGangInfo) {
     const dictMembers = await getGangInfoDict(ns, myGangMembers, 'getMemberInformation');
@@ -412,6 +422,7 @@ async function tryAscendMembers(ns) {
 }
 
 /** @param {NS} ns
+ * @param {{[gangMember: string]: GangMemberInfo;}} dictMembers
  * Upgrade any missing equipment / augmentations of members if we have the budget for it **/
 async function tryUpgradeMembers(ns, dictMembers) {
     // Update equipment costs to take into account discounts
@@ -470,8 +481,10 @@ async function doUpgradePurchases(ns, purchaseOrder) {
 
 let sequentialMisfires = 0;
 
-/** @param {NS} ns
- * Helper to wait for the game to update stats (typically 2 seconds per cycle) **/
+/** Helper to wait for the game to update stats (typically 2 seconds per cycle)
+ * @param {NS} ns
+ * @param {GangGenInfo} oldGangInfo
+ * @returns {Promise<GangGenInfo>} **/
 async function waitForGameUpdate(ns, oldGangInfo) {
     if (!myGangMembers.some(member => !assignedTasks[member].includes("Train")))
         return oldGangInfo; // Ganginfo will never change if all members are training, so don't wait for an update
@@ -493,8 +506,9 @@ async function waitForGameUpdate(ns, oldGangInfo) {
     return latestGangInfo;
 }
 
-/** @param {NS} ns
- * Checks whether we should be engaging in warfare based on our gang power and that of other gangs. **/
+/** Checks whether we should be engaging in warfare based on our gang power and that of other gangs.
+ * @param {NS} ns
+ * @param {GangGenInfo} myGangInfo **/
 async function enableOrDisableWarfare(ns, myGangInfo) {
     warfareFinished = Math.round(myGangInfo.territory * 2 ** 20) / 2 ** 20 /* Handle API imprecision */ >= 1;
     if (warfareFinished && !myGangInfo.territoryWarfareEngaged) return; // No need to engage once we hit 100%
@@ -520,21 +534,27 @@ async function enableOrDisableWarfare(ns, myGangInfo) {
 }
 
 // Ram-dodging helper to get gang information for each item in a list
-const getGangInfoDict = async (ns, elements, gangFunction) => await getDict(ns, elements, `gang.${gangFunction}`, `/Temp/gang-${gangFunction}.txt`);
-const getDict = async (ns, elements, nsFunction, fileName) => await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(o => [o, ns.${nsFunction}(o)]))`, fileName, elements);
+const getGangInfoDict = /**@returns{Promise<{[gangMember: string]: any;}>}*/async (ns, elements, gangFunction) => await getDict(ns, elements, `gang.${gangFunction}`, `/Temp/gang-${gangFunction}.txt`);
+const getDict = /**@returns{Promise<{[key: string]: any;}>}*/ async (ns, elements, nsFunction, fileName) => await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(o => [o, ns.${nsFunction}(o)]))`, fileName, elements);
 
-/** Gang calcs shamefully stolen from https://github.com/danielyxie/bitburner/blob/dev/src/Gang/GangMember.ts **/
-let getStatWeight = (task, memberInfo) =>
-    (task.hackWeight / 100) * memberInfo["hack"] + // Need to quote to avoid paying RAM for ns.hack -_-
-    (task.strWeight / 100) * memberInfo.str +
-    (task.defWeight / 100) * memberInfo.def +
-    (task.dexWeight / 100) * memberInfo.dex +
-    (task.agiWeight / 100) * memberInfo.agi +
-    (task.chaWeight / 100) * memberInfo.cha;
+/** Gang calcs shamefully stolen from https://github.com/bitburner-official/bitburner-src/blob/dev/src/Gang/GangMember.ts **/
+/** @param {GangTaskStats} task
+ * @param {GangMemberInfo} memberInfo **/
+function getStatWeight(task, memberInfo) {
+    return (task.hackWeight / 100) * memberInfo["hack"] + // Need to quote to avoid paying RAM for ns.hack -_-
+        (task.strWeight / 100) * memberInfo.str +
+        (task.defWeight / 100) * memberInfo.def +
+        (task.dexWeight / 100) * memberInfo.dex +
+        (task.agiWeight / 100) * memberInfo.agi +
+        (task.chaWeight / 100) * memberInfo.cha;
+}
 
 let getWantedPenalty = myGangInfo => myGangInfo.respect / (myGangInfo.respect + myGangInfo.wantedLevel);
 let getTerritoryPenalty = myGangInfo => (0.2 * myGangInfo.territory + 0.8) * multGangSoftcap;
 
+/** @param {GangGenInfo} myGangInfo
+ * @param {string} currentTask
+ * @param {GangMemberInfo} memberInfo **/
 function computeRepGains(myGangInfo, currentTask, memberInfo) {
     const task = allTaskStats[currentTask];
     const statWeight = getStatWeight(task, memberInfo) - 4 * task.difficulty;
@@ -547,6 +567,9 @@ function computeRepGains(myGangInfo, currentTask, memberInfo) {
     return Math.pow(11 * task.baseRespect * statWeight * territoryMult * respectMult, territoryPenalty);
 }
 
+/** @param {GangGenInfo} myGangInfo
+ * @param {string} currentTask
+ * @param {GangMemberInfo} memberInfo **/
 function computeWantedGains(myGangInfo, currentTask, memberInfo) {
     const task = allTaskStats[currentTask];
     const statWeight = getStatWeight(task, memberInfo) - 3.5 * task.difficulty;
@@ -557,6 +580,9 @@ function computeWantedGains(myGangInfo, currentTask, memberInfo) {
         Math.min(100, (7 * task.baseWanted) / Math.pow(3 * statWeight * territoryMult, 0.8));
 }
 
+/** @param {GangGenInfo} myGangInfo
+ * @param {string} currentTask
+ * @param {GangMemberInfo} memberInfo **/
 function calculateMoneyGains(myGangInfo, currentTask, memberInfo) {
     const task = allTaskStats[currentTask];
     const statWeight = getStatWeight(task, memberInfo) - 3.2 * task.difficulty;
