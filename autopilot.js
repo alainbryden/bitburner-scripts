@@ -734,8 +734,9 @@ export async function main(ns) {
                 return log_once(ns, `INFO: Waiting a minute to establish player income before deciding whether casino.js is needed.`);
             // Since it's possible that the CashRoot Startker Kit could give a false income velocity, account for that.
             const cashRootBought = installedAugmentations.includes(`CashRoot Starter Kit`);
-            const incomePerMinute = (playerWealth - (cashRootBought ? 1e6 : 0)) / getTimeInAug();
-            if (incomePerMinute > 5e9 / 60000) {
+            const incomePerMs = (playerWealth - (cashRootBought ? 1e6 : 0)) / getTimeInAug();
+            const incomePerMinute = incomePerMs * 60_000;
+            if (incomePerMinute >= 5e9) {
                 log(ns, `INFO: Skipping running casino.js this augmentation, since our income (${formatMoney(incomePerMinute)}/min) >= 5b/min`);
                 return ranCasino = true;
             }
