@@ -105,6 +105,7 @@ export async function main(ns) {
     let installCountdown = 0; // Start of a countdown before we install augmentations.
     let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
     let sleevesMaxedOut = false; // Flag used only when the player is replaying BN 10 with all sleeves but has suppressed auto-destroying the BN, to allow continued auto-installs
+    let loggedBnCompletion = false; // Flag set to ensure that if we choose to stay in the BN, we only log the "BN completed" message once per reset.
 
     // Replacements for player properties deprecated since 2.3.0
     function getTimeInAug() { return Date.now() - resetInfo.lastAugReset; }
@@ -362,11 +363,14 @@ export async function main(ns) {
 
         if (!bnComplete) return false; // No win conditions met
 
-        const text = `BN ${resetInfo.currentNode}.${(dictOwnedSourceFiles[resetInfo.currentNode] || 0) + 1} completed at ` +
-            `${formatDuration(getTimeInBitnode())} ` +
-            `(${(player.skills.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
-        persist_log(ns, text);
-        log(ns, `SUCCESS: ${text}`, true, 'success');
+        if (!loggedBnCompletion) {
+            const text = `BN ${resetInfo.currentNode}.${(dictOwnedSourceFiles[resetInfo.currentNode] || 0) + 1} completed at ` +
+                `${formatDuration(getTimeInBitnode())} ` +
+                `(${(player.skills.hacking >= wdHack ? `hack (${wdHack.toFixed(0)})` : 'bladeburner')} win condition)`;
+            persist_log(ns, text);
+            log(ns, `SUCCESS: ${text}`, true, 'success');
+            loggedBnCompletion = true; // Flag set to ensure that if we choose to stay in the BN, we only log the "BN completed" message once per reset.
+        }
 
         // Run the --on-completion-script if specified
         if (options['on-completion-script']) {
@@ -1082,11 +1086,13 @@ export async function main(ns) {
     let logged_once = new Set();
     /** Helper to log a message, but only the first time it is encountered.
      * @param {NS} ns
-     * @param {string} message The message to log, only if it hasn't been previously logged. */
-    function log_once(ns, message) {
+     * @param {string} message The message to log, only if it hasn't been previously logged. 
+     * @param {boolean} alsoPrintToTerminal Set to true to print not only to the current script's tail file, but to the terminal
+     * @param {""|"success"|"warning"|"error"|"info"} toastStyle - If specified, your log will will also become a toast notification */
+    function log_once(ns, message, alsoPrintToTerminal, toastStyle) {
         if (logged_once.has(message))
             return;
-        logged_once.add(log(ns, message));
+        logged_once.add(log(ns, message, alsoPrintToTerminal, toastStyle));
     }
 
     // Invoke the main function
