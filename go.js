@@ -10,7 +10,9 @@
  * - Insight (alainbryden)
  */
 
-import { getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile, tail } from "./helpers";
+import {
+    getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile, tail
+} from './helpers.js'
 
 const argsSchema = [
     ['cheats', true], // (Now true by default - but still an option for backwards compatibility) This is only possible if you have BN14.2
