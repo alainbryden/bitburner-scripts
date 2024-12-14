@@ -496,7 +496,7 @@ export async function main(ns) {
         }
 
         // Spend hacknet hashes on our boosting best hack-income server once established
-        const existingSpendHashesProc = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
+        let existingSpendHashesProc = findScript('spend-hacknet-hashes.js', s => s.args.includes("--spend-on-server"))
         if ((9 in unlockedSFs) && getTimeInAug() >= options['time-before-boosting-best-hack-server']
             && 0 != bitNodeMults.ScriptHackMoney * bitNodeMults.ScriptHackMoneyGain) // No point in boosting hack income if it's scaled to 0 in the current BN
         {
