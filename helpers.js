@@ -815,7 +815,7 @@ export function getConfiguration(ns, argsSchema) {
         }
         log(ns, (error ? `ERROR: There was an error parsing the script arguments provided: ${error}\n` : 'INFO: ') +
             `${scriptName} possible arguments:` + argsSchema.map(a => `\n  ${a[0].length == 1 ? " -" : "--"}${a[0].padEnd(30)} ` +
-                `Default: ${(a[1] === null ? "null" : JSON.stringify(a[1])).padEnd(10)}` +
+                `Default: ${(a[1] === null ? "null" : (JSON.stringify(a[1]) ?? "undefined")).padEnd(10)}` +
                 (a[0] in optionDescriptions ? ` // ${optionDescriptions[a[0]]}` : '')).join("") + '\n' +
             `\nTip: All argument names, and some values support auto-complete. Hit the <tab> key to autocomplete or see possible options.` +
             `\nTip: Array arguments are populated by specifying the argument multiple times, e.g.:` +
