@@ -37,6 +37,17 @@ export async function main(ns) {
         log(ns, 'Cleared any existing stanek layout.');
     }
 
+    // If we're in a bladeburner BN, and there's no bladeburner piece in our selected layout (id=30),
+    // replace the identically shaped hacking multi piece  with this one.
+    const has0butNot30 = bestLayout.fragments.some(p => p.id == 0) && !bestLayout.fragments.some(p => p.id == 30);
+    if (has0butNot30) {
+        const bitnodeN = (await getNsDataThroughFile(ns, 'ns.getResetInfo()')).currentNode;;
+        if (bitnodeN == 6 || bitnodeN == 7) {
+            log(ns, `We're in a bladeburner node, replacing a hack piece with the bladeburner piece.`);
+            bestLayout.fragments.find(p => p.id == 0).id = 30;
+        }
+    }
+
     // Place the layout
     log(ns, `Placing ${bestLayout.fragments.length} fragments:\n` + JSON.stringify(bestLayout.fragments));
     const result = await getNsDataThroughFile(ns,
