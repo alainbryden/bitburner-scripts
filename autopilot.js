@@ -103,6 +103,7 @@ export async function main(ns) {
     let acceptedStanek = false, stanekLaunched = false;
     let daemonStartTime = 0; // The time we personally launched daemon.
     let installCountdown = 0; // Start of a countdown before we install augmentations.
+    let installCountdownResets = 0; // Number of times we've reset the countdown because our affordable augs has increased
     let bnCompletionSuppressed = false; // Flag if we've detected that we've won the BN, but are suppressing a restart
     let sleevesMaxedOut = false; // Flag used only when the player is replaying BN 10 with all sleeves but has suppressed auto-destroying the BN, to allow continued auto-installs
     let loggedBnCompletion = false; // Flag set to ensure that if we choose to stay in the BN, we only log the "BN completed" message once per reset.
@@ -420,8 +421,8 @@ export async function main(ns) {
 
         // Use the new special singularity function to automate entering a new BN
         pid = await runCommand(ns, `ns.singularity.destroyW0r1dD43m0n(ns.args[0], ns.args[1]` +
-            `, { sourceFileOverrides: new Map() }` + // Work around a long-standing bug on bitburner-official.github.io TODO: Remove
-            `)`, null, [nextBn, ns.getScriptName()]);
+            `, { sourceFileOverrides: new Map() }` + // Work around a long-standing bug on bitburner-official.github.io TODO: Remove when no longer needed
+            `)`, '/Temp/singularity-destroyW0r1dD43m0n.js', [nextBn, ns.getScriptName()]);
         if (pid) {
             log(ns, `SUCCESS: Initiated process ${pid} to execute 'singularity.destroyW0r1dD43m0n' with args: [${nextBn}, ${ns.getScriptName()}]`, true, 'success')
             await waitForProcessToComplete(ns, pid);
@@ -829,7 +830,7 @@ export async function main(ns) {
         let totalCost = facman.total_rep_cost + facman.total_aug_cost;
         const augSummary = `${pendingAugCount} of ${facman.unpurchased_count - 1} remaining augmentations` + // Unowned - 1 because we can always buy more Neuroflux
             (pendingNfCount > 0 ? ` + ${pendingNfCount} levels of NeuroFlux.` : '.') +
-            (pendingAugCount > 0 ? `\n  Augs: [\"${augsToInstall.join("\", \"")}\"]` : '');
+            (pendingAugCount > 0 ? `\n    Augs: [\"${augsToInstall.join("\", \"")}\"]` : '');
         let resetStatus = `Reserving ${formatMoney(totalCost)} to install ${augSummary}`
         let shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
             pendingAugCount >= augsNeeded || pendingAugInclNfCount >= augsNeededInclNf;
@@ -870,12 +871,29 @@ export async function main(ns) {
         if (await shouldDelayInstall(ns, player, facman)) // If we're currently in a state where we should not be resetting, skip reset logic
             return reservedPurchase = 0;
 
-        // Ensure the money needed for the above augs doesn't get ripped out from under us by reserving it and waiting one more loop
+        // Ensure the money needed for the above augs doesn't get ripped out from under us by reserving it
         if (reservedPurchase < totalCost) {
-            if (reservedPurchase != 0) // If we were already reserving for a purchase and the nubmer went up, log a notice of the timer being reset.
-                log(ns, `INFO: The augmentation purchase we can afford has increased from ${formatMoney(reservedPurchase)} ` +
-                    `to ${formatMoney(totalCost)}. Resetting the timer before we install augmentations.`);
-            installCountdown = Date.now() + options['install-countdown']; // Each time we can afford more augs, reset the install delay timer
+            // A countdown is displayed to give the user a heads up, and give us time to potentially earn money for more augmentations
+            if (reservedPurchase == 0)
+                installCountdown = Date.now() + options['install-countdown'];
+            else { // If we were already reserving for a purchase and the number went up, log a notice of the timer being reset.
+                let purchaseChangeLog = `INFO: The augmentation purchase we can afford has increased from ${formatMoney(reservedPurchase)} to ${formatMoney(totalCost)}.`
+                // First, check if we're ready to install TRP - if so, don't delay the install for any additional augmentations.
+                if (!augsToInstall.includes(augTRP)) {
+                    // Otherwise, each time we can afford more augs, reset the install delay timer to take advantage of "momentum"
+                    // and potentially purchase many more augmentations in this reset. To avoid delaying an install indefinitely,
+                    // we reduce the additional time we're willing to wait a little bit each time this happens.
+                    installCountdownResets++;
+                    const newCountDown = Date.now() + Math.max(10 * 1000, // At a bare minimum, wait 10 more seconds
+                        // Heuristic: Linearly reduce the cooldown until we have doubled the aug count needed.
+                        options['install-countdown'] * (1 - (installCountdownResets / augsNeededInclNf)));
+                    if (newCountDown > installCountdown) { // If the existing countdown remaining was longer than this, leave it be
+                        installCountdown = newCountDown;
+                        purchaseChangeLog = purchaseChangeLog + ' Resetting the timer before we install augmentations.'
+                    }
+                }
+                log(ns, purchaseChangeLog, true);
+            }
             ns.write("reserve.txt", totalCost, "w"); // Should prevent other scripts from spending this money
         }
         // We must wait until the configured cooldown elapses before we install augs.
@@ -888,7 +906,7 @@ export async function main(ns) {
         }
 
         // Otherwise, we've got the money reserved, we can afford the augs, we should be confident to ascend
-        const resetLog = `Invoking ascend.js at ${formatDuration(getTimeInAug()).padEnd(11)} since last aug to install: ${augSummary}`;
+        const resetLog = `  Invoking ascend.js at ${formatDuration(getTimeInAug()).padEnd(11)} since last aug to install: ${augSummary}`;
         persist_log(ns, log(ns, resetLog, true, 'info'));
 
         // Kick off ascend.js
