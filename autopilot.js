@@ -364,6 +364,11 @@ export async function main(ns) {
 
         if (!bnComplete) return false; // No win conditions met
 
+        // We cannot technically destroy WD until we have root. If we recently reset, we may have to wait a bit
+        // for daemon.js to get a little money, buy the crack tools, and nuke the server first.
+        const caveRooted = await getNsDataThroughFile(ns, 'ns.hasRootAccess(ns.args[0])', null, ["w0r1d_d43m0n"]);
+        if (!caveRooted) return false;
+
         if (!loggedBnCompletion) {
             const text = `BN ${resetInfo.currentNode}.${(dictOwnedSourceFiles[resetInfo.currentNode] || 0) + 1} completed at ` +
                 `${formatDuration(getTimeInBitnode())} ` +
