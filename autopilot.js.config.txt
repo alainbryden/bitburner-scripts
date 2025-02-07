@@ -1,1 +1,1 @@
-[["no-tail-windows",true]]
+[["no-tail-windows",true],["install-at-aug-count", 5],["install-at-aug-plus-nf-count", 8]
