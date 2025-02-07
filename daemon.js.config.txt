@@ -1,1 +1,1 @@
-[["spend-hashes-for-money-when-under", 1E9],["run-script", ["me/2.js"]],["n", true], ["use-hacknet-nodes", true], ["use-hacknet-servers", true]]
+[["spend-hashes-for-money-when-under", 1E9],["n", true], ["use-hacknet-nodes", true], ["use-hacknet-servers", true]]
