@@ -83,7 +83,7 @@ export async function main(ns) {
             const logType = isShort ? '做空' : '做多';
             const emoji = isShort ? '🔴' : '🟢';
             transactionLog.unshift(
-                `${emoji} ${stock} ${logType} ×${formatNumberShort(amount, 1)} @ ${formatNumberShort(price)} 成本:${formatMoney(cost)}`
+                `${emoji} ${stock} ${logType} ×${formatNumberShort(amount, 1)} @ ${formatMoney(price)} 成本:${formatMoney(cost)}`
             );
             ns.toast(`${isShort ? '↓' : '↑'} ${stock} ${logType}`, isShort ? "warning" : "success", CONFIG.TOAST_DURATION);
         }
@@ -172,7 +172,7 @@ export async function main(ns) {
     function generateCompactReport(stocks) {
         return stocks.map(stock => {
             const { forecast, vol, pos } = getStockData(stock);
-            return `${stock.padEnd(5)} ${progressBar(forecast, 8)}  ${(vol.toFixed(2))}  ` +
+            return `${stock.padEnd(5)} ${progressBar(forecast, 8)} ${progressBar(vol, 0)}  ` +
                 `📈${pos[0] > 0 ? formatNumberShort(pos[0], 1).padEnd(6) : '0'.padEnd(6)} ` +
                 `📉${pos[2] > 0 ? formatNumberShort(pos[2], 1).padEnd(6) : '0'.padEnd(6)}`;
         }).join('\n');
@@ -212,7 +212,7 @@ export async function main(ns) {
         ns.print([
             statusHeader,
             "=".repeat(70),
-            "🔥 市场热力榜（前5）:\n代码   预测趋势         波动率 多仓    空仓",
+            "🔥 市场热力榜（前5）:\n代码   预测趋势         波动   多仓      空仓",
             generateCompactReport(allStocks.slice(0, 5).map(x => x.symbol)),
             `\n📊 ${portfolioInfo} | 累计收益 ${formatMoney(totalProfit)}`,
             `📈 净值变化: ${growthRate >= 0 ? '+' : ''}${growthRate}% | 止损线: ${ns.formatPercent(CONFIG.STOP_LOSS_RATIO)} | 风险等级: ${CONFIG.RISK_LEVEL}`,
