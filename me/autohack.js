@@ -16,7 +16,6 @@ export async function main(ns) {
     let servers, hosts, targets, exes, tarIndex, loop, hType, tmp, act;
     let netManager = await ns.prompt('Activate Hacknet Manager?');
     let serverManager = await ns.prompt('Activate Player Server Manager?');
-
     const checkFunds = (cost, divisor) => cost < ns.getServerMoneyAvailable('home') / divisor;
     const sortDesc = arr => arr.sort((a, b) => b[0] - a[0]);
     const truncate = s => s.length > 14 ? s.substring(0, 14) + '...' : s;
@@ -49,7 +48,7 @@ export async function main(ns) {
         topTargets.forEach(t => {
             const ratio = serverInfo.MA(t[1]) / serverInfo.MM(t[1]);
             const progress = '|'.repeat(Math.floor(ratio * 10)).padEnd(10, '-');
-            const balance = `[${progress}]` + `(${ns.formatPercent(ratio, 0).padStart(4, '_')})`;
+            const balance = `[${progress}]` + `[${ns.formatPercent(ratio, 0).padStart(4, '_')}]`;
             const severMA = `$${ns.formatNumber(serverInfo.MA(t[1]), 2)}`.padEnd(8);
             ns.print(`║ ${act[t[1]] || ' '} ║ ${truncate(t[1]).padEnd(18)} ║ ${severMA} ║ ${balance} ║`);
         });
@@ -92,7 +91,7 @@ export async function main(ns) {
             }
 
             servers.push(server);
-            await ns.scp(FILES, server, 'home');
+            ns.scp(FILES, server, 'home');
             await scanNetwork(current, server);
         }
         targets = sortDesc(targets);
@@ -153,8 +152,9 @@ export async function main(ns) {
     }
 
     async function manageServers() {
-        const maxRam = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
-            .findLast(ram => checkFunds(ns.getPurchasedServerCost(ram), 20));
+        let A = []
+        for (let i = 3; i < 20; i++)  A.push(2 ** i);
+        const maxRam = A.findLast(ram => checkFunds(ns.getPurchasedServerCost(ram), 20));
 
         if (ns.getPurchasedServers().length < 25 && maxRam) {
             ns.purchaseServer('daemon', maxRam);
@@ -181,7 +181,7 @@ export async function main(ns) {
 
         await updateExes();
         await scanNetwork('', 'home');
-        await allocateResources();      
+        await allocateResources();
 
         if (netManager) await manageHacknet();
         if (serverManager) await manageServers();
