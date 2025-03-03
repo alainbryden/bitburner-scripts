@@ -1,22 +1,25 @@
 /** @param {NS} ns**/
 export async function main(ns) {
     ns.disableLog('ALL');
+    ns.setTitle('AutoHack v2.1');
+    ns.tail();
+    ns.resizeTail(600, 420);
+    ns.moveTail(1000, 0);
 
     const FILES = ['grow.script', 'weak.script', 'hack.script'];
-    const EXCLUDE = [''];
-    const CYCLE = [0, "▄", "█", "▀", "█"];
+    let EXCLUDE = [];
+    const CYCLE = [0, "▁", '▂', '▃', '▄', '▅', '▆', '▇', '█'];//
     const HACK_COMMANDS = ['brutessh', 'ftpcrack', 'relaysmtp', 'httpworm', 'sqlinject'];
+    const KEEP_MONEY = ns.fileExists('reserve.txt') ? Number(ns.read('reserve.txt')) : 0;
+    const HAVE_MONEY = ns.getServerMoneyAvailable('home')
 
     await Promise.all([
         ns.write(FILES[0], 'grow(args[0])', 'w'),
         ns.write(FILES[1], 'weaken(args[0])', 'w'),
         ns.write(FILES[2], 'hack(args[0])', 'w')
     ]);
-
-    let servers, hosts, targets, exes, tarIndex, loop, hType, tmp, act;
-    let netManager = await ns.prompt('Activate Hacknet Manager?');
-    let serverManager = await ns.prompt('Activate Player Server Manager?');
-    const checkFunds = (cost, divisor) => cost < ns.getServerMoneyAvailable('home') / divisor;
+    let servers, hosts, targets, exes, tarIndex, loop, hType, act;
+    const checkFunds = (cost, divisor) => cost < (HAVE_MONEY / divisor);
     const sortDesc = arr => arr.sort((a, b) => b[0] - a[0]);
     const truncate = s => s.length > 14 ? s.substring(0, 14) + '...' : s;
 
@@ -36,38 +39,53 @@ export async function main(ns) {
     }
 
     function generateLog() {
-        if (CYCLE[0] >= 4) CYCLE[0] = 0;
+        if (CYCLE[0] >= 8) CYCLE[0] = 0;
         CYCLE[0]++;
         ns.clearLog();
 
         // 优化后的日志头
-        ns.print('╔═══╦════════════════════════════════════════════════════╗');
-        ns.print(`║ ${CYCLE[CYCLE[0]]} ║      TARGETS                ░▒▓ CASH FLOW ▓▒░      ║`);
-        ns.print('╠═══╬════════════════════╦══════════╦════════════════════╣');
-        const topTargets = targets.slice(0, 12);
+        ns.print('╔═══╦══════════════════════╦═════════╦══════════════════════╗');
+        ns.print(`║ ${CYCLE[CYCLE[0]]} ║      TARGETS         ║  FUNDS  ║ SECURITY & PROGRESS  ║`);
+        ns.print('╠═══╬══════════════════════╬═════════╬══════════════════════╣');
+
+        const topTargets = targets.slice(0, 10);
         topTargets.forEach(t => {
-            const ratio = serverInfo.MA(t[1]) / serverInfo.MM(t[1]);
-            const progress = '|'.repeat(Math.floor(ratio * 10)).padEnd(10, '-');
-            const balance = `[${progress}]` + `[${ns.formatPercent(ratio, 0).padStart(4, '_')}]`;
-            const severMA = `$${ns.formatNumber(serverInfo.MA(t[1]), 2)}`.padEnd(8);
-            ns.print(`║ ${act[t[1]] || ' '} ║ ${truncate(t[1]).padEnd(18)} ║ ${severMA} ║ ${balance} ║`);
+            const maxMoney = serverInfo.MM(t[1]);
+            const currentMoney = serverInfo.MA(t[1]);
+            const ratio = currentMoney / maxMoney || 0;
+
+            // 使用更直观的进度条字符
+            const filled = Math.floor(ratio * 10);
+            const progressBar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+
+            // 格式化金额显示
+            const funds = `$${ns.formatNumber(currentMoney, 1)}`.padEnd(7);
+
+            // 安全等级状态
+            const security = serverInfo.SL(t[1]).toFixed(1).padStart(5);
+            const minSecurity = serverInfo.MSL(t[1]).toFixed(1).padEnd(5);
+
+            ns.print(`║ ${(act[t[1]] || ' ')} ║ ${truncate(t[1]).padEnd(20)} ║ ${funds} ║ ${progressBar}${security}/${minSecurity}║`);
         });
 
         // 状态栏优化
-        ns.print('╠═══╩════════════════════╩══════════╩════════════════════╣');
-        const exeProgress = exes.map(_e => '●').join('') + '○'.repeat(5 - exes.length);
-        ns.print(`║ EXE:[${exeProgress}]  HOSTS:${hosts.length.toString().padStart(3)}  TARGETS:${targets.length.toString().padStart(3)}                    ║`);
+        ns.print('╠═══╩══════════════════════╩═════════╩══════════════════════╣');
 
-        // 管理器状态优化
-        if (netManager || serverManager) {
-            ns.print('╠════════════════════════════════════════════════════════╣');
-            let status = [];
-            if (netManager) status.push(`HN:${ns.hacknet.numNodes().toString().padStart(3)}`);
-            if (serverManager) status.push(`SV:${ns.getPurchasedServers().length.toString().padStart(2)}`);
-            ns.print(`║ [MANAGERS]  ${status.join('  ').padEnd(35)}        ║`);
-        }
+        // EXE进度显示（支持颜色代码）
+        const exeStatus = HACK_COMMANDS.map(cmd =>
+            exes.includes(cmd) ? '■' : '□'
+        ).join('');
 
-        ns.print('╚════════════════════════════════════════════════════════╝');
+        // 主机状态统计
+        const hostStats = [
+            `HN:${ns.hacknet.numNodes()}`,
+            `SV:${ns.getPurchasedServers().length}`,
+            `UP:${hosts.filter(h => h[1] !== 'home').length}`,
+            `TG:${targets.length}`
+        ].join('  ');
+
+        ns.print(`║ EXE:${exeStatus}  ${hostStats.padEnd(47)}║`);
+        ns.print('╚═══════════════════════════════════════════════════════════╝');
     }
 
     async function scanNetwork(host, current) {
@@ -97,9 +115,10 @@ export async function main(ns) {
         targets = sortDesc(targets);
         hosts = sortDesc(hosts);
     }
-
     async function allocateResources() {
         for (const [_, host] of hosts) {
+            if (host === 'home') continue;
+
             if (tarIndex >= targets.length) {
                 tarIndex = 0;
                 loop = true;
@@ -107,14 +126,15 @@ export async function main(ns) {
 
             const target = targets[tarIndex][1];
             const freeRam = serverInfo.MR(host) - serverInfo.UR(host);
-            const ramRatio = freeRam / serverInfo.MR(host);
+            const server = ns.getServer(host);
+            const cores = server.cpuCores || 1;
 
             if (serverInfo.MA(target) < serverInfo.MM(target) * 0.8) {
                 hType = 0;
             } else if (serverInfo.SL(target) > serverInfo.MSL(target) + 5 || loop) {
                 hType = 1;
-                if (ramRatio > 0.13 && freeRam > 4) {
-                    const threads = Math.floor(freeRam / 1.75);
+                if (freeRam > 4) {
+                    const threads = calculateWeakenThreads(ns, target, freeRam, cores);
                     if (threads > 0) ns.exec(FILES[1], host, threads, target);
                 }
             } else {
@@ -122,18 +142,15 @@ export async function main(ns) {
                 const isHacking = hosts.some(([_, h]) => h !== host && ns.isRunning(FILES[2], h, target));
                 if (!isHacking && !ns.scriptRunning(FILES[2], host)) {
                     if (freeRam < 2) ns.killall(host);
-                    const maxThreads = Math.floor(freeRam / 1.7);
-                    let safeThreads = 1;
-                    while (ns.hackAnalyze(target) * safeThreads < 0.7 && safeThreads < maxThreads) safeThreads++;
-                    ns.exec(FILES[2], host, safeThreads, target);
+                    const threads = calculateHackThreads(ns, target, freeRam, cores);
+                    if (threads > 0) ns.exec(FILES[2], host, threads, target);
                 }
             }
 
             if ((hType === 0 || hType === 2) && freeRam > 3.9) {
-                const weakenThreads = Math.ceil(serverInfo.MR(host) * 0.14 / 1.75);
-                const growThreads = Math.floor(serverInfo.MR(host) * 0.79 / 1.75);
-                if (growThreads > 0 && ramRatio >= 0.8) ns.exec(FILES[0], host, growThreads, target);
-                if (weakenThreads > 0 && ramRatio >= 0.15) ns.exec(FILES[1], host, weakenThreads, target);
+                const [growThreads, weakenThreads] = calculateGWThreads(ns, target, freeRam, cores);
+                if (growThreads > 0) ns.exec(FILES[0], host, growThreads, target);
+                if (weakenThreads > 0) ns.exec(FILES[1], host, weakenThreads, target);
             }
 
             if (!loop) act[target] = ['G', 'W', 'H'][hType];
@@ -141,27 +158,73 @@ export async function main(ns) {
         }
     }
 
+    // 新增线程计算函数
+    function calculateHackThreads(ns, target, freeRam, cores) {
+        const scriptRam = ns.getScriptRam(FILES[2]);
+        const maxThreads = Math.floor(freeRam / scriptRam);
+        const hackPerThread = ns.hackAnalyze(target);
+        if (hackPerThread <= 0) return 0;
+
+        const desiredPercentage = 0.7; // 最大安全窃取比例
+        const maxSafeThreads = Math.floor(desiredPercentage / hackPerThread);
+        return Math.min(maxThreads, maxSafeThreads);
+    }
+
+    function calculateWeakenThreads(ns, target, freeRam, cores) {
+        const scriptRam = ns.getScriptRam(FILES[1]);
+        const securityDiff = serverInfo.SL(target) - serverInfo.MSL(target);
+        const threadsNeeded = Math.ceil(securityDiff / (0.05 * cores));
+        const possibleThreads = Math.floor(freeRam / scriptRam);
+        return Math.min(threadsNeeded, possibleThreads);
+    }
+
+    function calculateGWThreads(ns, target, freeRam, cores) {
+        const growRam = ns.getScriptRam(FILES[0]);
+        const weakenRam = ns.getScriptRam(FILES[1]);
+        let remainingRam = freeRam;
+
+        // 计算需要的grow线程
+        let growThreads = 0;
+        const currentMoney = serverInfo.MA(target);
+        const maxMoney = serverInfo.MM(target);
+        if (currentMoney < maxMoney * 0.8 && currentMoney > 0) {
+            const growFactor = (maxMoney * 0.8) / currentMoney;
+            growThreads = Math.ceil(ns.growthAnalyze(target, growFactor, cores));
+            growThreads = Math.min(growThreads, Math.floor(remainingRam * 0.7 / growRam));
+            remainingRam -= growThreads * growRam;
+        }
+
+        // 计算需要的weaken线程
+        let weakenThreads = 0;
+        const securityDiff = serverInfo.SL(target) - serverInfo.MSL(target);
+        if (securityDiff > 0) {
+            weakenThreads = Math.ceil(securityDiff / (0.05 * cores));
+            weakenThreads = Math.min(weakenThreads, Math.floor(remainingRam / weakenRam));
+        }
+
+        return [growThreads, weakenThreads];
+    }
+
     async function manageHacknet() {
-        if (checkFunds(ns.hacknet.getPurchaseNodeCost(), 20)) ns.hacknet.purchaseNode();
+        if (checkFunds(ns.hacknet.getPurchaseNodeCost(), 50)) ns.hacknet.purchaseNode();
         for (let i = 0; i < ns.hacknet.numNodes(); i++) {
             ['Level', 'Ram', 'Core'].forEach(prop => {
                 const cost = ns.hacknet[`get${prop}UpgradeCost`](i);
-                if (checkFunds(cost, 20)) ns.hacknet[`upgrade${prop}`](i);
+                if (checkFunds(cost, 50)) ns.hacknet[`upgrade${prop}`](i);
             });
         }
     }
 
     async function manageServers() {
         let A = []
-        for (let i = 3; i < 20; i++)  A.push(2 ** i);
-        const maxRam = A.findLast(ram => checkFunds(ns.getPurchasedServerCost(ram), 20));
-
+        for (let i = 0; i < 20; i++)  A.push(2 ** i);
+        const maxRam = A.findLast(ram =>
+            checkFunds(ns.getPurchasedServerCost(ram), 50));
         if (ns.getPurchasedServers().length < 25 && maxRam) {
             ns.purchaseServer('daemon', maxRam);
         }
-
         ns.getPurchasedServers().reverse().forEach(server => {
-            if (serverInfo.MR(server) < maxRam && checkFunds(ns.getPurchasedServerCost(maxRam), 20) && !EXCLUDE.includes(server)) {
+            if (serverInfo.MR(server) < maxRam && checkFunds(ns.getPurchasedServerCost(maxRam), 50)) {
                 ns.killall(server);
                 ns.deleteServer(server);
                 ns.purchaseServer('daemon', maxRam);
@@ -169,22 +232,23 @@ export async function main(ns) {
         });
     }
 
-    ns.tail();
     while (true) {
         servers = [];
         targets = [];
-        hosts = [[Math.max(serverInfo.MR('home') - 50, 0), 'home']];
+        hosts = [[Math.max(serverInfo.MR('home') - 50, 0), 'home']]; // 初始化时仍包含home
         exes = [];
         tarIndex = 0;
         loop = false;
         act = {};
+        EXCLUDE = [...Array.from({ length: ns.hacknet.numNodes() }, (_, i) => ns.hacknet.getNodeStats(i).name)]
 
+        if (HAVE_MONEY > KEEP_MONEY) {
+            await manageHacknet();
+            await manageServers();
+        }
         await updateExes();
         await scanNetwork('', 'home');
         await allocateResources();
-
-        if (netManager) await manageHacknet();
-        if (serverManager) await manageServers();
 
         generateLog();
         await ns.sleep(1000);
