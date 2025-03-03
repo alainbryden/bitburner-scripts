@@ -5,8 +5,9 @@
  **/
 export async function main(ns) {
   // ===================== 核心配置 =====================
-  const min = ns.stock.getConstants().msPerStockUpdateMin;
-  const max = ns.stock.getConstants().msPerStockUpdate;
+  // const min = ns.stock.getConstants().msPerStockUpdateMin;
+  // const max = ns.stock.getConstants().msPerStockUpdate;
+
   const CONFIG = {
     RISK_PER_TRADE: 0.02,          // 单笔交易风险比例（占账户总资金）
     MAX_EXPOSURE: 0.8,             // 最大持仓比例（总仓位限制）
@@ -16,7 +17,7 @@ export async function main(ns) {
     VOLATILITY_FILTER: 0.4,        // 波动率过滤阈值（筛选稳定标的）
     STOP_LOSS: 0.08,               // 动态止损比例（亏损5%平仓）
     TAKE_PROFIT: 0.15,             // 动态止盈比例（盈利15%平仓）
-    REFRESH_INTERVAL: Math.floor(Math.random() * (max - min + 1)) + min,
+    // REFRESH_INTERVAL: Math.floor(Math.random() * (max - min + 1)) + min,
     ENABLE_SHORT: true,            // 启用做空（允许空头交易）
     MAX_SHARE_RATIO: 0.1,          // 最大持股比例（单标的最大持股比例）
     FORECAST_BUY: 0.60,            // 多头预测阈值（新增配置）
@@ -66,8 +67,8 @@ export async function main(ns) {
       await ns.sleep(5000);
       continue;
     };
-
-    await ns.sleep(CONFIG.REFRESH_INTERVAL);
+    await ns.stock.nextUpdate()
+    // await ns.sleep(CONFIG.REFRESH_INTERVAL);
     ns.clearLog();
 
     try {
