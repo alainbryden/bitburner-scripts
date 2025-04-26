@@ -1,11 +1,14 @@
 let options;
 const argsSchema = [
-    ['github', 'alainbryden'],
+    //['github', 'alainbryden'],
+    ['github', 'Ciechom'],
     ['repository', 'bitburner-scripts'],
-    ['branch', 'main'],
+    //['branch', 'main'],
+    ['branch', 'patch-1'],
     ['download', []], // By default, all supported files in the repository will be downloaded. Override with just a subset of files here
     ['new-file', []], // If a repository listing fails, only files returned by ns.ls() will be downloaded. You can add additional files to seek out here.
     ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
+    //['subfolder', 'Ciechom'], // Can be set to download to a sub-folder that is not part of the remote repository structure
     ['extension', ['.js', '.ns', '.txt', '.script']], // Files to download by extension
     ['omit-folder', ['Temp/']], // Folders to omit when getting a list of files to update (TODO: This may be obsolete now that we get a list of files from github itself.)
 ];
