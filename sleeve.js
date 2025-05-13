@@ -32,7 +32,7 @@ const rerollTime = 61000; // How often we re-roll for each sleeve's chance to be
 const statusUpdateInterval = 10 * 60 * 1000; // Log sleeve status this often, even if their task hasn't changed
 const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
-const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
+const trainStats = ['str', 'def', 'dex', 'agi'];
 const trainSmarts = ['hacking', 'charisma'];
 const sleeveBbContractNames = ["Tracking", "Bounty Hunter", "Retirement"];
 const minBbContracts = 2; // There should be this many contracts remaining before sleeves attempt them
@@ -163,10 +163,10 @@ async function mainLoop(ns) {
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, null, [bladeburnerCity]);
         bladeburnerContractChances = await getNsDataThroughFile(ns,
             // There is currently no way to get sleeve chance, so assume it is the same as player chance for now. (EDIT: This is a terrible assumption)
-            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionEstimatedSuccessChance("contract", c)[0]]))',
+            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionEstimatedSuccessChance("Contracts", c)[0]]))',
             '/Temp/sleeve-bladeburner-success-chances.txt', sleeveBbContractNames);
         bladeburnerContractCounts = await getNsDataThroughFile(ns,
-            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionCountRemaining("contract", c)]))',
+            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionCountRemaining("Contracts", c)]))',
             '/Temp/sleeve-bladeburner-contract-counts.txt', sleeveBbContractNames);
     } else
         bladeburnerCityChaos = 0, bladeburnerContractChances = {}, bladeburnerContractCounts = {};
@@ -292,12 +292,12 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
         // Hack: Without paying much attention to what's happening in bladeburner, pre-assign a variety of tasks by sleeve index
         const bbTasks = [
             // Note: Sleeve 0 might still be used for faction work (unless --disable-follow-player is set), so don't assign them a 'unique' task
-            /*0*/options['enable-bladeburner-team-building'] ? ["Support main sleeve"] : ["Infiltrate synthoids"],
+            /*0*/options['enable-bladeburner-team-building'] ? ["Support main sleeve"] : ["Infiltrate Synthoids"],
             // Note: Each contract type can only be performed by one sleeve at a time (similar to working for factions)
             /*1*/["Take on contracts", "Retirement"], /*2*/["Take on contracts", "Bounty Hunter"], /*3*/["Take on contracts", "Tracking"],
             // Other bladeburner work can be duplicated, but tackling a variety is probably useful. Overrides occur below
-            /*4*/["Infiltrate synthoids"], /*5*/["Diplomacy"], /*6*/["Field analysis"],
-            /*7*/options['enable-bladeburner-team-building'] ? ["Recruitment"] : ["Infiltrate synthoids"]
+            /*4*/["Infiltrate Synthoids"], /*5*/["Diplomacy"], /*6*/["Field Analysis"],
+            /*7*/options['enable-bladeburner-team-building'] ? ["Recruitment"] : ["Infiltrate Synthoids"]
         ];
         let [action, contractName] = bbTasks[i];
         const contractChance = bladeburnerContractChances[contractName] ?? 1;
@@ -324,7 +324,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
         // If the sleeve is on cooldown ,do not perform their designated bladeburner task
         else if (onCooldown()) { // When on cooldown from a failed task, recover shock if applicable, or else add contracts
             if (sleeve.shock > 0) return shockRecoveryTask(sleeve, i, `bladeburner task is on cooldown`);
-            [action, contractName] = ["Infiltrate synthoids"]; // Fall-back to something long-term useful
+            [action, contractName] = ["Infiltrate Synthoids"]; // Fall-back to something long-term useful
         }
         return [`Bladeburner ${action} ${contractName || ''}`.trimEnd(),
         /*   */ `ns.sleeve.setToBladeburnerAction(ns.args[0], ns.args[1], ns.args[2])`, [i, action, contractName ?? ''],
@@ -334,7 +334,7 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
     if (sleeve.shock > 0)
         return shockRecoveryTask(sleeve, i, `there appears to be nothing better to do`);
     // Finally, do crime for Karma. Pick the best crime based on success chances
-    var crime = options.crime || (await calculateCrimeChance(ns, sleeve, "homicide")) >= options['homicide-chance-threshold'] ? 'homicide' : 'mug';
+    var crime = options.crime || (await calculateCrimeChance(ns, sleeve, "Homicide")) >= options['homicide-chance-threshold'] ? 'Homicide' : 'Mug';
     return await crimeTask(ns, crime, i, sleeve, `there appears to be nothing better to do`);
 }
 
@@ -353,8 +353,8 @@ async function crimeTask(ns, crime, i, sleeve, reason) {
     const successChance = await calculateCrimeChance(ns, sleeve, crime);
     return [`commit ${crime}`, `ns.sleeve.setToCommitCrime(ns.args[0], ns.args[1])`, [i, crime],
     /*   */ `committing ${crime} with chance ${(successChance * 100).toFixed(2)}% because ${reason}` +
-    /*   */ (options.crime || crime == "homicide" ? '' : // If auto-criming, user may be curious how close we are to switching to homicide
-    /*   */     ` (Note: Homicide chance would be ${((await calculateCrimeChance(ns, sleeve, "homicide")) * 100).toFixed(2)}%)`)];
+    /*   */ (options.crime || crime == "Homicide" ? '' : // If auto-criming, user may be curious how close we are to switching to homicide
+    /*   */     ` (Note: Homicide chance would be ${((await calculateCrimeChance(ns, sleeve, "Homicide")) * 100).toFixed(2)}%)`)];
 }
 
 
@@ -414,8 +414,8 @@ async function calculateCrimeChance(ns, sleeve, crimeName) {
     const crimeStats = cachedCrimeStats[crimeName] ?? (cachedCrimeStats[crimeName] = (4 in ownedSourceFiles ?
         await getNsDataThroughFile(ns, `ns.singularity.getCrimeStats(ns.args[0])`, null, [crimeName]) :
         // Hack: To support players without SF4, hard-code values as of the current release
-        crimeName == "homicide" ? { difficulty: 1, strength_success_weight: 2, defense_success_weight: 2, dexterity_success_weight: 0.5, agility_success_weight: 0.5 } :
-            crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :
+        crimeName == "Homicide" ? { difficulty: 1, strength_success_weight: 2, defense_success_weight: 2, dexterity_success_weight: 0.5, agility_success_weight: 0.5 } :
+            crimeName == "Mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :
                 undefined));
     let chance =
         (crimeStats.hacking_success_weight || 0) * sleeve.skills.hacking +

@@ -363,7 +363,7 @@ export async function main(ns) {
             playerInBladeburner = playerInBladeburner || await getNsDataThroughFile(ns, 'ns.bladeburner.inBladeburner()');
         if (!bnComplete && playerInBladeburner)
             bnComplete = await getNsDataThroughFile(ns,
-                `ns.bladeburner.getActionCountRemaining('blackop', 'Operation Daedalus') === 0`,
+                `ns.bladeburner.getActionCountRemaining('Black Operations', 'Operation Daedalus') === 0`,
                 '/Temp/bladeburner-completed.txt');
 
         // HEURISTIC: If we naturally get within 75% of the if w0r1d_d43m0n hack stat requirement,
