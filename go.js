@@ -87,6 +87,11 @@ export async function main(ns) {
     const opponent = ["Netburners", "Slum Snakes", "The Black Hand", "Tetrads", "Daedalus", "Illuminati"];
     const opponent2 = ["Netburners", "Slum Snakes", "The Black Hand", "Tetrads", "Daedalus", "Illuminati", "????????????"];
 
+    if (ns.getResetInfo() == 8) {
+        opponent.splice(index, 0);
+        opponent2.splice(index, 0);
+    }
+
     await start();
 
     /** @param {NS} ns */
