@@ -44,14 +44,14 @@ const companySpecificConfigs = [
 ]
 const jobs = [ // Job stat requirements for a company with a base stat modifier of +224 (modifier of all megacorps except the ones above which are 25 higher)
     {
-        name: "it",
+        name: "IT",
         reqRep: [0e0, 7e3, 35e3, 175e3],
         reqHck: [225, 250, 275, 375], // [1, 26, 51, 151] + 224
         reqCha: [0e0, 0e0, 275, 300], // [0,  0, 51,  76] + 224
         repMult: [0.9, 1.1, 1.3, 1.4]
     },
     {
-        name: "software",
+        name: "Software",
         reqRep: [0e0, 8e3, 4e4, 2e5, 4e5, 8e5, 16e5, 32e5],
         reqHck: [225, 275, 475, 625, 725, 725, 825, 975],   // [1, 51, 251, 401, 501, 501, 601, 751] + 224
         reqCha: [0e0, 0e0, 275, 375, 475, 475, 625, 725],   // [0,  0,  51, 151, 251, 251, 401, 501] + 224
@@ -616,7 +616,7 @@ async function goToCity(ns, cityName) {
 
 /** @param {NS} ns */
 export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, doFastCrimesOnly = false) {
-    const bestCrimesByDifficulty = ["heist", "assassinate", "homicide", "mug"]; // Will change crimes as our success rate improves
+    const bestCrimesByDifficulty = ["Heist", "Assassination", "Homicide", "Mug"]; // Will change crimes as our success rate improves
     const chanceThresholds = [0.75, 0.9, 0.5, 0]; // Will change crimes once we reach this probability of success for better all-round gains
     doFastCrimesOnly = doFastCrimesOnly || (options ? options['fast-crimes-only'] : false);
     let player = await getPlayerInfo(ns);
@@ -633,13 +633,13 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
         let karma = -ns.heart.break();
-        crime = crimeCount < 2 ? (crimeChances["homicide"] > 0.75 ? "homicide" : "mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
-            (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
+        crime = crimeCount < 2 ? (crimeChances["Homicide"] > 0.75 ? "Homicide" : "Mug") : // Start with a few fast & easy crimes to boost stats if we're just starting
+            (!needStats && (player.numPeopleKilled < reqKills || karma < reqKarma)) ? "Homicide" : // If *all* we need now is kills or Karma, homicide is the fastest way to do that, even at low proababilities
                 bestCrimesByDifficulty.find((c, index) => doFastCrimesOnly && index <= 1 ? 0 : crimeChances[c] >= chanceThresholds[index]); // Otherwise, crime based on success chance vs relative reward (precomputed)
         // Warn if current crime is disrupted
         let currentWork = await getCurrentWorkInfo(ns);
         let crimeType = currentWork.crimeType;
-        if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
+        if (!lastCrime || !(crimeType && crimeType.includes(lastCrime))) {
             if (await isValidInterruption(ns, currentWork)) return;
             if (lastCrime) {
                 log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType ?? currentWork.type}) Restarting...`, false, 'warning');
@@ -1154,8 +1154,8 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     if ((await checkFactionInvites(ns)).includes(factionName))
         return waitForInvite ? await waitForFactionInvite(ns, factionName) : false;
     // TODO: In some scenarios, the best career path may require combat stats, this hard-codes the optimal path for hack stats
-    const itJob = jobs.find(j => j.name == "it");
-    const softwareJob = jobs.find(j => j.name == "software");
+    const itJob = jobs.find(j => j.name == "IT");
+    const softwareJob = jobs.find(j => j.name == "Software");
     if (itJob.reqHck[0] + statModifier > player.skills.hacking) // We don't qualify to work for this company yet if we can't meet IT qualifications (lowest there are)
         return ns.print(`Cannot yet work for "${companyName}": Need Hack ${itJob.reqHck[0] + statModifier} to get hired (current Hack: ${player.skills.hacking});`);
     ns.print(`Going to work for Company "${companyName}" next...`)
@@ -1174,7 +1174,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // It's generally best to hop back-and-forth between it and software engineer career paths (rep gain is about the same, but better money from software)
         const qualifyingItTier = getTier(itJob), qualifyingSoftwareTier = getTier(softwareJob);
         const bestJobTier = Math.max(qualifyingItTier, qualifyingSoftwareTier); // Go with whatever job promotes us higher
-        const bestRoleName = qualifyingItTier > qualifyingSoftwareTier ? "it" : "software"; // If tied for qualifying tier, go for software
+        const bestRoleName = qualifyingItTier > qualifyingSoftwareTier ? "IT" : "Software"; // If tied for qualifying tier, go for software
         if (currentJobTier < bestJobTier || currentRole != bestRoleName) { // We are ready for a promotion, ask for one!
             if (await tryApplyToCompany(ns, companyName, bestRoleName))
                 log(ns, `Successfully applied to "${companyName}" for a '${bestRoleName}' Job or Promotion`, false, 'success');
@@ -1185,9 +1185,9 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             player = await getPlayerInfo(ns); // Update player.jobs info after attempted promotion
         }
         const currentJob = player.jobs[companyName];
-        const nextJobTier = currentRole == "it" ? currentJobTier : currentJobTier + 1;
-        const nextJobName = currentRole == "it" || nextJobTier >= itJob.reqRep.length ? "software" : "it";
-        const nextJob = nextJobName == "it" ? itJob : softwareJob;
+        const nextJobTier = currentRole == "IT" ? currentJobTier : currentJobTier + 1;
+        const nextJobName = currentRole == "IT" || nextJobTier >= itJob.reqRep.length ? "Software" : "IT";
+        const nextJob = nextJobName == "IT" ? itJob : softwareJob;
         const requiredRep = nextJob.reqRep[nextJobTier] * (backdoored ? 0.75 : 1); // Rep requirement is decreased when company server is backdoored
         const requiredHack = nextJob.reqHck[nextJobTier] === 0 ? 0 : nextJob.reqHck[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
         const requiredCha = nextJob.reqCha[nextJobTier] === 0 ? 0 : nextJob.reqCha[nextJobTier] + statModifier; // Stat modifier only applies to non-zero reqs
