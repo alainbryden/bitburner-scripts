@@ -181,7 +181,7 @@ export async function main(ns) {
                         log(ns, `SUCCESS: spend-hacknet-hashes.js spent ${formatMoney(nextNodeCost)} to purchase a new hacknet node ${nodes + 1} ` +
                             `in order to increase hash capacity and afford further purchases (${toBuy.join(", ")}). (You can disable this with --no-capacity-upgrades)`, false, 'success');
                     else
-                        log(ns, `WARNING: spend-hacknet-hashes.js attempted to spend ${formatMoney(nextNodeCost)} to purchase hacknet node ${nodes + 1}, `
+                        log(ns, `WARNING: spend-hacknet-hashes.js attempted to spend ${formatMoney(nextNodeCost)} to purchase hacknet node ${nodes + 1}, ` +
                             `but the purchase failed for an unknown reason (despite appearing to have ${formatMoney(spendableMoney)} to spend after reserves.)`, false, 'warning');
                 } // Otherwise, try upgrading the cache level of an existing hash node 
                 else if (lowestIndex !== null && nextCacheUpgradeCost < spendableMoney) {
@@ -189,7 +189,7 @@ export async function main(ns) {
                         log(ns, `SUCCESS: spend-hacknet-hashes.js spent ${formatMoney(nextCacheUpgradeCost)} to upgrade hacknet node ${lowestIndex} hash capacity ` +
                             `in order to afford further purchases (${toBuy.join(", ")}). (You can disable this with --no-capacity-upgrades)`, false, 'success');
                     else
-                        log(ns, `WARNING: spend-hacknet-hashes.js attempted to spend ${formatMoney(nextCacheUpgradeCost)} to upgrade hacknet node ${lowestIndex} hash capacity, `
+                        log(ns, `WARNING: spend-hacknet-hashes.js attempted to spend ${formatMoney(nextCacheUpgradeCost)} to upgrade hacknet node ${lowestIndex} hash capacity, ` +
                             `but the purchase failed for an unknown reason (despite appearing to have ${formatMoney(spendableMoney)} to spend after reserves.)`, false, 'warning');
                 } else if (nodes > 0) {
                     // Prepare a message about our inability to upgrade hash capacity
