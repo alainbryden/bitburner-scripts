@@ -2,3 +2,23 @@
 *.txt
 .vscode/*.*
 *.ts
+
+# editor and IDE paraphernalia
+.idea
+*.swp
+*.swo
+*~
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin
+testbin/*
+.git/
+
+# OSX trash
+.DS_Store
+.env

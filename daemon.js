@@ -418,6 +418,7 @@ export async function main(ns) {
             },
             // Check if any new servers can be backdoored. If there are many, this can eat up a lot of RAM, so make this the last script scheduled at startup.
             { interval: 33000, name: "/Tasks/backdoor-all-servers.js", shouldRun: () => 4 in dictSourceFiles && playerHackSkill() > 10 }, // Don't do this until we reach hack level 10. If we backdoor too early, it's very slow and eats up RAM for a long time,
+            { interval: 34000, name: "corp.js", shouldRun: () => dictSourceFiles[3] >= 1 && reqRam(700) && !processList(ns, "home").some(proc => proc.filename.includes("corp.js")), shouldTail: false},
         ];
         periodicScripts.forEach(tool => tool.ignoreReservedRam = true);
         if (verbose) // In verbose mode, have periodic sripts persist their logs.
