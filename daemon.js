@@ -945,23 +945,18 @@ export async function main(ns) {
                     options['share'] !== false && options['no-share'] !== true &&
                     (options['share'] === true || network.totalMaxRam > 1024)) // If not explicitly enabled or disabled, auto-enable share at 1TB of network RAM
                 {
-                    // Figure out if the player is currently working (no point in RAM share if we aren't currently working for a faction)
-                    // Getting work info requires sinularity (SF4) - if we don't have it yet, we can still share, but we can only assume we're currently doing faction work.
-                    let workInfo = 4 in dictSourceFiles ? await getCurrentWorkInfo(ns) : { "type": "FACTION" };
-                    if (workInfo.type == "FACTION") {
-                        let shareTool = getTool("share");
-                        let maxThreads = shareTool.getMaxThreads(); // This many threads would use up 100% of the (1-utilizationPercent)% RAM remaining
-                        if (xpOnly) maxThreads -= Math.floor(getServerByName('home').ramAvailable() / shareTool.cost); // Reserve home ram entirely for XP cycles when in xpOnly mode
-                        network = getNetworkStats(); // Update network stats since they may have changed after scheduling xp cycles above
-                        utilizationPercent = network.totalUsedRam / network.totalMaxRam;
-                        let shareThreads = Math.floor(maxThreads * (maxShareUtilization - utilizationPercent) / (1 - utilizationPercent)); // Ensure we don't take utilization above (1-maxShareUtilization)%
-                        if (shareThreads > 0) {
-                            if (verbose) log(ns, `Creating ${shareThreads.toLocaleString('en')} share threads to improve faction rep gain rates. Using ${formatRam(shareThreads * 4)} of ${formatRam(network.totalMaxRam)} ` +
-                                `(${(400 * shareThreads / network.totalMaxRam).toFixed(1)}%) of all RAM). Final utilization will be ${(100 * (4 * shareThreads + network.totalUsedRam) / network.totalMaxRam).toFixed(1)}%`);
-                            await arbitraryExecution(ns, getTool('share'), shareThreads, [Date.now()], null, true) // Note: Need a unique argument to facilitate multiple parallel share scripts on the same server
-                            lastShareTime = Date.now();
-                        }
-                    } //else log(ns, `Not Sharing. (Not working for faction. Work is ${JSON.stringify(workInfo)})`);
+                    let shareTool = getTool("share");
+                    let maxThreads = shareTool.getMaxThreads(); // This many threads would use up 100% of the (1-utilizationPercent)% RAM remaining
+                    if (xpOnly) maxThreads -= Math.floor(getServerByName('home').ramAvailable() / shareTool.cost); // Reserve home ram entirely for XP cycles when in xpOnly mode
+                    network = getNetworkStats(); // Update network stats since they may have changed after scheduling xp cycles above
+                    utilizationPercent = network.totalUsedRam / network.totalMaxRam;
+                    let shareThreads = Math.floor(maxThreads * (maxShareUtilization - utilizationPercent) / (1 - utilizationPercent)); // Ensure we don't take utilization above (1-maxShareUtilization)%
+                    if (shareThreads > 0) {
+                        if (verbose) log(ns, `Creating ${shareThreads.toLocaleString('en')} share threads to improve faction rep gain rates. Using ${formatRam(shareThreads * 4)} of ${formatRam(network.totalMaxRam)} ` +
+                                         `(${(400 * shareThreads / network.totalMaxRam).toFixed(1)}%) of all RAM). Final utilization will be ${(100 * (4 * shareThreads + network.totalUsedRam) / network.totalMaxRam).toFixed(1)}%`);
+                        await arbitraryExecution(ns, getTool('share'), shareThreads, [Date.now()], null, true) // Note: Need a unique argument to facilitate multiple parallel share scripts on the same server
+                        lastShareTime = Date.now();
+                    }
                 } //else log(ns, `Not Sharing. workCapped: ${isWorkCapped()} utilizationPercent: ${utilizationPercent} maxShareUtilization: ${maxShareUtilization} cooldown: ${formatDuration(Date.now() - lastShareTime)} networkRam: ${network.totalMaxRam}`);
 
                 // Log some status updates
