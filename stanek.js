@@ -122,7 +122,7 @@ export async function main(ns) {
         if (ns.run(completionScript, 1, ...completionArgs)) {
             log(ns, `INFO: Stanek.js shutting down and launching ${completionScript}...`, false, 'info');
             if (!options['no-tail'])
-                ns.closeTail(); // Close the tail window if we opened it
+                tail(ns, ns.pid, true); // Close the tail window if we opened it
         } else
             log(ns, `WARNING: Stanek.js shutting down, but failed to launch ${completionScript}...`, false, 'warning');
     }
