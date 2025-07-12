@@ -848,6 +848,13 @@ export function unEscapeArrayArgs(args) {
 export function tail(ns, processId = undefined) {
     checkNsInstance(ns, '"tail"');
     processId ??= ns.pid
+
+    /* no-tail option used in corresponding script */
+    if (close){
+      ns.ui.closeTail(processId);
+      return; // Exit function as we're not modifying a window at this time.
+    }
+
     ns.ui.openTail(processId);
     // Don't move or resize tail windows that were previously opened and possibly moved by the player
     const tailFile = '/Temp/helpers-tailed-pids.txt'; // Use a file so it can be wiped on reset
