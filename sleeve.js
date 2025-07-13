@@ -32,7 +32,7 @@ const rerollTime = 61000; // How often we re-roll for each sleeve's chance to be
 const statusUpdateInterval = 10 * 60 * 1000; // Log sleeve status this often, even if their task hasn't changed
 const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
-const trainStats = ['str', 'def', 'dex', 'agi'];
+const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
 const trainSmarts = ['hacking', 'charisma'];
 const sleeveBbContractNames = ["Tracking", "Bounty Hunter", "Retirement"];
 const minBbContracts = 2; // There should be this many contracts remaining before sleeves attempt them
@@ -253,8 +253,12 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
             }
             var trainStat = untrainedStats.reduce((min, s) => sleeve.skills[s] < sleeve.skills[min] ? s : min, untrainedStats[0]);
             var gym = ns.enums.LocationName.Sector12PowerhouseGym;
-            return [`train ${trainStat} (${gym})`, `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`, [i, gym, trainStat],
-            /*   */ `training ${trainStat}... ${sleeve.skills[trainStat]}/${(options[`train-to-${trainStat}`])}`];
+            return [
+                `train ${trainStat} (${gym})`,
+                `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`,
+                [i, gym, trainStat.slice(0, 3)], // Gym expects the short form stat names ('str', 'def', 'dex', 'agi')
+                `training ${trainStat}... ${sleeve.skills[trainStat]}/${(options[`train-to-${trainStat}`])}`
+            ];
             // if we're tough enough, flip over to studying to improve the mental stats
         } else if (untrainedSmarts.length > 0) {
             if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
@@ -266,8 +270,12 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
             var trainSmart = untrainedSmarts.reduce((min, s) => sleeve.skills[s] < sleeve.skills[min] ? s : min, untrainedSmarts[0]);
             var univ = ns.enums.LocationName.VolhavenZBInstituteOfTechnology;
             var course = univClasses[trainSmart];
-            return [`study ${trainSmart} (${univ})`, `ns.sleeve.setToUniversityCourse(ns.args[0], ns.args[1], ns.args[2])`, [i, univ, course],
-            /*   */ `studying ${trainSmart}... ${sleeve.skills[trainSmart]}/${(options[`study-to-${trainSmart}`])}`];
+            return [
+                `study ${trainSmart} (${univ})`,
+                `ns.sleeve.setToUniversityCourse(ns.args[0], ns.args[1], ns.args[2])`,
+                [i, univ, course],
+                `studying ${trainSmart}... ${sleeve.skills[trainSmart]}/${(options[`study-to-${trainSmart}`])}`
+            ];
         }
     }
     // If player is currently working for faction or company rep, a sleeve can help him out (Note: Only one sleeve can work for a faction)
@@ -276,13 +284,21 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
         // We'll cycle through work types until we find one that is supported. TODO: Auto-determine the most productive faction work to do.
         const faction = playerWorkInfo.factionName;
         const work = works[workByFaction[faction] || 0];
-        return [`work for faction '${faction}' (${work})`, `ns.sleeve.setToFactionWork(ns.args[0], ns.args[1], ns.args[2])`, [i, faction, work],
-        /*   */ `helping earn rep with faction ${faction} by doing ${work} work.`];
+        return [
+            `work for faction '${faction}' (${work})`,
+            `ns.sleeve.setToFactionWork(ns.args[0], ns.args[1], ns.args[2])`,
+            [i, faction, work],
+            `helping earn rep with faction ${faction} by doing ${work} work.`
+        ];
     } // Same as above if player is currently working for a megacorp
     if (i == followPlayerSleeve && playerWorkInfo.type == "COMPANY") {
         const companyName = playerWorkInfo.companyName;
-        return [`work for company '${companyName}'`, `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`, [i, companyName],
-        /*   */ `helping earn rep with company ${companyName}.`];
+        return [
+            `work for company '${companyName}'`,
+            `ns.sleeve.setToCompanyWork(ns.args[0], ns.args[1])`,
+            [i, companyName],
+            `helping earn rep with company ${companyName}.`
+        ];
     }
     // If gangs are available, prioritize homicide until we've got the requisite -54K karma to unlock them
     if (!playerInGang && !options['disable-gang-homicide-priority'] && (2 in ownedSourceFiles) && ns.heart.break() > -54000)
