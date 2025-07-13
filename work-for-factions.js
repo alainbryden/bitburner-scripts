@@ -190,13 +190,16 @@ async function loadStartupData(ns) {
     bitNodeMults = await tryGetBitNodeMultipliers(ns);
 
     // Get some faction and augmentation information to decide what remains to be purchased
-    dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', allKnownFactions);
     const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', allKnownFactions);
     const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
     const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationRepReq(o)'), '/Temp/getAugmentationRepReqs.txt', augmentationNames);
     const dictAugStats = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationStats(o)'), '/Temp/getAugmentationStats.txt', augmentationNames);
     const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
     const installedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
+    dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', allKnownFactions);
+    // For the purposes of this script, we want to know how much favor we have with each faction IGNORING temporary boosts from go.js (which are lost upon reset)
+    for (const factionName of allKnownFactions)
+        dictFactionFavors[factionName] -= ns.go.analysis.getStats()[factionName]?.favor ?? 0; // This favor is lost upon reset. Don't count it in our calculations!
     // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
     hasFocusPenalty = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
     shouldFocus = !options['no-focus'] && hasFocusPenalty; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
@@ -811,9 +814,11 @@ async function getCompanyReputation(ns, companyName) {
 }
 
 /** @param {NS} ns
- *  @returns {Promise<Number>} Current favour with the specified faction */
+ *  @returns {Promise<Number>} Current favour with the specified faction, ignoring temporary favor boosts */
 async function getCurrentFactionFavour(ns, factionName) {
-    return await getNsDataThroughFile(ns, `ns.singularity.getFactionFavor(ns.args[0])`, null, [factionName]);
+    let currentFavor = await getNsDataThroughFile(ns, `ns.singularity.getFactionFavor(ns.args[0])`, null, [factionName]);
+    currentFavor -= ns.go.analysis.getStats()[factionName]?.favor ?? 0; // This favor is lost upon reset. Don't count it in our calculations!
+    return currentFavor;
 }
 
 /** @param {NS} ns
