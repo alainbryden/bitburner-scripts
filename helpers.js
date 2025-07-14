@@ -18,6 +18,10 @@ const symbols = ["", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "e33", "e
  * @param {number=} maxDecimalPlaces - (default: 3) The maximum decimal places you wish to see, regardless of significant figures. (e.g. 12.3, 1.2, 0.1 all have 1 decimal)
  **/
 export function formatNumberShort(num, maxSignificantFigures = 6, maxDecimalPlaces = 3) {
+    if (typeof num !== "number") {
+        console.warn(`formatNumberShort called with "num" set to a non-numeric "${typeof num}" value ${JSON.stringify(num)}`);
+        num = Number(num);
+    }
     if (Math.abs(num) > 10 ** (3 * symbols.length)) // If we've exceeded our max symbol, switch to exponential notation
         return num.toExponential(Math.min(maxDecimalPlaces, maxSignificantFigures - 1));
     for (var i = 0, sign = Math.sign(num), num = Math.abs(num); num >= 1000 && i < symbols.length; i++) num /= 1000;
