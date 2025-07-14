@@ -760,25 +760,24 @@ export function getConfiguration(ns, argsSchema) {
     const confName = `${scriptName}.config.txt`;
     const overrides = ns.read(confName);
     const overriddenSchema = overrides ? [...argsSchema] : argsSchema; // Clone the original args schema
+    const dictArgsSchema = Object.fromEntries(argsSchema);
     if (overrides) {
         try {
-            let parsedOverrides = JSON.parse(overrides); // Expect a parsable dict or array of 2-element arrays like args schema
+            let parsedOverrides = JSON.parse(overrides, jsonReviver); // Expect a parsable dict or array of 2-element arrays like args schema
             if (Array.isArray(parsedOverrides)) parsedOverrides = Object.fromEntries(parsedOverrides);
             log(ns, `INFO: Applying ${Object.keys(parsedOverrides).length} overriding default arguments from "${confName}"...`);
             for (const key in parsedOverrides) {
                 const override = parsedOverrides[key];
                 const matchIndex = overriddenSchema.findIndex(o => o[0] == key);
                 const match = matchIndex === -1 ? null : overriddenSchema[matchIndex];
+                const strDefaultValue = match[1] === undefined ? "undefined" : JSON.stringify(match[1], jsonReplacer);
+                const strFinalValue = override === undefined ? "undefined" : JSON.stringify(override, jsonReplacer);
                 if (!match)
-                    throw new Error(`Unrecognized key "${key}" does not match of this script's options: ` + JSON.stringify(argsSchema.map(a => a[0])));
+                    throw new Error(`Unrecognized key "${key}" does not match any of this script's options: ` + JSON.stringify(argsSchema.map(a => a[0])));
                 else if (override === undefined)
                     throw new Error(`The key "${key}" appeared in the config with no value. Some value must be provided. Try null?`);
-                else if (match && JSON.stringify(match[1]) != JSON.stringify(override)) {
-                    if (typeof (match[1]) !== typeof (override))
-                        log(ns, `WARNING: The "${confName}" overriding "${key}" value: ${JSON.stringify(override)} has a different type (${typeof override}) than the ` +
-                            `current default value ${JSON.stringify(match[1])} (${typeof match[1]}). The resulting behaviour may be unpredictable.`, false, 'warning');
-                    else
-                        log(ns, `INFO: Overriding "${key}" value: ${JSON.stringify(match[1])}  ->  ${JSON.stringify(override)}`);
+                else if (match && strDefaultValue != strFinalValue) {
+                    log(ns, `INFO: Overriding "${key}" value: ${strDefaultValue}  ->  ${strFinalValue}`);
                     overriddenSchema[matchIndex] = { ...match }; // Clone the (previously shallow-copied) object at this position of the new argsSchema
                     overriddenSchema[matchIndex][1] = override; // Update the value of the clone.
                 }
@@ -794,10 +793,32 @@ export function getConfiguration(ns, argsSchema) {
     }
     // Return the result of using the in-game args parser to combine the defaults with the command line args provided
     try {
+        // TODO: ns.flags will aggressively convert args to the destination type, rather than produce an error.
+        // For example, passing in a value of "1m" for a numeric arg will result in a value of Number.NaN being passed,
+        // rather than appropriately notifying the user that "1m" is a string, so not a valid value (resulting in Bug #237 )
+        // As a result, we may wish to stop using ns.flags below and implement our own arg parsing, as painful as that may be.
         const finalOptions = ns.flags(overriddenSchema);
-        log(ns, `INFO: Running ${scriptName} with the following settings:` + Object.keys(finalOptions).filter(a => a != "_").map(a =>
-            `\n  ${a.length == 1 ? "-" : "--"}${a} = ${finalOptions[a] === null ? "null" : JSON.stringify(finalOptions[a])}`).join("") +
-            `\nrun ${scriptName} --help  to get more information about these options.`)
+        // Summarize the final set of settings the script is being run with
+        log(ns, `INFO: Running ${scriptName} with the following settings:` +
+            Object.keys(finalOptions).filter(a => a != "_").map(key => {
+                const defaultValue = dictArgsSchema[key];
+                const finalValue = finalOptions[key];
+                const strDefaultValue = defaultValue === undefined ? "undefined" : JSON.stringify(defaultValue, jsonReplacer);
+                const strFinalValue = finalValue === undefined ? "undefined" : JSON.stringify(finalValue, jsonReplacer);
+                // Log a warning to the terminal if an argument was filled in with an different type than the default value.
+                if ((typeof finalValue) !== (typeof defaultValue) && defaultValue != null)
+                    log(ns, `WARNING: A configuration value provided (${key}=${strFinalValue} - type="${typeof finalValue}") ` +
+                        `does not match the expected type "${typeof defaultValue}" based on the default value ` +
+                        `(${key}=${strDefaultValue}). The script may behave unpredictably.`, true, 'warning');
+                if (finalValue !== defaultValue && (typeof finalValue == 'number') && Number.isNaN(finalValue))
+                    log(ns, `WARNING: A numeric configuration value (--${key}) got a value of "NaN" (Not a Number), ` +
+                        `which likely indicates it was set to a string value that could not be parsed. ` +
+                        `The script may behave unpredictably. Please double-check the script arguments for mistakes or typos.`);
+                // Outputs a single config summary row
+                return `\n  ${key.length == 1 ? "-" : "--"}${key} = ${strFinalValue}` +
+                    // Display the default that was overridden, if it doesn't match the configured value
+                    (strDefaultValue == strFinalValue ? '' : ` (changed from default value of ${strDefaultValue})`);
+            }).join("") + `\nrun ${scriptName} --help  to get more information about these options.`);
         return finalOptions;
     } catch (err) {
         // Detect if the user passed invalid arguments, and return help text

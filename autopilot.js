@@ -1,7 +1,7 @@
 import {
     log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-    formatMoney, formatDuration, formatNumber, getErrorInfo, tail
+    formatMoney, formatDuration, formatNumber, getErrorInfo, tail, jsonReplacer
 } from './helpers.js'
 
 const argsSchema = [ // The set of all command line arguments
@@ -190,15 +190,41 @@ export async function main(ns) {
      * @param {NS} ns **/
     async function persistConfigChanges(ns) {
         // Because we cannot pass args to "install" and "destroy" functions, we write them to disk to override defaults
-        const changedArgs = JSON.stringify(argsSchema
-            .filter(a => JSON.stringify(options[a[0]]) != JSON.stringify(a[1]))
-            .map(a => [a[0], options[a[0]]]));
+        const changedArgs = argsSchema
+            .filter(a => JSON.stringify(options[a[0]], jsonReplacer) != JSON.stringify(a[1]), jsonReplacer)
+            .map(a => [a[0], options[a[0]]]);
+        // Fix Bug #237 - do not overwrite the config file if one of the arguments provided is of the wrong type
+        // This is a copy of new code in helpers.js which generates warnings, but otherwise ignores the errors.
+        // We evaluate the same logic here because we want to act on the errors (avoid persisting them)
+        for (const [key, finalValue] of changedArgs) {
+            const defaultValue = argsSchema.find(kvp => kvp[0] == key)[1];
+            const strFinalValue = JSON.stringify(finalValue, jsonReplacer);
+            const strDefaultValue = JSON.stringify(defaultValue, jsonReplacer);
+            log(ns, `INFO: Default config has been modified: ${key}=${strFinalValue} (type="${typeof finalValue})" ` +
+                `does not match default value of ${key}=${strDefaultValue} (type="${typeof defaultValue}").`);
+            if ((typeof finalValue) !== (typeof defaultValue) && defaultValue != null) {
+                log(ns, `WARNING: A configuration value provided (${key}=${strFinalValue} - ` +
+                    `type="${typeof finalValue}") does not match the expected type "${typeof defaultValue}" ` +
+                    `based on the default value (${key}=${strDefaultValue}).` +
+                    `\nThis configuration will NOT be persisted, and the script may behave unpredictably.`);
+                return;
+            }
+            if (finalValue !== defaultValue && (typeof finalValue == 'number') && Number.isNaN(finalValue)) {
+                log(ns, `WARNING: A numeric configuration value (--${key}) got a value of "NaN" (Not a Number), ` +
+                    `which likely indicates it was set to a string value that could not be parsed. ` +
+                    `Please double-check the script arguments for mistakes or typos.` +
+                    `\nThis configuration will NOT be persisted, and the script may behave unpredictably.`);
+                return;
+            }
+        }
+
+        const strConfigChanges = JSON.stringify(changedArgs, jsonReplacer);
         // Only update the config file if it doesn't match the most resent set of run args
         const configPath = `${ns.getScriptName()}.config.txt`
         const currentConfig = ns.read(configPath);
-        if ((changedArgs.length > 2 || currentConfig) && changedArgs != currentConfig) {
-            ns.write(configPath, changedArgs, "w");
-            log(ns, `INFO: Updated "${configPath}" to persist the most recent run args through resets: ${changedArgs}`, true, 'info');
+        if ((strConfigChanges.length > 2 || currentConfig) && strConfigChanges != currentConfig) {
+            ns.write(configPath, strConfigChanges, "w");
+            log(ns, `INFO: Updated "${configPath}" to persist the most recent run args through resets: ${strConfigChanges}`, true, 'info');
         }
     }
 
