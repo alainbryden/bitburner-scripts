@@ -63,8 +63,8 @@ export async function main(ns) {
     playerInGang = playerInBladeburner = false;
     // Ensure we have access to sleeves
     ownedSourceFiles = await getActiveSourceFiles(ns);
-    if (!(10 in ownedSourceFiles))
-        return ns.tprint("WARNING: You cannot run sleeve.js until you do BN10.");
+    if (!(10 in ownedSourceFiles) || !(4 in ownedSourceFiles))
+        return ns.tprint("WARNING: You cannot run sleeve.js until you do BN10 and BN4.");
     // Start the main loop
     while (true) {
         try { await mainLoop(ns); }
