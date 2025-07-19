@@ -3,7 +3,7 @@ import {
     hashCode, disableLogs, log, getFilePath, getConfiguration,
     getNsDataThroughFile_Custom, runCommand_Custom, waitForProcessToComplete_Custom,
     tryGetBitNodeMultipliers_Custom, getActiveSourceFiles_Custom,
-    getFnRunViaNsExec, tail, autoRetry, getErrorInfo
+    getFnRunViaNsExec, tail, autoRetry, getErrorInfo, getCompatibleApi
 } from './helpers.js'
 
 // daemon.js has histocially been the central orchestrator of almost every script in the game.
@@ -1057,8 +1057,8 @@ export async function main(ns) {
 
         // Hack: Below concerns aren't related to "server data", but are things we also wish to refresh just once in a while
         // Determine whether we have purchased stock API accesses yet (affects reserving and attempts to manipulate stock markets)
-        haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.hasTIXAPIAccess()`);
-        have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`);
+        haveTixApi = haveTixApi || await getNsDataThroughFile(ns, `ns.stock.${getCompatibleApi(ns, "hasTixApiAccess")}()`);
+        have4sApi = have4sApi || await getNsDataThroughFile(ns, `ns.stock.${getCompatibleApi(ns, "has4SDataTixApi")}()`);
         // If required, determine the current terminal server (used when intelligence farming)
         if (options.i)
             currentTerminalServer = getServerByName(await getNsDataThroughFile(ns, 'ns.singularity.getCurrentServer()'));
