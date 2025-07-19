@@ -662,7 +662,13 @@ export async function getHardCodedBitNodeMultipliers(ns, fnGetNsDataThroughFile,
         PurchasedServerSoftcap: /*     */[1, 1.3, 1.3, 1.2, 1.2, 2, 2, 4, 1, 1.1, 2, 1, 1.6, 1],
         PurchasedServerLimit: /*       */[1, 1, 1, 1, 1, 1, 1, 1, 0, 0.6, 1, 1, 1, 1],
         PurchasedServerMaxRam: /*      */[1, 1, 1, 1, 1, 1, 1, 1, 1, 0.5, 1, 1, 1, 1],
+        // TODO: v3.0.0
+        /**
+         * RepToDonateToFaction and FavorToDonateToFaction have the same value. RepToDonateToFaction was renamed to
+         * FavorToDonateToFaction in v3.0.0.
+         */
         RepToDonateToFaction: /*       */[1, 1, 0.5, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
+        FavorToDonateToFaction: /*     */[1, 1, 0.5, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
         ScriptHackMoney: /*            */[1, 1, 0.2, 0.2, 0.15, 0.75, 0.5, 0.3, 0.1, 0.5, 1, 1, 0.2, 0.3],
         ScriptHackMoneyGain: /*        */[1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1],
         ServerGrowthRate: /*           */[1, 0.8, 0.2, 1, 1, 1, 1, 1, 1, 1, 0.2, 1, 1, 1],
@@ -889,4 +895,36 @@ export function tail(ns, processId = undefined) {
     ns.ui.moveTail(offsetPct * (width * 0.25 - 300) + 250, offsetPct * (height * 0.75 - 100) + 50, processId);
     tailedPids.push(processId);
     ns.write(tailFile, JSON.stringify(tailedPids), 'w');
+}
+
+// TODO: v3.0.0
+function isV3(ns) {
+    return ns.ui.getGameInfo().versionNumber >= 44;
+}
+
+export function formatTime(ns, milliseconds, milliPrecision) {
+    if (isV3(ns)) {
+        return ns.ui.time(milliseconds, milliPrecision);
+    }
+    return ns.tFormat(milliseconds, milliPrecision);
+}
+
+export function getCompatibleApi(ns, latestApi) {
+    if (isV3(ns)) {
+        return latestApi;
+    }
+    // Return v2 APIs
+    switch (latestApi) {
+        case "hasWseAccount":
+            return "hasWSEAccount";
+        case "hasTixApiAccess":
+            return "hasTIXAPIAccess";
+        case "has4SDataTixApi":
+            return "has4SDataTIXAPI";
+        case "FavorToDonateToFaction":
+            return "RepToDonateToFaction";
+    }
+    const errorMessage = `Unknown API: ${latestApi}`;
+    ns.tprint(`\u001b[31m${errorMessage}`);
+    throw new Error(errorMessage);
 }

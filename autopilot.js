@@ -1,7 +1,7 @@
 import {
     log, getFilePath, getConfiguration, instanceCount, getNsDataThroughFile, runCommand, waitForProcessToComplete,
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
-    formatMoney, formatDuration, formatNumber, getErrorInfo, tail, jsonReplacer
+    formatMoney, formatDuration, formatNumber, getErrorInfo, tail, jsonReplacer, getCompatibleApi
 } from './helpers.js'
 
 const argsSchema = [ // The set of all command line arguments
@@ -874,7 +874,11 @@ export async function main(ns) {
         // If we are in Daedalus, and we do not yet have enough favour to unlock rep donations with Daedalus,
         // but we DO have enough rep to earn that favor on our next restart, trigger an install immediately (need at least 1 aug)
         // (doesn't apply in BN8, since we can immediately donate to all factions)
-        if (player.factions.includes("Daedalus") && bitNodeMults.RepToDonateToFaction !== 0 && ns.read("/Temp/Daedalus-donation-rep-attained.txt")) {
+        if (
+            player.factions.includes("Daedalus") &&
+            bitNodeMults[getCompatibleApi(ns, "FavorToDonateToFaction")] !== 0 &&
+            ns.read("/Temp/Daedalus-donation-rep-attained.txt")
+        ) {
             shouldReset = true;
             resetStatus = `We have enough reputation with Daedalus to unlock donations on our next reset.\n${resetStatus}`;
             if (totalCost == 0) totalCost = 1; // Hack, logic below expects some non-zero reserve in preparation for ascending.
@@ -975,7 +979,7 @@ export async function main(ns) {
         if (await checkIfGrafting(ns))
             return true;
         // Are we close to being able to afford 4S TIX data?
-        if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.has4SDataTIXAPI()`))) {
+        if (!options['disable-wait-for-4s'] && !(await getNsDataThroughFile(ns, `ns.stock.${getCompatibleApi(ns, "has4SDataTixApi")}()`))) {
             const totalWorth = player.money + await getStocksValue(ns);
             const has4S = await getNsDataThroughFile(ns, `ns.stock.has4SData()`);
             const totalCost = 25E9 * bitNodeMults.FourSigmaMarketDataApiCost +

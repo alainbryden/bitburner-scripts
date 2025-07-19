@@ -11,7 +11,7 @@
  */
 
 import {
-    getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile, tail
+    getConfiguration, instanceCount, log, getErrorInfo, getActiveSourceFiles, getNsDataThroughFile, formatTime
 } from './helpers.js'
 
 const argsSchema = [
@@ -1306,7 +1306,7 @@ export async function main(ns) {
         ns.printf("%s", attack.msg)
         const results = await go_makeMove(ns, x, y);
         let END = performance.now()
-        if (logtime) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
+        if (logtime) ns.printf("Time: Me: %s  Them: %s", formatTime(ns, mid - START, true), formatTime(ns, END - mid, true))
         START = performance.now()
         return results
     }
@@ -1323,7 +1323,7 @@ export async function main(ns) {
             const results = await go_cheat_playTwoMoves(ns, s1x, s1y, s2x, s2y)
             ns.printf("%s  Chance: %.2f%%  Result: %s", attack.msg, chance * 100, results.type);
             let END = performance.now()
-            if (logtime) ns.printf("Time: Me: %s  Them: %s", ns.tFormat(mid - START, true), ns.tFormat(END - mid, true))
+            if (logtime) ns.printf("Time: Me: %s  Them: %s", formatTime(ns, mid - START, true), formatTime(ns, END - mid, true))
             START = performance.now()
             return results
         }

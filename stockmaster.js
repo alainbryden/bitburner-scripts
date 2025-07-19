@@ -1,6 +1,6 @@
 import {
     instanceCount, getConfiguration, getNsDataThroughFile, runCommand, getActiveSourceFiles, tryGetBitNodeMultipliers,
-    formatMoney, formatNumberShort, formatDuration, getStockSymbols
+    formatMoney, formatNumberShort, formatDuration, getStockSymbols, getCompatibleApi
 } from './helpers.js'
 
 let disableShorts = false;
@@ -74,7 +74,7 @@ export async function main(ns) {
 
     // If given the "liquidate" command, try to kill any versions of this script trading in stocks
     // NOTE: We must do this immediately before we start resetting / overwriting global state below (which is shared between script instances)
-    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()');
+    const hasTixApiAccess = await getNsDataThroughFile(ns, `ns.stock.${getCompatibleApi(ns, "hasTixApiAccess")}()`);
     if (runOptions.l || runOptions.liquidate) {
         if (!hasTixApiAccess) return log(ns, 'ERROR: Cannot liquidate stocks because we do not have Tix Api Access', true, 'error');
         log(ns, 'INFO: Killing any other stockmaster processes...', false, 'info');
@@ -156,7 +156,7 @@ export async function main(ns) {
             const playerStats = await getPlayerInfo(ns);
             const reserve = options['reserve'] != null ? options['reserve'] : Number(ns.read("reserve.txt") || 0);
             // Check whether we have 4s access yes (once we do, we can stop checking)
-            if (pre4s) pre4s = !(await checkAccess(ns, 'has4SDataTIXAPI'));
+            if (pre4s) pre4s = !(await checkAccess(ns, getCompatibleApi(ns, "has4SDataTixApi")));
             const holdings = await refresh(ns, !pre4s, allStocks, myStocks); // Returns total stock value
             const corpus = holdings + playerStats.money; // Corpus means total stocks + cash
             const maxHoldings = (1 - fracH) * corpus; // The largest value of stock we could hold without violiating fracH (Fraction to keep as cash)
@@ -554,7 +554,7 @@ async function liquidate(ns) {
 /** @param {NS} ns **/
 /** @param {Player} playerStats **/
 async function tryGet4SApi(ns, playerStats, budget) {
-    if (await checkAccess(ns, 'has4SDataTIXAPI')) return false; // Only return true if we just bought it
+    if (await checkAccess(ns, getCompatibleApi(ns, "has4SDataTixApi"))) return false; // Only return true if we just bought it
     const cost4sData = 1E9 * bitNodeMults.FourSigmaMarketDataCost;
     const cost4sApi = 25E9 * bitNodeMults.FourSigmaMarketDataApiCost;
     const has4S = await checkAccess(ns, 'has4SData');
@@ -582,7 +582,7 @@ async function tryGet4SApi(ns, playerStats, budget) {
 }
 
 /** @param {NS} ns
- * @param {"hasWSEAccount"|"hasTIXAPIAccess"|"has4SData"|"has4SDataTIXAPI"} stockFn
+ * @param {"hasWseAccount"|"hasTixApiAccess"|"has4SData"|"has4SDataTixApi"} stockFn
  * Helper to check for one of the stock access functions */
 async function checkAccess(ns, stockFn) {
     return await getNsDataThroughFile(ns, `ns.stock.${stockFn}()`)
@@ -599,10 +599,10 @@ async function tryBuy(ns, stockFn) {
  * @param {number} budget - The amount we are willing to spend on WSE and API access
  * Tries to purchase access to the stock market **/
 async function tryGetStockMarketAccess(ns, budget) {
-    if (await checkAccess(ns, 'hasTIXAPIAccess')) return true; // Already have access
+    if (await checkAccess(ns, getCompatibleApi(ns, "hasTixApiAccess"))) return true; // Already have access
     const costWseAccount = 200E6;
     const costTixApi = 5E9;
-    const hasWSE = await checkAccess(ns, 'hasWSEAccount');
+    const hasWSE = await checkAccess(ns, getCompatibleApi(ns, "hasWseAccount"));
     const totalCost = (hasWSE ? 0 : costWseAccount) + costTixApi;
     if (totalCost > budget) return false;
     if (!hasWSE) {

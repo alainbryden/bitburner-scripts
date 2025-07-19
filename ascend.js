@@ -1,6 +1,6 @@
 import {
     log, getConfiguration, getFilePath, runCommand, waitForProcessToComplete, getNsDataThroughFile,
-    getActiveSourceFiles, getStockSymbols
+    getActiveSourceFiles, getStockSymbols, getCompatibleApi
 } from './helpers.js'
 
 const argsSchema = [
@@ -53,7 +53,7 @@ export async function main(ns) {
     ns.run(getFilePath('spend-hacknet-hashes.js'), 1, '--liquidate');
 
     // If we do not have tix api access, we cannot automate checking on or selling stocks, so skip this
-    const hasTixApiAccess = await getNsDataThroughFile(ns, 'ns.stock.hasTIXAPIAccess()');
+    const hasTixApiAccess = await getNsDataThroughFile(ns, `ns.stock.${getCompatibleApi(ns, "hasTixApiAccess")}()`);
     if (hasTixApiAccess) {
         const stkSymbols = await getStockSymbols(ns);
         const countOwnedStocks = async () => await getNsDataThroughFile(ns, `ns.args.map(sym => ns.stock.getPosition(sym))` +

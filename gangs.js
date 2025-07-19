@@ -1,6 +1,6 @@
 import {
     log, getConfiguration, instanceCount, getNsDataThroughFile, getActiveSourceFiles, runCommand, tryGetBitNodeMultipliers,
-    formatMoney, formatNumberShort, formatDuration
+    formatMoney, formatNumberShort, formatDuration, getCompatibleApi
 } from './helpers.js'
 
 // Global config
@@ -437,7 +437,7 @@ async function tryUpgradeMembers(ns, dictMembers) {
     let augBudget = Math.min(maxBudget, (options['augmentations-budget'] || defaultMaxSpendPerTickPermanentEquipment)) * homeMoney;
     // Hack: Default aug budget is cut by 1/100 in a few situations (TODO: Add more, like when BitnodeMults are such that gang income is severely nerfed)
     if (!is4sBought)
-        is4sBought = await getNsDataThroughFile(ns, 'ns.stock.has4SDataTIXAPI()');
+        is4sBought = await getNsDataThroughFile(ns, `ns.stock.${getCompatibleApi(ns, "has4SDataTixApi")}()`);
     if (!is4sBought || resetInfo.currentNode === 8) {
         budget /= 100;
         augBudget /= 100;
