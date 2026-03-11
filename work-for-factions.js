@@ -515,7 +515,7 @@ async function earnFactionInvite(ns, factionName) {
             if (player.city != "Volhaven") await goToCity(ns, "Volhaven");
             studying = await study(ns, false, "Algorithms");
         } else if (uniByCity[player.city]) // Otherwise only go to free university if our city has a university
-            studying = await study(ns, false, "Study Computer Science");
+            studying = await study(ns, false, "Computer Science");
         else
             return ns.print(`You have insufficient money (${formatMoney(player.money)} < --pay-for-studies-threshold ` +
                 `${formatMoney(options['pay-for-studies-threshold'])}) to travel or pay for studies, and your current ` +
@@ -670,7 +670,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 /** @param {NS} ns */
 async function studyForCharisma(ns, focus) {
     await goToCity(ns, 'Volhaven');
-    return await study(ns, focus, 'Leadership', 'ZB Institute Of Technology');
+    return await study(ns, focus, 'Leadership', 'ZB Institute of Technology');
 }
 
 const uniByCity = Object.fromEntries([["Aevum", "Summit University"], ["Sector-12", "Rothman University"], ["Volhaven", "ZB Institute of Technology"]]);
