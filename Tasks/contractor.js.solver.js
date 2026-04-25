@@ -99,18 +99,8 @@ function findAnswer(contract) {
     return codingContractSolution ? codingContractSolution.solver(JSON.parse(contract.dataJson, jsonReviver)) : null;
 }
 
-function convert2DArrayToString(arr) {
-    const components = []
-    arr.forEach(function (e) {
-        let s = e.toString()
-        s = ['[', s, ']'].join('')
-        components.push(s)
-    })
-    return components.join(',').replace(/\s/g, '')
-}
-
 // Based on https://github.com/danielyxie/bitburner/blob/master/src/data/codingcontracttypes.ts
-const codingContractTypesMetadata = [{
+export const codingContractTypesMetadata = [{
     name: 'Find Largest Prime Factor',
     solver: function (data) {
         let fac = 2
@@ -272,8 +262,7 @@ const codingContractTypesMetadata = [{
             }
         }
         result.push([start, end])
-        const sanitizedResult = convert2DArrayToString(result)
-        return sanitizedResult
+        return result;
     },
 },
 {
@@ -300,7 +289,7 @@ const codingContractTypesMetadata = [{
                 }
             }
         }
-        return ret.toString(); // Answer expected is the string representation of this array
+        return ret;
     },
 },
 {
@@ -312,7 +301,7 @@ const codingContractTypesMetadata = [{
             maxCur = Math.max(0, (maxCur += data[i] - data[i - 1]))
             maxSoFar = Math.max(maxCur, maxSoFar)
         }
-        return maxSoFar.toString()
+        return maxSoFar;
     },
 },
 {
@@ -322,7 +311,7 @@ const codingContractTypesMetadata = [{
         for (let p = 1; p < data.length; ++p) {
             profit += Math.max(data[p] - data[p - 1], 0)
         }
-        return profit.toString()
+        return profit;
     },
 },
 {
@@ -338,7 +327,7 @@ const codingContractTypesMetadata = [{
             release1 = Math.max(release1, hold1 + price)
             hold1 = Math.max(hold1, price * -1)
         }
-        return release2.toString()
+        return release2;
     },
 },
 {
@@ -712,7 +701,7 @@ const codingContractTypesMetadata = [{
         while (!oddCycleFound && solution.some(e => e === undefined)) {
             traverse(solution.indexOf(undefined), 0)
         }
-        if (oddCycleFound) return "[]"; // TODO: Bug #3755 in bitburner requires a string literal. Will this be fixed?
+        if (oddCycleFound) return [];
         return solution
     },
 },
