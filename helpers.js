@@ -183,7 +183,8 @@ function checkBackwardsCompatibility(ns, command) {
         .replaceAll("cloud.deleteServer", "deleteServer")
         .replaceAll("cloud.getServerNames", "getPurchasedServers")
         .replaceAll("cloud.getServerLimit", "getPurchasedServerLimit")
-        .replaceAll("cloud.getRamLimit", "getPurchasedServerMaxRam");
+        .replaceAll("cloud.getRamLimit", "getPurchasedServerMaxRam")
+        .replaceAll("getAllGangInformation", "getOtherGangInformation");
 
     // Log altered commands to assist with troubleshooting.
     if (alteredCommand != command)
