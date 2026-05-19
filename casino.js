@@ -3,6 +3,10 @@ import {
     runCommand, getNsDataThroughFile, formatMoney, getErrorInfo, tail
 } from './helpers.js'
 
+export const MIN_CASINO_CASH = 300_000;
+export const MIN_TRAVEL_CASH = 200_000;
+export const CASINO_STATE_FILE = '/Temp/casino-state.txt';
+
 const argsSchema = [
     ['save-sleep-time', 10], // Time to sleep in milliseconds before and after saving. If you are having trouble with your automatic saves not "taking effect" try increasing this.
     ['click-sleep-time', 5], // Time to sleep in milliseconds before and after clicking any button (or setting text). Increase if clicks don't appear to be "taking effect".
@@ -30,10 +34,36 @@ export async function main(ns) {
     let doc = eval("document");
     let options;
     let verbose = false;
+    let scriptsWereKilled = false;
+    /** @type {null | 'no_money' | 'nav_failed' | 'fatal'} */
+    let failureReason = null;
+    let exitSucceeded = false;
+
+    function clearCasinoState() {
+        if (ns.fileExists(CASINO_STATE_FILE, 'home'))
+            ns.rm(CASINO_STATE_FILE);
+    }
+
+    function writeCasinoFailureState(reason) {
+        ns.write(CASINO_STATE_FILE, JSON.stringify({
+            failedAt: Date.now(),
+            reason,
+            killAllRan: scriptsWereKilled,
+        }), 'w');
+    }
+
+    async function ensureRecovery() {
+        if (exitSucceeded) return;
+        if (failureReason)
+            writeCasinoFailureState(failureReason);
+        if (options['on-completion-script'] && (scriptsWereKilled || failureReason))
+            await onCompletion(false);
+    }
 
     async function start() {
         options = getConfiguration(ns, argsSchema);
         if (!options) return; // Invalid options, or ran in --help mode.
+        try {
         const saveSleepTime = options['save-sleep-time'];
         verbose = options['enable-logging'];
         if (verbose)
@@ -141,6 +171,18 @@ export async function main(ns) {
         // Why? Because this creates "Temp files", and we want to keep the save file as small as possible for fast saves and reloads.
         //      We use an empty temp folder as a sign that we previously ran and killed all scripts and can safely proceed.
 
+        // Step 1.5: Kill other scripts before travel so nothing drains cash or steals focus during navigation
+        if (options['kill-all-scripts'] && !scriptsWereKilled) {
+            await killAllOtherScripts(!options['no-deleting-remote-files']);
+            scriptsWereKilled = true;
+            await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+            if (ns.getPlayer().money < MIN_CASINO_CASH) {
+                failureReason = 'no_money';
+                return log(ns, `WARNING: After stopping other scripts, only ${formatMoney(ns.getPlayer().money)} ` +
+                    `remains (need ${formatMoney(MIN_CASINO_CASH)}). Will restart autopilot to recover.`, true, 'warning');
+            }
+        }
+
         // Step 2: Try to navigate to the blackjack game (with retries in case of transient errors)
         let priorAttempts = 0;
         while (true) {
@@ -153,8 +195,8 @@ export async function main(ns) {
 
                 // Step 2.2: Go to Aevum if we aren't already there. (Must be done manually if you don't have SF4)
                 if (ns.getPlayer().city != "Aevum") {
-                    if (ns.getPlayer().money < 200000)
-                        throw new Error("Sorry, you need at least 200k to travel to the casino.");
+                    if (ns.getPlayer().money < MIN_TRAVEL_CASH)
+                        throw new Error(`Sorry, you need at least ${formatMoney(MIN_TRAVEL_CASH)} to travel to the casino.`);
                     let travelled = false;
                     try {
                         travelled = await getNsDataThroughFile(ns, 'ns.singularity.travelToCity(ns.args[0])', null, ["Aevum"]);
@@ -166,7 +208,7 @@ export async function main(ns) {
                         await click(await findRequiredElement("//div[@role='button' and ./div/p/text()='Travel']"));
                         await click(await findRequiredElement("//span[contains(@class,'travel') and ./text()='A']"));
                         // If this didn't put us in Aevum, there's likely a travel confirmation dialog we need to click through
-                        if (!ns.getPlayer().city != "Aevum")
+                        if (ns.getPlayer().city != "Aevum")
                             await click(await findRequiredElement("//button[p/text()='Travel']"));
                     }
                     if (ns.getPlayer().city == "Aevum")
@@ -214,14 +256,16 @@ export async function main(ns) {
                     } else { // Otherwise, we've probably been kicked out of the casino, but...
                         // because we haven't killed scripts yet, it's possible another script stole focus again. Detect and handle that case.
                         if (!(await checkStillAtCasino(false))) continue; // Loop back after taking back focus and try again
-                        if (await checkForKickedOut()) return await onCompletion(false); // We appear to have previously been kicked out
+                        if (await checkForKickedOut()) return await onCompletion(true); // We appear to have previously been kicked out
                         throw new Error("Couldn't start a game of blackjack at the casino, but we don't appear to be kicked out...");
                     }
-                    // Step 2.6.2: Kill all other scripts if enabled (note, we assume that if the temp folder is empty, they're already killed and this is a reload)
-                    if (options['kill-all-scripts'])
+                    // Step 2.6.2: Kill all other scripts if enabled and not already done before navigation
+                    if (options['kill-all-scripts'] && !scriptsWereKilled) {
                         await killAllOtherScripts(!options['no-deleting-remote-files']);
-                    // Step 2.6.3: Clear the temp folder on home (all transient scripts / outputs)
-                    await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+                        scriptsWereKilled = true;
+                        // Step 2.6.3: Clear the temp folder on home (all transient scripts / outputs)
+                        await waitForProcessToComplete(ns, ns.run(getFilePath('cleanup.js')));
+                    }
                 }
                 break; // We achieved everthing we wanted, we can exit the retry loop.
             } catch (err) {
@@ -231,14 +275,19 @@ export async function main(ns) {
                     verbose = true; // Switch on verbose logs
                     log(ns, `WARNING: casino.js Caught (and suppressed) an unexpected error while navigating to blackjack. ` +
                         `Error was:\n${getErrorInfo(err)}\nWill try again (attempt ${priorAttempts} of 5)...`, false, 'warning');
-                } else // More than 5 errors, give up and prompt the user to investigate
+                } else { // More than 5 errors, give up and prompt the user to investigate
+                    failureReason = 'nav_failed';
                     return log(ns, `ERROR: After ${priorAttempts} attempts, casino.js continues to catch unexpected errors ` +
                         `while navigating to blackjack. The final error was:\n  ${getErrorInfo(err)}\n${supportMsg}`, true, 'error');
+                }
             }
         }
 
-        if (ns.getPlayer().money < 1)
-            return log(ns, "WARNING: Whoops, we have no money to bet! Kill whatever's spending it and try again later.", true, 'warning');
+        if (ns.getPlayer().money < MIN_CASINO_CASH) {
+            failureReason = 'no_money';
+            return log(ns, `WARNING: Need at least ${formatMoney(MIN_CASINO_CASH)} to bet at the casino ` +
+                `(current: ${formatMoney(ns.getPlayer().money)}). Will restart autopilot to recover.`, true, 'warning');
+        }
 
         // Step 3: Save the game state now that this script is running, so that future reloads start this script back up immediately.
         await saveGame();
@@ -249,8 +298,12 @@ export async function main(ns) {
             while (true) {
                 if (abort) return;
                 // Step 4.1: Bet the maximum amount (we save scum to avoid losing, so no risk of going broke)
-                const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
-                if (bet < 0) return await reload(); // If somehow we have no money, we can't continue
+                const bet = Math.min(1E8, Math.max(0, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */));
+                if (bet < 1) {
+                    failureReason = 'no_money';
+                    return log(ns, `WARNING: Cannot place a bet (cash: ${formatMoney(ns.getPlayer().money)}). ` +
+                        `Will restart autopilot to recover.`, true, 'warning');
+                }
                 await setText(inputWager, `${bet}`); // Set our bet amount
 
                 /* Step 4.2: Try to start a new game. There are a few possible outcomes here:
@@ -286,7 +339,7 @@ export async function main(ns) {
                     if (winLoseTie == null) { // Handle Outcomes #3-5 (atypical of normal casino gameplay)
                         // Step 4.4.2: Detect Outcome #3 (kicked out of casino)
                         if (await checkForKickedOut()) // Were we kicked out of the casino?
-                            return await onCompletion(ns); // This is a good thing!
+                            return await onCompletion(true); // This is a good thing!
 
                         // Step 4.4.3: Detect Outcome #4 (something stole focus). We can't recover because we're out of the "navigate to casino" loop.
                         await checkStillAtCasino(); // Throws an error if not. User must stop whatever is stealing focus.
@@ -358,7 +411,7 @@ export async function main(ns) {
                         }
                         // Quick pre-emptive test after each win to see if we've been kicked out
                         if (await checkForKickedOut(1)) // Only 1 retry should be very fast
-                            return await onCompletion(ns);
+                            return await onCompletion(true);
                         continue;
                     case "lose":
                         netWinnings -= bet;
@@ -375,7 +428,11 @@ export async function main(ns) {
         }
         catch (err) {
             tail(ns); // Display the tail log if anything goes wrong so the user can review the logs
+            failureReason = 'fatal';
             log(ns, `ERROR: casino.js Caught a fatal error while playing blackjack:\n${getErrorInfo(err)}\n${supportMsg}`, true, 'error');
+        }
+        } finally {
+            await ensureRecovery();
         }
     }
 
@@ -454,10 +511,12 @@ export async function main(ns) {
      *  @param {boolean} kickedOutAfterPlaying (default: true) set to false if we detected having been kicked out before we even started.
      *  Run when we can no longer gamble at the casino (presumably because we've been kicked out) **/
     async function onCompletion(kickedOutAfterPlaying = true) {
-        if (kickedOutAfterPlaying)
+        exitSucceeded = true;
+        if (kickedOutAfterPlaying) {
+            clearCasinoState();
             log(ns, "SUCCESS: We've been kicked out of the casino.", true);
-        else
-            log(ns, "INFO: We appear to have been previously kicked out of the casino. Continuing without playing...", true);
+        } else
+            log(ns, "INFO: casino.js is handing control back after an incomplete run...", true);
 
         // For convenience, route to the terminal (but no stress if it doesn't work)
         try {

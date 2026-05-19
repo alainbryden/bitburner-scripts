@@ -3,6 +3,9 @@ import {
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
     formatMoney, formatDuration, formatNumber, getErrorInfo, tail, jsonReplacer
 } from './helpers.js'
+import { MIN_CASINO_CASH, CASINO_STATE_FILE } from './casino.js'
+
+const CASINO_FAILURE_COOLDOWN_MS = 30 * 60 * 1000;
 
 const argsSchema = [ // The set of all command line arguments
     ['next-bn', 0], // If we destroy the current BN, the next BN to start
@@ -247,8 +250,12 @@ export async function main(ns) {
         await checkOnDaedalusStatus(ns, player, stocksValue);
         await checkIfBnIsComplete(ns, player);
         await maybeAcceptStaneksGift(ns, player);
+        const casinoRunsFirst = isCasinoEligibleThisLoop(player);
+        if (casinoRunsFirst)
+            await maybeDoCasino(ns, player);
         await checkOnRunningScripts(ns, player);
-        await maybeDoCasino(ns, player);
+        if (!casinoRunsFirst)
+            await maybeDoCasino(ns, player);
         await maybeInstallAugmentations(ns, player);
         return shouldWeKeepRunning(ns); // Return false to shut down autopilot.js if we installed augs, or don't have enough home RAM
     }
@@ -749,15 +756,49 @@ export async function main(ns) {
         acceptedStanek = true;
     }
 
+    /** @param {Player} player */
+    function isCasinoEligibleThisLoop(player) {
+        if (ranCasino || options['disable-casino']) return false;
+        if (player.money < MIN_CASINO_CASH) return false;
+        if (isCasinoInCooldown(ns)) return false;
+        return true;
+    }
+
+    /** @param {NS} ns */
+    function readCasinoState(ns) {
+        try {
+            const raw = ns.read(CASINO_STATE_FILE);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** @param {NS} ns */
+    function isCasinoInCooldown(ns) {
+        const state = readCasinoState(ns);
+        return !!(state?.failedAt && Date.now() - state.failedAt < CASINO_FAILURE_COOLDOWN_MS);
+    }
+
+    /** @param {NS} ns */
+    function clearCasinoState(ns) {
+        if (ns.fileExists(CASINO_STATE_FILE, 'home'))
+            ns.rm(CASINO_STATE_FILE);
+    }
+
     /** Logic to steal 10b from the casino
      * @param {NS} ns
      * @param {Player} player */
     async function maybeDoCasino(ns, player) {
         if (ranCasino || options['disable-casino']) return;
+        if (isCasinoInCooldown(ns))
+            return log_once(ns, `INFO: Skipping casino.js while recovering from a recent failure ` +
+                `(see ${CASINO_STATE_FILE}). Earning cash with daemon.js first.`, true);
         // Figure out whether we've already been kicked out of the casino for earning more than 10b there
         const moneySources = await getPlayerMoneySources(ns);
         const casinoEarnings = moneySources.sinceInstall.casino;
         if (casinoEarnings >= 1e10) {
+            clearCasinoState(ns);
             log(ns, `INFO: Skipping running casino.js, as we've previously earned ${formatMoney(casinoEarnings)} and been kicked out.`);
             return ranCasino = true;
         }
@@ -784,9 +825,9 @@ export async function main(ns) {
             }
         }
 
-        // If we aren't in Aevum already, wait until we have the 200K required to travel (plus some extra buffer to actually spend at the casino)
-        if (player.city != "Aevum" && player.money < 300000)
-            return log_once(ns, `INFO: Waiting until we have ${formatMoney(300000)} to travel to Aevum and run casino.js`);
+        if (player.money < MIN_CASINO_CASH)
+            return log_once(ns, `INFO: Waiting until we have ${formatMoney(MIN_CASINO_CASH)} before running casino.js ` +
+                `(current: ${formatMoney(player.money)}).`, true);
 
         // Run casino.js (and expect this script to get killed in the process)
         // Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
@@ -800,8 +841,11 @@ export async function main(ns) {
         if (pid) {
             await waitForProcessToComplete(ns, pid);
             await ns.sleep(10000); // Give time for this script to be killed if the game is being restarted by casino.js
-            // Otherwise, something went wrong
-            log(ns, `ERROR: Something went wrong. casino.js was run, but we haven't been killed. It must have run into a problem...`)
+            if (readCasinoState(ns))
+                log_once(ns, `WARNING: casino.js failed recently. Waiting for cooldown before retrying ` +
+                    `(see ${CASINO_STATE_FILE}).`, true, 'warning');
+            else
+                log_once(ns, `ERROR: casino.js was run, but autopilot was not killed. It may have exited unexpectedly.`, true, 'error');
         }
     }
 
@@ -1071,22 +1115,10 @@ export async function main(ns) {
         const minStockPercent = Math.max(0, 0.8 - 0.1 * getTimeInBitnode() / 3.6E6); // Reduce by 10% per hour in the BN
         const reserveCap = 1E12; // As we start start to earn crazy money, we will hit the stock market cap, so cap the maximum reserve
         // Dynamically update reserved cash based on how much money is already converted to stocks.
-        const reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));
+        let reserve = Math.min(reserveCap, Math.max(0, player.money * minStockPercent, minStockValue - stocksValue));
+        if (!ranCasino && player.money < 8e9)
+            reserve = Math.max(reserve, MIN_CASINO_CASH);
         return currentReserve == reserve ? true : ns.write("reserve.txt", reserve, "w"); // Reserve for stocks
-        // NOTE: After several iterations, I decided that the above is actually best to keep in all scenarios:
-        // - Casino.js ignores the reserve, so the above takes care of ensuring our casino seed money isn't spent
-        // - In low-income situations, stockmaster will be our best source of income. We invoke it such that it ignores
-        //	 the global reserve, so this 8B is for stocks only. The 2B remaining is plenty to kickstart the rest.
-        // - Once high-hack/gang income is achieved, this 8B will not be missed anyway.
-        /*
-        if(!ranCasino) {
-            ns.write("reserve.txt", 300000, "w"); // Prevent other scripts from spending our casino seed money
-            return moneyReserved = true;
-        }
-        // Otherwise, clear any reserve we previously had
-        if(moneyReserved) ns.write("reserve.txt", 0, "w"); // Remove the casino reserve we would have placed
-        return moneyReserved = false;
-        */
     }
 
     /** Logic to determine whether we should keep running, or shut down autopilot.js for some reason.
