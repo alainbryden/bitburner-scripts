@@ -1028,7 +1028,7 @@ export async function main(ns) {
         }
 
         // In BN10, it takes a while to build up the 100q needed to purchase the last sleeve, so don't reset if we're close
-        if (resetInfo.currentNode == 10 && player.money >= 10e15 && !sleevesMaxedOut) { // Heuristic: If we hit 10q (10% the cost of the last sleeve) before an install, we can probably go all the way
+        if (resetInfo.currentNode == 10 && player.money >= 10e16 && !sleevesMaxedOut) { // Heuristic: If we hit 10q (10% the cost of the last sleeve) before an install, we can probably go all the way
             setStatus(ns, `Not installing anymore since we are nearing the 100q needed to purchase the 6th sleeve from the Covenant.`);
             return true;
         }
