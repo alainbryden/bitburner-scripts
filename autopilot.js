@@ -754,6 +754,24 @@ export async function main(ns) {
      * @param {Player} player */
     async function maybeDoCasino(ns, player) {
         if (ranCasino || options['disable-casino']) return;
+        // [FIX] Persist a casino-attempted flag, keyed PER-AUGMENTATION (not per-BitNode).
+        // The sinceInstall.casino guard below resets to 0 on every augmentation install,
+        // and the game allows winning 10B from the casino on EVERY augmentation — so the
+        // flag is valid for exactly ONE augmentation. We key it on resetInfo.lastAugReset
+        // (the timestamp of the last augmentation reset; the same field getTimeInAug()
+        // uses): if lastAugReset has changed since we wrote the flag, the flag is stale
+        // (from a previous augmentation) and the casino may be run again; if it's
+        // unchanged, we already attempted the casino this augmentation and skip.
+        // (A save-scum reload WITHOUT a new augmentation restores the same lastAugReset,
+        // so the flag stays valid and the kick-out reload loop is broken.)
+        // NOTE: stored at the HOME ROOT (NOT /Temp/), because cleanup.js (run by both
+        // casino.js step 2.6.3 and checkIfBnIsComplete) wipes /Temp/ and would delete the flag.
+        const CASINO_FLAG = '/autopilot-casino-attempted.flag';
+        const flagAugReset = ns.read(CASINO_FLAG);
+        if (flagAugReset != null && Number(flagAugReset) === resetInfo.lastAugReset) {
+            log(ns, `INFO: Skipping casino.js, already attempted in this augmentation (flag=${flagAugReset}).`);
+            return ranCasino = true; // Already attempted in this augmentation
+        }
         // Figure out whether we've already been kicked out of the casino for earning more than 10b there
         const moneySources = await getPlayerMoneySources(ns);
         const casinoEarnings = moneySources.sinceInstall.casino;
@@ -798,6 +816,7 @@ export async function main(ns) {
 
         const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
         if (pid) {
+            ns.write(CASINO_FLAG, String(resetInfo.lastAugReset), 'w'); // [FIX] Mark casino as attempted THIS augmentation (home root, survives cleanup.js)
             await waitForProcessToComplete(ns, pid);
             await ns.sleep(10000); // Give time for this script to be killed if the game is being restarted by casino.js
             // Otherwise, something went wrong
