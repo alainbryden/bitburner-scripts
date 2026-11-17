@@ -3,6 +3,7 @@ import {
     getActiveSourceFiles, tryGetBitNodeMultipliers, getStocksValue, unEscapeArrayArgs,
     formatMoney, formatDuration, formatNumber, getErrorInfo, tail, jsonReplacer
 } from './helpers.js'
+import { COORDINATOR as DARKNET_COORDINATOR, DAEMON as DARKNET_DAEMON, WORM as DARKNET_WORM, buildOf, stampBuild } from './darknet/darknet-paths.js'
 
 const argsSchema = [ // The set of all command line arguments
     ['next-bn', 0], // If we destroy the current BN, the next BN to start
@@ -87,6 +88,7 @@ export async function main(ns) {
     let playerInBladeburner = false; // Whether we've joined bladeburner
     let wdHack = (/**@returns{null|number}*/() => null)(); // If the WD server is available (i.e. TRP is installed), caches the required hack level
     let ranCasino = false; // Flag to indicate whether we've stolen 10b from the casino yet
+    let lastDarknetCheck = 0; // Last darknet check time
     let reservedPurchase = 0; // The amount of player money that has been reserved to purchase augmentations
     let alreadyJoinedDaedalus = false, autoJoinDaedalusUnavailable = false, reservingMoneyForDaedalus = false, disableStockmasterForDaedalus = false; // Flags to indicate that we should be keeping 100b cash on hand to earn an invite to Daedalus
     let prioritizeHackForDaedalus = false, prioritizeHackForWd = false;
@@ -249,6 +251,7 @@ export async function main(ns) {
         await maybeAcceptStaneksGift(ns, player);
         await checkOnRunningScripts(ns, player);
         await maybeDoCasino(ns, player);
+        await maybeRunDarknet(ns);
         await maybeInstallAugmentations(ns, player);
         return shouldWeKeepRunning(ns); // Return false to shut down autopilot.js if we installed augs, or don't have enough home RAM
     }
@@ -803,6 +806,33 @@ export async function main(ns) {
             // Otherwise, something went wrong
             log(ns, `ERROR: Something went wrong. casino.js was run, but we haven't been killed. It must have run into a problem...`)
         }
+    }
+
+    /** Runs darknet-daemon.js after the casino step, only when needed: the coordinator is gone, or darkweb (the darknet's
+     * entry node) lacks a worm of the current build. stampBuild hashes the darknet scripts here, so git-pulls are seen without the daemon.
+     * @param {NS} ns */
+    async function maybeRunDarknet(ns) {
+        if (!ranCasino && !options['disable-casino'])
+            return log_once(ns, `INFO: Waiting for the casino decision before starting darknet-daemon.js (casino.js kills all scripts).`);
+        if (lastDarknetCheck > Date.now() - options['interval-check-scripts']) return;
+        lastDarknetCheck = Date.now();
+        const dn = await getNsDataThroughFile(ns, `(() => {
+            const strip = f => f.replace(/^\\/+/, ''), [daemon, coordinator, worm] = ns.args.map(strip);
+            const find = (host, file) => ns.serverExists(host) ? ns.ps(host).find(p => strip(p.filename) === file) ?? null : null;
+            return { free: ns.getServerMaxRam('home') - ns.getServerUsedRam('home'), daemonRam: ns.getScriptRam(daemon, 'home'),
+                coordinatorRam: ns.getScriptRam(coordinator, 'home'), daemon: !!find('home', daemon), coordinator: !!find('home', coordinator),
+                worm: find('darkweb', worm) };
+        })()`, '/Temp/autopilot-darknet.txt', [DARKNET_DAEMON, DARKNET_COORDINATOR, DARKNET_WORM]);
+        if (dn.daemon || dn.daemonRam === 0) return; // Daemon already running, or scripts missing on home
+        const { build } = stampBuild(ns);
+        const why = !dn.coordinator ? 'the coordinator is not running' : !dn.worm ? 'the darkweb worm is not running'
+            : buildOf(dn.worm) < build ? `darkweb runs build ${buildOf(dn.worm) || 'pre-build'}, current is ${build}` : null;
+        if (!why) return;
+        const needed = dn.daemonRam + (dn.coordinator ? 0 : dn.coordinatorRam);
+        if (dn.free < needed)
+            return log_once(ns, `INFO: Waiting for ${needed.toFixed(1)} GB free on home (have ${dn.free.toFixed(1)}) to start darknet-daemon.js.`);
+        log(ns, `INFO: Starting darknet-daemon.js (${why}). It exits by itself once the darknet runs without it.`);
+        launchScriptHelper(ns, DARKNET_DAEMON, [], false);
     }
 
     /** Retrieves the last faction manager output file, parses, and provides type-hints for it.

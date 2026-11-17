@@ -67,6 +67,8 @@ You may find it useful to set up one or more aliases with the default options yo
   - Quick way to start/stop the system. I personally now use `auto` instead of `start` for this alias (auto => autopilot.js).
 - `alias sscan="home; run scan.js"`
   - Makes it a little quicker to run this custom-scan routine, which shows the entire network, stats about servers, and provides handy links for jumping to servers or backdooring them.
+- `alias dark-update="home; rm darknet/darknet-build.txt; run darknet-daemon.js"`
+  - Forces every darknet worm to pull the current scripts from home and restart in place.
 - `alias do="run run-command.js"`
   - This lets you run ns commands from the terminal, such as `do ns.getPlayer()`, `do Object.keys(ns)` or `do ns.getServerMoneyAvailable('n00dles')`
 - `alias reserve="run reserve.js"`
