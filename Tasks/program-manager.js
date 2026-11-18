@@ -4,10 +4,13 @@
  * or write them ourselves. Like tor-manager, this script dies a natural death
  * once all programs are bought. **/
 export async function main(ns) {
-    const programNames = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe"];
+    const defaultPrograms = ["BruteSSH.exe", "FTPCrack.exe", "relaySMTP.exe", "HTTPWorm.exe", "SQLInject.exe"];
+    // Args other than "-c" name programs to buy (e.g. DarkscapeNavigator.exe); default is the port crackers
+    const requested = ns.args.filter(arg => arg != "-c").map(String);
+    const programNames = requested.length > 0 ? requested : defaultPrograms;
     const interval = 2000;
 
-    const keepRunning = ns.args.length > 0 && ns.args[0] == "-c";
+    const keepRunning = ns.args.includes("-c");
     if (!keepRunning)
         ns.print(`program-manager will run once. Run with argument "-c" to run continuously.`)
 

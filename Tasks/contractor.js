@@ -9,7 +9,9 @@ export async function main(ns) {
 
     disableLogs(ns, ["scan"]);
     ns.print("Getting server list...");
-    const servers = await getNsDataThroughFile(ns, 'scanAllServers(ns)');
+    // Extra hostnames from args (e.g. darknet servers) are added to the scan
+    const scanned = await getNsDataThroughFile(ns, 'scanAllServers(ns)');
+    const servers = [...new Set([...scanned, ...ns.args.map(String)])];
     ns.print(`Got ${servers.length} servers. Searching for contracts on each...`);
     // Retrieve all contracts and convert them to objects with the required information to solve
     const contractsDb = servers.map(hostname => ({ hostname, contracts: ns.ls(hostname, '.cct') }))
